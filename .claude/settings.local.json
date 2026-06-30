@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(git -C C:/Users/o-yos/developer/ContentsBuilder ls-files mock/ver2/book.pdf mock/ver2/book_英語.pdf)"
-    ]
-  }
-}
