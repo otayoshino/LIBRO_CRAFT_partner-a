@@ -43,14 +43,42 @@
       "Bash(pkill -f \"python3 server.py\")",
       "Bash(rm -rf /private/tmp/claude-501/-Users-meitec-yagisawa-github-LIBRO-CRAFT/21ab6733-55fc-453d-b505-3f0e67d6f98d/scratchpad/pw-check /private/tmp/claude-501/-Users-meitec-yagisawa-github-LIBRO-CRAFT/21ab6733-55fc-453d-b505-3f0e67d6f98d/scratchpad/*.png)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(claude mcp *)",
+      "mcp__serena__initial_instructions",
+      "mcp__serena__onboarding",
+      "mcp__serena__read_memory",
+      "mcp__serena__get_symbols_overview",
+      "mcp__serena__find_symbol",
+      "mcp__serena__write_memory",
+      "Bash(node -e \"require.resolve\\('playwright'\\)\")",
+      "Bash(npx --yes playwright --version)",
+      "Read(//Users/meitec-yagisawa/Library/Caches/ms-playwright/**)",
+      "Bash(node -e ' *)",
+      "Bash(node make_zip.js)",
+      "Bash(node run_verify.js)",
+      "Bash(node verify_mode_fix.js)",
+      "Bash(git -C /Users/meitec-yagisawa/github/LIBRO_CRAFT status --short)",
+      "Read(//Users/meitec-yagisawa/.cache/**)",
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(node test_libro_zip.mjs)",
+      "Bash(node test_libro_zip3.mjs)",
+      "Bash(node test_audio.mjs)",
+      "Bash(node test_pagelink.mjs)",
+      "Bash(node /private/tmp/claude-501/-Users-meitec-yagisawa-github-LIBRO-CRAFT/eebf3ddd-c1ba-4d15-94b5-d576461ab476/scratchpad/test_roundtrip.mjs)",
+      "Bash(mv /private/tmp/claude-501/-Users-meitec-yagisawa-github-LIBRO-CRAFT/eebf3ddd-c1ba-4d15-94b5-d576461ab476/scratchpad/testmod/state.js /private/tmp/claude-501/-Users-meitec-yagisawa-github-LIBRO-CRAFT/eebf3ddd-c1ba-4d15-94b5-d576461ab476/scratchpad/testmod/state.mjs)",
+      "Bash(sed -i '' 's/from '\\\\''.\\\\/state.js'\\\\''/from '\\\\''.\\\\/state.mjs'\\\\''/' /private/tmp/claude-501/-Users-meitec-yagisawa-github-LIBRO-CRAFT/eebf3ddd-c1ba-4d15-94b5-d576461ab476/scratchpad/testmod/libro-format.mjs)",
+      "Bash(node test_roundtrip.mjs)",
+      "Bash(mkdir -p screenshots)",
+      "Bash(node verify.js)",
+      "Bash(node verify2.js)",
+      "Bash(node verify3.js)",
+      "Bash(pkill -f \"server.py\")"
     ],
     "additionalDirectories": [
       "/tmp/orig_check",
       "/Users/meitec-yagisawa/github/LIBRO_CRAFT/.claude/skills"
     ]
-  },
-  "deny": [
-    "Read(./sample_books/**)"
-  ]
+  }
 }
