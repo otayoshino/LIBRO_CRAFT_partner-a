@@ -22,7 +22,12 @@
       "Bash(node check2.mjs)",
       "Bash(cd /Users/meitec-yagisawa/github/LIBRO_CRAFT *)",
       "Bash(sed 's#localhost:8080#localhost:8090#' check2.mjs)",
-      "Bash(node check2_orig.mjs)"
+      "Bash(node check2_orig.mjs)",
+      "Bash(npx --version)",
+      "Bash(\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" --headless --disable-gpu --screenshot=\"/private/tmp/claude-501/-Users-meitec-yagisawa-github-LIBRO-CRAFT/79dc0aec-0c67-43b4-8295-506191afd0ab/scratchpad/before_check.png\" --window-size=1600,1000 \"http://localhost:8080/app/index.html\")",
+      "Bash(\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" --headless --disable-gpu --dump-dom \"http://localhost:8080/app/index.html\")",
+      "Bash(lsof -ti:8080)",
+      "Bash(xargs kill -9)"
     ],
     "additionalDirectories": [
       "/tmp/orig_check"
