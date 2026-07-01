@@ -237,6 +237,23 @@
       outline: 2px solid rgba(255,255,255,0.6);
     }
 
+    /* 見開きページ表示中バッジ（real-page-count超過ページで表示） */
+    .spread-badge {
+      display: none;
+      align-items: center;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 10px;
+      background: #fff;
+      color: #647cc0;
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .spread-badge.show {
+      display: inline-flex;
+    }
+
     /* フィットボタン（枠線あり） */
     .blk.fit-group {
       padding: 0 16px;

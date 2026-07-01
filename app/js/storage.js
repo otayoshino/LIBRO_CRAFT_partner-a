@@ -313,7 +313,8 @@ import { showToast, updateStatus } from './ui-common.js';
       // （restoreAnnotationsFromArray は標準アノテーション種別のみクリアするため別途対応）
       document.querySelectorAll('#pageLeft .libro-toggle').forEach(el => el.remove());
 
-      loadLibroBookPages(pages);
+      const realPageCount = indexJson.configs?.['real-page-count'] ?? null;
+      loadLibroBookPages(pages, realPageCount);
       restoreAnnotationsFromArray(knownAnnotations);
       renderTogglePairs(togglePairs);
       updateAnnotationVisibility();

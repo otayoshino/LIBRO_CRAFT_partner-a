@@ -53,6 +53,7 @@ import { updateStatus } from './ui-common.js';
         document.getElementById('pageInput').value = 0;
         const totalPagesText = document.getElementById('totalPagesText');
         if (totalPagesText) totalPagesText.textContent = '/ 0';
+        updateSpreadBadge();
         return;
       }
 
@@ -62,6 +63,8 @@ import { updateStatus } from './ui-common.js';
       if (totalPagesText) {
         totalPagesText.textContent = `/ ${state.totalPages}`;
       }
+      // 見開き（real-page-count超過ページ）バッジの表示更新
+      updateSpreadBadge();
 
       // ページ移動時に選択を全解除する
       deselectAllObjects();
@@ -91,6 +94,18 @@ import { updateStatus } from './ui-common.js';
       }
       // 現在ページのアノテーションのみ表示する
       updateAnnotationVisibility();
+    }
+
+
+    /**
+     * 見開きページ（real-page-count超過ページ）を表示中であることを示すバッジの表示を更新する。
+     */
+    function updateSpreadBadge() {
+      const badge = document.getElementById('spreadBadge');
+      if (!badge) return;
+      const isSpread = state.realPageCount != null && state.currentPage > state.realPageCount;
+      badge.classList.toggle('show', isSpread);
+      if (isSpread) badge.dataset.tip = `${state.realPageCount + 1}ページ目から見開き表示`;
     }
 
 
@@ -130,6 +145,7 @@ import { updateStatus } from './ui-common.js';
           standardFontDataUrl: BASE + 'standard_fonts/',
         }).promise;
         state.totalPages = state.pdfDoc.numPages;
+        state.realPageCount = null;
         const pageInput = document.getElementById('pageInput');
         if (pageInput) pageInput.dataset.max = state.totalPages;
         state.currentPage = 1;
@@ -151,11 +167,14 @@ import { updateStatus } from './ui-common.js';
      * LIBRO bookフォルダのページ画像一覧を読み込んで最初のページを表示する。
      * loadPDF の LIBRO book版。pdfDoc とは排他利用（読込時に pdfDoc を null にする）。
      * @param {Array<{pageNum:number, width:number, height:number, imageUrl:string}>} pages
+     * @param {number|null} [realPageCount] - index.json の configs['real-page-count']。
+     *   このページ数を超えるページは見開きであることを示す。未指定時はnull。
      */
-    export function loadLibroBookPages(pages) {
+    export function loadLibroBookPages(pages, realPageCount = null) {
       state.pdfDoc = null;
       state.bookPages = pages;
       state.totalPages = pages.length;
+      state.realPageCount = realPageCount;
       const pageInput = document.getElementById('pageInput');
       if (pageInput) pageInput.dataset.max = state.totalPages;
       state.currentPage = 1;

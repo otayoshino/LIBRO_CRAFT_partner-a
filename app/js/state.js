@@ -78,6 +78,12 @@ export const state = {
    */
   bookPages: null,
   /**
+   * LIBRO book読込時の見開き開始境界。index.json の configs['real-page-count'] の値で、
+   * このページ数を超えるページ番号は見開き（1ページ画像に2ページ分を含む）であることを示す。
+   * PDF読込時や real-page-count 未設定の book では null のまま。
+   */
+  realPageCount: null,
+  /**
    * LIBRO book読込時、既知パターンに一致しなかった未知アノテーション、および
    * Hide/Showペア（付箋の開閉等）を構成する生アノテーションをページごとに保持する。
    * どちらも編集UIには出さず、書き出し時は変更せずそのまま annots[] に書き戻す。
