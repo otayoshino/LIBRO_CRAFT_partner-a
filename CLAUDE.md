@@ -65,3 +65,4 @@ LIBRO の book フォルダ形式（`index.json` / `p####.json` / 暗号化ペ�
 | [libro-integration](.claude/skills/libro-integration/SKILL.md) | LIBROのbook形式との相互変換・暗号化まわりの作業 |
 | [add-annotation-type](.claude/skills/add-annotation-type/SKILL.md) | 新規アノテーション種別の追加 |
 | [ui-change-constraints](.claude/skills/ui-change-constraints/SKILL.md) | CSS/HTML/レイアウトなどUI変更作業 |
+| [git-commit-convention](.claude/skills/git-commit-convention/SKILL.md) | コミット作成時のメッセージ規約 |

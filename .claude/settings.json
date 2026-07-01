@@ -27,10 +27,27 @@
       "Bash(\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" --headless --disable-gpu --screenshot=\"/private/tmp/claude-501/-Users-meitec-yagisawa-github-LIBRO-CRAFT/79dc0aec-0c67-43b4-8295-506191afd0ab/scratchpad/before_check.png\" --window-size=1600,1000 \"http://localhost:8080/app/index.html\")",
       "Bash(\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" --headless --disable-gpu --dump-dom \"http://localhost:8080/app/index.html\")",
       "Bash(lsof -ti:8080)",
-      "Bash(xargs kill -9)"
+      "Bash(xargs kill -9)",
+      "Bash(xargs -I{} sh -c 'echo \"== {} ==\"; head -20 \"{}\"')",
+      "Bash(mkdir -p /Users/meitec-yagisawa/github/LIBRO_CRAFT/.claude/skills/git-commit-convention && ls /Users/meitec-yagisawa/github/LIBRO_CRAFT/.claude/skills)",
+      "Edit(/.claude/skills/git-commit-convention/**)",
+      "Bash(curl -s -o /dev/null -w \"index.html: %{http_code}\\\\n\" http://localhost:8080/app/index.html)",
+      "Bash(curl -s -o /dev/null -w \"sprite.svg: %{http_code}\\\\n\" http://localhost:8080/app/icons/sprite.svg)",
+      "Bash(curl -s http://localhost:8080/app/icons/sprite.svg)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(command -v node npx python3)",
+      "Bash(find /Users/meitec-yagisawa -iname \"*playwright*\" -maxdepth 4 2>/dev/null | head; echo done)",
+      "Read(//Users/meitec-yagisawa/**)",
+      "Bash(node check3.js)",
+      "Bash(pkill -f \"python3 server.py\")",
+      "Bash(rm -rf /private/tmp/claude-501/-Users-meitec-yagisawa-github-LIBRO-CRAFT/21ab6733-55fc-453d-b505-3f0e67d6f98d/scratchpad/pw-check /private/tmp/claude-501/-Users-meitec-yagisawa-github-LIBRO-CRAFT/21ab6733-55fc-453d-b505-3f0e67d6f98d/scratchpad/*.png)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ],
     "additionalDirectories": [
-      "/tmp/orig_check"
+      "/tmp/orig_check",
+      "/Users/meitec-yagisawa/github/LIBRO_CRAFT/.claude/skills"
     ]
   },
   "deny": [
