@@ -619,6 +619,22 @@
       font-size: 48px;
     }
 
+    /* LIBRO book読込ボタン（親のpointer-events:noneを個別に打ち消してクリック可能にする） */
+    #bookLoadBtn {
+      pointer-events: auto;
+      font-size: 14px;
+      padding: 8px 16px;
+      border: 1px solid #4285f4;
+      border-radius: 6px;
+      background: #fff;
+      color: #4285f4;
+      cursor: pointer;
+    }
+    #bookLoadBtn:hover {
+      background: #4285f4;
+      color: #fff;
+    }
+
     /* 現在ページ以外のアノテーションは非表示 */
     .ann-hidden-page { display: none !important; }
 

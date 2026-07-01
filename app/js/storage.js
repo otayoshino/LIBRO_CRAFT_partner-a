@@ -1,7 +1,8 @@
 import { applyLiveUpdate, buildAnnDialogFields } from './annotation-dialog.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
-import { updateAnnotationVisibility } from './pdf-view.js';
+import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs } from './libro-format.js';
+import { loadLibroBookPages, updateAnnotationVisibility } from './pdf-view.js';
 import { mediaBlobs, state } from './state.js';
 import { showToast, updateStatus } from './ui-common.js';
 
@@ -246,6 +247,13 @@ import { showToast, updateStatus } from './ui-common.js';
       if (!file) return;
       try {
         const zip = await JSZip.loadAsync(file);
+
+        // ルート直下にindex.jsonがあればLIBRO bookフォルダ形式として扱う
+        if (isLibroBookZip(zip)) {
+          await handleLibroBookZip(zip);
+          return;
+        }
+
         // 既存BlobURLを解放してmediaBlobsを初期化
         Object.values(mediaBlobs).forEach(url => URL.revokeObjectURL(url));
         Object.keys(mediaBlobs).forEach(k => delete mediaBlobs[k]);
@@ -287,6 +295,37 @@ import { showToast, updateStatus } from './ui-common.js';
         showToast('ZIP読込エラー: ファイルが壊れているか形式が正しくありません');
         console.error(e);
       }
+    }
+
+
+    /**
+     * LIBRO bookフォルダ形式のZIPを読み込み、ページ画像を表示しアノテーションを復元する。
+     * 既知のアノテーション（ページリンク／外部リンク／音声再生／付箋等の開閉）はContentsBuilderの
+     * オブジェクトとして復元し、未知のアノテーションは編集UIに出さず内部に保持するのみとする
+     * （書き出しは現段階では未対応）。
+     * @param {JSZip} zip - JSZip.loadAsync 済みのZIPオブジェクト
+     */
+    async function handleLibroBookZip(zip) {
+      const { pages, knownAnnotations, togglePairs, unknownAnnotations, maxAnnotId, baseDir, indexJson } =
+        await parseLibroBookZip(zip);
+
+      // 再読込時に前回分のHide/Showペア要素が残らないようクリアする
+      // （restoreAnnotationsFromArray は標準アノテーション種別のみクリアするため別途対応）
+      document.querySelectorAll('#pageLeft .libro-toggle').forEach(el => el.remove());
+
+      loadLibroBookPages(pages);
+      restoreAnnotationsFromArray(knownAnnotations);
+      renderTogglePairs(togglePairs);
+      updateAnnotationVisibility();
+
+      // 新規アノテーションのID採番が既存IDと衝突しないよう、カウンターを引き上げる
+      state.annIdCounter = Math.max(state.annIdCounter, maxAnnotId);
+      // 未知アノテーション・Hide/Showペアの生データは編集不可のまま保持し、書き出し時にそのまま書き戻す
+      state.libroUnknownAnnotations = unknownAnnotations;
+      // 書き出し時に未変更ファイルをそのまま維持できるよう、元zip・書誌情報を保持する
+      state.libroBook = { zip, baseDir, indexJson };
+
+      showToast(`LIBRO bookを読み込みました（${pages.length}ページ、未知アノテーション${unknownAnnotations.length}件）`);
     }
 
 
@@ -377,6 +416,67 @@ import { showToast, updateStatus } from './ui-common.js';
         showToast('ZIPで保存しました');
       } catch (e) {
         showToast('ZIP保存エラー: ' + e.message);
+        console.error(e);
+      }
+    }
+
+
+    /**
+     * LIBRO bookとして読み込んだ内容を、LIBRO bookフォルダ形式のZIPとして書き出す。
+     * ページリンク・外部リンク・音声再生のみ対応（LIBROの既知action種別に対応するため）。
+     * それ以外の種別（付箋・動画・図・大問/答/証明ボタン等）が存在する場合はトーストで警告し、
+     * 書き出し対象から除外する。
+     */
+    export async function saveAnnotationsAsLibroBook() {
+      if (!state.libroBook) {
+        showToast('LIBRO bookとして読み込んだ場合のみ書き出せます');
+        return;
+      }
+
+      const page = document.getElementById('pageLeft');
+      const pageRect = page.getBoundingClientRect();
+      const elements = page.querySelectorAll('.sticky-note, .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+      const supportedTypes = new Set(['pagelink', 'externallink', 'audio']);
+
+      const domAnnotations = [];
+      const unsupportedTypes = new Set();
+      elements.forEach(el => {
+        const type = el.dataset.type;
+        if (!supportedTypes.has(type)) {
+          if (type) unsupportedTypes.add(ANNOTATION_TYPE_CONFIG[type]?.label || type);
+          return;
+        }
+        const left   = parseFloat(el.style.left)   || 0;
+        const top    = parseFloat(el.style.top)    || 0;
+        const width  = parseFloat(el.style.width)  || el.offsetWidth;
+        const height = parseFloat(el.style.height) || el.offsetHeight;
+        domAnnotations.push({
+          id:   parseInt(el.dataset.id, 10),
+          page: parseInt(el.dataset.page, 10),
+          type,
+          style: `left:${(left / pageRect.width) * 100}%;top:${(top / pageRect.height) * 100}%;` +
+                 `width:${(width / pageRect.width) * 100}%;height:${(height / pageRect.height) * 100}%;`,
+          savedData: el.dataset.savedData || '',
+        });
+      });
+
+      if (unsupportedTypes.size > 0) {
+        showToast(`LIBRO形式に非対応の種別（${[...unsupportedTypes].join('、')}）は書き出し対象から除外しました`);
+      }
+
+      try {
+        const zip = await buildLibroBookExport(state.libroBook, domAnnotations, state.libroUnknownAnnotations);
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'libro_book.zip';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+        showToast('LIBRO形式で書き出しました');
+      } catch (e) {
+        showToast('LIBRO書き出しエラー: ' + e.message);
         console.error(e);
       }
     }
@@ -587,6 +687,3 @@ import { showToast, updateStatus } from './ui-common.js';
       closeDialog();
       updateStatus('アノテーションを保存しました');
     }
-
-    /** トースト非表示用タイマー */
-    let _toastTimer = null;

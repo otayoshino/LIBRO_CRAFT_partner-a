@@ -1,5 +1,7 @@
 import { updateAlignPanel } from './annotation-interaction.js';
 
+    /** トースト非表示用タイマー */
+    let _toastTimer = null;
 
     /**
      * 画面中央にトーストメッセージを表示する。

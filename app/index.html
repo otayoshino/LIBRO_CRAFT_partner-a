@@ -93,6 +93,10 @@
             <svg width="14" height="14"><use href="icons/sprite.svg#icon-save-zip"></use></svg>
             ZIPで保存（音声・動画含む）
           </button>
+          <button onclick="saveAnnotationsAsLibroBook(); document.getElementById('saveDropdownMenu').classList.remove('is-open');">
+            <svg width="14" height="14"><use href="icons/sprite.svg#icon-save-zip"></use></svg>
+            LIBRO形式で書き出す
+          </button>
         </div>
       </div>
       <!-- 読込用ファイル選択input（非表示） -->
@@ -363,6 +367,7 @@
           <div id="pdfDropOverlay">
             <span class="drop-icon">📄</span>
             <span>PDFをここにドロップ</span>
+            <button type="button" id="bookLoadBtn" onclick="loadAnnotationsFromZip()">LIBRO bookを読み込む（ZIP）</button>
           </div>
           <canvas id="pdfCanvas" class="page-content"></canvas>
         </div>

@@ -5,7 +5,7 @@ import { switchToViewMode } from './mode.js';
 import { applyZoomChange, goFirstPage, goLastPage, loadPDF, nextPage, prevPage, renderPage, resizePage, scaleAnnotations, setFit, updatePageDisplay, zoomIn, zoomOut } from './pdf-view.js';
 import { selectedStickySet, state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
-import { closeDialog, handleAnnotationFile, handleZipFile, loadAnnotations, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';
+import { closeDialog, handleAnnotationFile, handleZipFile, loadAnnotations, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsLibroBook, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';
 import { toggleAcc, toggleNav, updateStatus } from './ui-common.js';
 import { pushUndo, redo, undo } from './undo-redo.js';
 
@@ -448,8 +448,8 @@ import { pushUndo, redo, undo } from './undo-redo.js';
       if (oldW > 0 && newW !== oldW) {
         scaleAnnotations(newW / oldW);
       }
-      // ページサイズ変化後にcanvasサイズを同期するため PDF を再描画する
-      if (state.pdfDoc) {
+      // ページサイズ変化後にcanvasサイズを同期するため PDF・book を再描画する
+      if (state.pdfDoc || state.bookPages) {
         clearTimeout(_resizeTimer);
         _resizeTimer = setTimeout(() => renderPage(state.currentPage), 150);
       }
@@ -538,6 +538,7 @@ Object.assign(window, {
   toggleSaveDropdown,
   saveAnnotations,
   saveAnnotationsAsZip,
+  saveAnnotationsAsLibroBook,
   handleAnnotationFile,
   handleZipFile,
   loadAnnotations,

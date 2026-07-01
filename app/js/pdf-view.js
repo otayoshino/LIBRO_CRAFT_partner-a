@@ -48,8 +48,8 @@ import { updateStatus } from './ui-common.js';
      */
     export function updatePageDisplay() {
 
-      // PDF未読み込み時は 0/0 を表示
-      if (!state.pdfDoc) {
+      // PDF・LIBRO book いずれも未読み込み時は 0/0 を表示
+      if (!state.pdfDoc && !state.bookPages) {
         document.getElementById('pageInput').value = 0;
         const totalPagesText = document.getElementById('totalPagesText');
         if (totalPagesText) totalPagesText.textContent = '/ 0';
@@ -66,8 +66,8 @@ import { updateStatus } from './ui-common.js';
       // ページ移動時に選択を全解除する
       deselectAllObjects();
 
-      // PDFページを描画
-      if (state.pdfDoc) renderPage(state.currentPage);
+      // PDF・LIBRO book ページを描画
+      if (state.pdfDoc || state.bookPages) renderPage(state.currentPage);
 
       // 前ページ・最初ページのボタン活性制御
       const navBtns = document.querySelectorAll('.nav-btn');
@@ -101,7 +101,8 @@ import { updateStatus } from './ui-common.js';
       document.querySelectorAll(
         '#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj, ' +
         '#pageLeft .daimon-btn, ' +
-        '#pageLeft .kotae-btn, #pageLeft .shomei-btn'
+        '#pageLeft .kotae-btn, #pageLeft .shomei-btn, ' +
+        '#pageLeft .libro-toggle'
       ).forEach(el => {
         const elPage = parseInt(el.dataset.page || '1', 10);
         el.classList.toggle('ann-hidden-page', elPage !== state.currentPage);
@@ -147,10 +148,92 @@ import { updateStatus } from './ui-common.js';
 
 
     /**
+     * LIBRO bookフォルダのページ画像一覧を読み込んで最初のページを表示する。
+     * loadPDF の LIBRO book版。pdfDoc とは排他利用（読込時に pdfDoc を null にする）。
+     * @param {Array<{pageNum:number, width:number, height:number, imageUrl:string}>} pages
+     */
+    export function loadLibroBookPages(pages) {
+      state.pdfDoc = null;
+      state.bookPages = pages;
+      state.totalPages = pages.length;
+      const pageInput = document.getElementById('pageInput');
+      if (pageInput) pageInput.dataset.max = state.totalPages;
+      state.currentPage = 1;
+      const first = pages[0];
+      if (first && first.width && first.height) {
+        state.PAGE_ASPECT = first.width / first.height;
+      }
+      resizePage();
+      updatePageDisplay();
+      // 読込成功後にドロップオーバーレイを非表示にする
+      document.getElementById('pdfDropOverlay').classList.add('hidden');
+    }
+
+
+    /**
+     * ページ画像（Imageオブジェクト）を読み込む。1度読み込んだ画像はpageDataにキャッシュする。
+     * @param {{imageUrl:string, _img?:HTMLImageElement}} pageData
+     * @returns {Promise<HTMLImageElement>}
+     */
+    function loadBookPageImage(pageData) {
+      if (pageData._img) return Promise.resolve(pageData._img);
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload  = () => { pageData._img = img; resolve(img); };
+        img.onerror = reject;
+        img.src = pageData.imageUrl;
+      });
+    }
+
+
+    /**
+     * LIBRO bookのページ画像をcanvasに描画する。renderPage の book版。
+     * @param {number} num - 描画するページ番号（1始まり）
+     */
+    async function renderBookPage(num) {
+      const pageData = state.bookPages[num - 1];
+      if (!pageData || !pageData.imageUrl) return;
+
+      const renderVersion = ++state._renderVersion;
+      let img;
+      try {
+        img = await loadBookPageImage(pageData);
+      } catch (err) {
+        console.error('bookページ画像読込エラー:', err);
+        return;
+      }
+      if (renderVersion !== state._renderVersion) return;
+
+      const canvas = document.getElementById('pdfCanvas');
+      const pageEl  = document.getElementById('pageLeft');
+      const pageAspect = pageData.width / pageData.height;
+      if (Math.abs(pageAspect - state.PAGE_ASPECT) > 0.001) {
+        state.PAGE_ASPECT = pageAspect;
+        resizePage();
+      }
+
+      const dpr   = window.devicePixelRatio || 1;
+      const scale = (pageEl.offsetWidth / pageData.width) * dpr * (state.zoomLevel / 100);
+      const newW  = Math.round(pageData.width  * scale);
+      const newH  = Math.round(pageData.height * scale);
+      canvas.width  = newW;
+      canvas.height = newH;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, newW, newH);
+      canvas.style.width  = pageEl.offsetWidth  + 'px';
+      canvas.style.height = pageEl.offsetHeight + 'px';
+      ctx.drawImage(img, 0, 0, newW, newH);
+    }
+
+
+    /**
      * 指定ページをcanvasに描画する。
      * @param {number} num - 描画するページ番号（1始まり）
      */
     export async function renderPage(num) {
+      // LIBRO book読込時はページ画像を描画する（PDF描画とは排他）
+      if (state.bookPages) { await renderBookPage(num); return; }
+
       if (!state.pdfDoc) return;
 
       // 前の描画タスクをキャンセルして競合（ページ混じり）を防ぐ
@@ -373,8 +456,8 @@ import { updateStatus } from './ui-common.js';
       state.panOffsetY = 0;
       document.getElementById('pageContainer').style.transform = 'none';
 
-      // フィット変更後にページサイズが変わるため PDF を再描画してcanvasサイズを合わせる
-      if (state.pdfDoc) renderPage(state.currentPage);
+      // フィット変更後にページサイズが変わるため PDF・book を再描画してcanvasサイズを合わせる
+      if (state.pdfDoc || state.bookPages) renderPage(state.currentPage);
 
       updateAlignPanel();
       updateStatus('表示フィット: ' + { page: 'ページ全体', height: '高さ', width: '幅' }[mode]);

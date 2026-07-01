@@ -71,6 +71,24 @@ export const state = {
   PAGE_ASPECT: 420 / 560,
   /* 現在のフィットモード */
   fitMode: 'height',
+  /**
+   * LIBRO bookフォルダ読込時のページ画像一覧。
+   * 各要素: { pageNum, width, height, imageUrl, _img（描画キャッシュ用Imageオブジェクト） }
+   * PDF読込時は null のまま（pdfDoc とは排他利用）。
+   */
+  bookPages: null,
+  /**
+   * LIBRO book読込時、既知パターンに一致しなかった未知アノテーション、および
+   * Hide/Showペア（付箋の開閉等）を構成する生アノテーションをページごとに保持する。
+   * どちらも編集UIには出さず、書き出し時は変更せずそのまま annots[] に書き戻す。
+   */
+  libroUnknownAnnotations: [],
+  /**
+   * LIBRO book zip読込時の元zip・書誌情報を保持する（書き出し時に未変更ファイルを
+   * そのまま維持するため）。LIBRO book以外を読み込んだ場合は null のまま。
+   * { zip: JSZip, baseDir: string, indexJson: Object }
+   */
+  libroBook: null,
 };
 
     /* -------- メディアBlobキャッシュ -------- */
