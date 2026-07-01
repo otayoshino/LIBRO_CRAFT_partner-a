@@ -1,0 +1,8 @@
+## macOS 固有ファイル
+.DS_Store
+
+## Windows 固有ファイル
+Thumbs.db
+
+## 生成物は含めない
+sample_books/

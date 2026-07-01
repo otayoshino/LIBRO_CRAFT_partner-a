@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(mkdir -p docs)",
+      "Bash(git mv *)",
+      "Bash(rmdir 指示書 libro_integration)",
+      "Edit(/.claude/skills/libro-integration/**)",
+      "Edit(/.claude/skills/ui-change-constraints/**)",
+      "Bash(python3 -c \"import mimetypes; print\\(mimetypes.guess_type\\('test.js'\\)\\)\")",
+      "Bash(python3 split.py)",
+      "Bash(python3 -c ' *)",
+      "Read(//Applications/**)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(python3 -c \"import playwright\")",
+      "Bash(python3 -)",
+      "Bash(npx playwright *)",
+      "Bash(sort -u -t: -k2)",
+      "Read(//tmp/**)",
+      "Bash(node check2.mjs)",
+      "Bash(cd /Users/meitec-yagisawa/github/LIBRO_CRAFT *)",
+      "Bash(sed 's#localhost:8080#localhost:8090#' check2.mjs)",
+      "Bash(node check2_orig.mjs)"
+    ],
+    "additionalDirectories": [
+      "/tmp/orig_check"
+    ]
+  },
+  "deny": [
+    "Read(./sample_books/**)"
+  ]
+}

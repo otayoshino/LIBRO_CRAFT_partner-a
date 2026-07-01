@@ -55,7 +55,7 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
         """
         ファイルアップロードを処理する POSTハンドラー。
         /upload?filename=xxx にファイルの生バイナリを送信すると
-        mock/ver2/_media/ に保存し、JSON を返す。
+        app/_media/ に保存し、JSON を返す。
         """
         parsed = urlparse(self.path)
         if not parsed.path.rstrip("/") == "/upload":
@@ -77,7 +77,7 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         # 保存先ディレクトリを作成
-        save_dir = os.path.join(SERVE_DIR, "mock", "ver2", "_media")
+        save_dir = os.path.join(SERVE_DIR, "app", "_media")
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, filename)
 
@@ -122,10 +122,10 @@ def start_server():
     with socketserver.TCPServer((HOST, PORT), CORSRequestHandler) as httpd:
         httpd.allow_reuse_address = True
         print("=" * 50)
-        print("  ContentsBuilder プレビューサーバー 起動中")
+        print("  LIBRO＋CRAFT プレビューサーバー 起動中")
         print("=" * 50)
-        print(f"  ローカル:      http://localhost:{PORT}/mock/ver2/")
-        print(f"  ネットワーク:  http://{local_ip}:{PORT}/mock/ver2/")
+        print(f"  ローカル:      http://localhost:{PORT}/app/")
+        print(f"  ネットワーク:  http://{local_ip}:{PORT}/app/")
         print("=" * 50)
         print("  停止するには Ctrl+C を押してください")
         print("=" * 50)
