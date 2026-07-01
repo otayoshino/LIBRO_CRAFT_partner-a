@@ -110,6 +110,16 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
         print(f"[アクセス] {self.address_string()} - {format % args}")
 
 
+class ReusableTCPServer(socketserver.TCPServer):
+    """
+    TIME_WAIT状態のソケットを即座に再利用できるTCPServer。
+    socketserver.TCPServerはbind時にallow_reuse_addressを参照するため、
+    インスタンス化前にクラス変数として設定しておく必要がある。
+    """
+
+    allow_reuse_address = True
+
+
 def start_server():
     """
     プレビューサーバーを起動する。
@@ -119,8 +129,7 @@ def start_server():
 
     local_ip = get_local_ip()
 
-    with socketserver.TCPServer((HOST, PORT), CORSRequestHandler) as httpd:
-        httpd.allow_reuse_address = True
+    with ReusableTCPServer((HOST, PORT), CORSRequestHandler) as httpd:
         print("=" * 50)
         print("  LIBRO＋CRAFT プレビューサーバー 起動中")
         print("=" * 50)

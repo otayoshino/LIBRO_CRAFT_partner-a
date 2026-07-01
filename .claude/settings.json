@@ -74,7 +74,12 @@
       "Bash(node verify.js)",
       "Bash(node verify2.js)",
       "Bash(node verify3.js)",
-      "Bash(pkill -f \"server.py\")"
+      "Bash(pkill -f \"server.py\")",
+      "Bash(node --check app/js/pdf-view.js)",
+      "Bash(node --check app/js/storage.js)",
+      "Bash(node --check app/js/state.js)",
+      "Bash(chromium-cli --help)",
+      "Bash(pkill -f \"find / -iname\")"
     ],
     "additionalDirectories": [
       "/tmp/orig_check",
