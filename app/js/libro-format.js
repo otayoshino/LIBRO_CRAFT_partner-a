@@ -196,14 +196,17 @@ function convertPageAnnotations(pageJson, pageNum) {
     const style = rectToStyle(a.rect, pageWidth, pageHeight);
 
     if (kind === 'pagelink') {
+      // LIBRO側のJSONには表示タイプ・塗り色に相当するプロパティが存在せず、
+      // 実データのページリンクは基本的に紙面（ページ画像）上の見た目をそのまま活かす
+      // 透明ホットスポットであるため、インポート時は「紙面カラー」型をデフォルトとする。
       const goto = a.actions.find(ac => ac.action === 'GoTo');
       known.push({
-        className: 'ann-object',
+        className: 'ann-object dt-page-color',
         type: 'pagelink',
         id: a._id,
         page: pageNum,
         style,
-        savedData: JSON.stringify({ annDisplayType: 'marker', annTarget: goto?.page ?? '' }),
+        savedData: JSON.stringify({ annDisplayType: 'page-color', annTarget: goto?.page ?? '' }),
       });
     } else if (kind === 'uri') {
       const uri = a.actions.find(ac => ac.action === 'URI');
@@ -212,7 +215,7 @@ function convertPageAnnotations(pageJson, pageNum) {
         type: 'externallink',
         id: a._id,
         page: pageNum,
-        style,
+        style: style + `background:${ANNOTATION_TYPE_CONFIG.externallink.color};`,
         savedData: JSON.stringify({ annDisplayType: 'marker', annUrl: uri?.uri || '' }),
       });
     } else if (kind === 'launch') {
@@ -223,7 +226,7 @@ function convertPageAnnotations(pageJson, pageNum) {
         type: 'audio',
         id: a._id,
         page: pageNum,
-        style,
+        style: style + `background:${ANNOTATION_TYPE_CONFIG.audio.color};`,
         savedData: JSON.stringify({ annDisplayType: 'marker', annFile: baseName, annPlayMode: '0' }),
       });
     } else {

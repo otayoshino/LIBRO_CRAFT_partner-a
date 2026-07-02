@@ -368,10 +368,15 @@ import { pushUndo } from './undo-redo.js';
       // 「既存付箋カラー」という専用選択肢を先頭に追加しデフォルト選択にする。
       // 実際の色を選び直した場合のみ、confirmAnnotation側で新規画像を生成して色を持たせる。
       const isLibroToggle = type === 'sticky' && existingEl?.dataset.libroToggle === '1';
-      if (isLibroToggle) {
+      // LIBRO由来の既存ページリンク（紙面カラー型でインポートされ、annColorを一度も
+      // 保存していないもの）も同様に色プロパティを実データとして持たない。
+      // 表示タイプを手動で「マーカー」に切り替えた際の塗り色選択用に、専用選択肢を用意する。
+      const isPagelinkNoColor = type === 'pagelink' && !!existingEl &&
+        (savedData.annColor === undefined || savedData.annColor === 'existing');
+      if (isLibroToggle || isPagelinkNoColor) {
         const o = document.createElement('option');
         o.value = 'existing';
-        o.textContent = '既存付箋カラー';
+        o.textContent = isLibroToggle ? '既存付箋カラー' : '既存ページリンクカラー';
         colSel.appendChild(o);
       }
       const colorList = (type === 'sticky') ? STICKY_COLORS : ANN_COLOR_OPTIONS;
@@ -381,7 +386,7 @@ import { pushUndo } from './undo-redo.js';
         o.textContent = c.label;
         colSel.appendChild(o);
       });
-      colSel.value = isLibroToggle ? 'existing' : (savedData.annColor || '0');
+      colSel.value = (isLibroToggle || isPagelinkNoColor) ? 'existing' : (savedData.annColor || '0');
       colWrap.appendChild(colSel);
       colDd.appendChild(colWrap);
       form.appendChild(colDt);
@@ -481,7 +486,7 @@ import { pushUndo } from './undo-redo.js';
           if (h > 0) target.style.height = Math.max(ICON_MIN, h) + 'px';
           target.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
         } else {
-          const bgColor = ANN_COLOR_OPTIONS[colorIdx]?.value ?? '#aaa';
+          const bgColor = ANN_COLOR_OPTIONS[colorIdx]?.value ?? ANN_COLOR_OPTIONS[0].value;
           if (w > 0) target.style.width  = w + 'px';
           if (h > 0) target.style.height = h + 'px';
           target.style.background = bgColor;
@@ -531,7 +536,7 @@ import { pushUndo } from './undo-redo.js';
             target.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
           } else {
             // マーカー型：サイズをデルタ分変更（最小10px）、塗り色は絶対値適用
-            const bgColor = ANN_COLOR_OPTIONS[colorIdx]?.value ?? '#aaa';
+            const bgColor = ANN_COLOR_OPTIONS[colorIdx]?.value ?? ANN_COLOR_OPTIONS[0].value;
             if (dw !== 0) target.style.width  = Math.max(10, (parseFloat(target.style.width)  || 0) + dw) + 'px';
             if (dh !== 0) target.style.height = Math.max(10, (parseFloat(target.style.height) || 0) + dh) + 'px';
             target.style.background = bgColor;
@@ -995,8 +1000,10 @@ import { pushUndo } from './undo-redo.js';
         // --- 汎用アノテーション（ページリンク / Plusファイル / 外部リンク / 音声再生 / 動画再生） ---
         const cfg         = ANNOTATION_TYPE_CONFIG[type];
         const displayType = savedData.annDisplayType || 'marker';
-        const colorIdx    = parseInt(savedData.annColor || '0', 10);
-        const bgColor     = ANN_COLOR_OPTIONS[colorIdx]?.value ?? cfg.color;
+        // 'existing'（LIBRO由来ページリンクの「既存ページリンクカラー」選択時）や
+        // 未設定時はデフォルト塗り色（ANN_COLOR_OPTIONS[0]）にフォールバックする
+        const colorIdx    = parseInt(savedData.annColor, 10);
+        const bgColor     = ANN_COLOR_OPTIONS[colorIdx]?.value ?? ANN_COLOR_OPTIONS[0].value;
         // 新規作成時は state.pendingRect のドラッグ寸法を優先し、更新時はフォーム値を使用する
         const x = isUpdate ? (parseFloat(savedData.annPosX)   || 0)   : (state.pendingRect?.x ?? parseFloat(savedData.annPosX)   ?? 0);
         const y = isUpdate ? (parseFloat(savedData.annPosY)   || 0)   : (state.pendingRect?.y ?? parseFloat(savedData.annPosY)   ?? 0);
