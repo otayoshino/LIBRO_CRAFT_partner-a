@@ -1417,6 +1417,14 @@
       overflow: visible;
     }
 
+    /* ページリンク種別はドロップシャドウ不要（編集・閲覧モード共通） */
+    .ann-object[data-type="pagelink"] {
+      box-shadow: none;
+    }
+    body:not(.is-view-mode) .ann-object[data-type="pagelink"]:not(.dt-page-color) {
+      box-shadow: none;
+    }
+
     /* リサイズハンドル（非アイコン型オブジェクトの選択時に四隅に表示） */
     .resize-handle {
       display: none;

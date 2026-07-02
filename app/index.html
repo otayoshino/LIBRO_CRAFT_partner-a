@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ContentsBuilder モック</title>
+  <title>LIBRO＋ CRAFT</title>
   <!-- favicon.ico への自動リクエストで404が出るのを防ぐ -->
   <link rel="icon" href="data:,">
   <!-- JSZip CDN（ZIP保存・読み込み用） -->
@@ -100,11 +100,7 @@
         </div>
       </div>
       <!-- 読込用ファイル選択input（非表示） -->
-      <input type="file" id="annotationFileInput" accept="application/json" style="display:none" onchange="handleAnnotationFile(event)">
       <input type="file" id="zipFileInput" accept=".zip" style="display:none" onchange="handleZipFile(event)">
-      <button class="nav-btn" data-tip="JSON読込" onclick="loadAnnotations()">
-        <svg width="16" height="16"><use href="icons/sprite.svg#icon-load-json"></use></svg>
-      </button>
       <button class="nav-btn" data-tip="ZIP読込" onclick="loadAnnotationsFromZip()">
         <svg width="16" height="16"><use href="icons/sprite.svg#icon-load-zip"></use></svg>
       </button>
