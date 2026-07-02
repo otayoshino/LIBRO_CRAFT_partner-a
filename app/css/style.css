@@ -605,7 +605,13 @@
       display: block;
     }
 
-    /* PDF ドロップオーバーレイ */
+    /* book未読込時は.pageの白背景・影を非表示にする（読込ボタンのみ見せる） */
+    .page.no-book {
+      background: transparent;
+      box-shadow: none;
+    }
+
+    /* book未読込時のオーバーレイ（読込ボタンのみを中央に表示し、背景・枠は持たない） */
     #pdfDropOverlay {
       position: absolute;
       inset: 0;
@@ -613,8 +619,6 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.92);
-      border: 3px dashed #aaa;
       color: #666;
       font-size: 18px;
       gap: 12px;
@@ -624,16 +628,6 @@
 
     #pdfDropOverlay.hidden {
       display: none;
-    }
-
-    #pdfDropOverlay.drag-over {
-      background: rgba(66, 133, 244, 0.15);
-      border-color: #4285f4;
-      color: #4285f4;
-    }
-
-    #pdfDropOverlay .drop-icon {
-      font-size: 48px;
     }
 
     /* LIBRO book読込ボタン（親のpointer-events:noneを個別に打ち消してクリック可能にする） */

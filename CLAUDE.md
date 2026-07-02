@@ -20,12 +20,12 @@ python server.py
 
 ### 単一ファイル構成
 
-アプリ本体は [app/index.html](app/index.html) 一つに HTML/CSS/JavaScript がすべて記述されている（約8000行）。モジュール分割・ビルドツールは使用していない。CDN経由で `pdf.js`（PDF描画）と `JSZip`（ZIP入出力）を読み込む。
+アプリ本体は [app/index.html](app/index.html) 一つに HTML/CSS/JavaScript がすべて記述されている（約8000行）。モジュール分割・ビルドツールは使用していない。CDN経由で `JSZip`（ZIP入出力）を読み込む。
 
 ### 状態管理
 
 グローバル変数によるシンプルな状態管理（クラスやフレームワークは使用しない）:
-- `currentPage` / `totalPages` / `pdfDoc`：PDF表示関連
+- `currentPage` / `totalPages` / `bookPages`：LIBRO bookページ表示関連
 - `zoomLevel` / フィットモード：拡大縮小・フィット状態
 - `annIdCounter` / `daimonCounter` / `kotaeCounter` / `shomeiCounter` / `stickyGroupCounter`：アノテーションID採番
 - `mediaBlobs`：ZIP内の音声・動画・PDFファイルを BlobURL に変換してキャッシュ

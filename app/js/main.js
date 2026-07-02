@@ -2,7 +2,7 @@ import { closeQuickCreateDialog, confirmAnnotation, openQuickCreateDialog } from
 import { createDaimonButton, createKotaeButton, createShomeiButton } from './buttons.js';
 import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObjects, deactivateAnnotationMode, finalizeDragSelect, getPageRelativePos, onDragSelectMove, onDrawPreviewMove, onPageMouseDown, onPageMouseMove, onPageMouseUp, pasteClipboard, selectAllObjects } from './annotation-interaction.js';
 import { switchToViewMode } from './mode.js';
-import { applyZoomChange, goFirstPage, goLastPage, loadPDF, nextPage, prevPage, renderPage, resizePage, scaleAnnotations, setFit, updatePageDisplay, zoomIn, zoomOut } from './pdf-view.js';
+import { applyZoomChange, goFirstPage, goLastPage, nextPage, prevPage, renderPage, resizePage, scaleAnnotations, setFit, updatePageDisplay, zoomIn, zoomOut } from './pdf-view.js';
 import { selectedStickySet, state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
 import { closeDialog, handleAnnotationFile, handleZipFile, loadAnnotations, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsLibroBook, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';
@@ -448,8 +448,8 @@ import { pushUndo, redo, undo } from './undo-redo.js';
       if (oldW > 0 && newW !== oldW) {
         scaleAnnotations(newW / oldW);
       }
-      // ページサイズ変化後にcanvasサイズを同期するため PDF・book を再描画する
-      if (state.pdfDoc || state.bookPages) {
+      // ページサイズ変化後にcanvasサイズを同期するため book を再描画する
+      if (state.bookPages) {
         clearTimeout(_resizeTimer);
         _resizeTimer = setTimeout(() => renderPage(state.currentPage), 150);
       }
@@ -490,36 +490,6 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         this.value = state.currentPage;
       }
     });
-
-    // ドラッグ&ドロップでPDFを読み込む
-    (function() {
-      const dropZone = document.getElementById('pageLeft');
-
-      // ドラッグ中はオーバーレイを強調表示
-      dropZone.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        document.getElementById('pdfDropOverlay').classList.add('drag-over');
-      });
-
-      // ドラッグが外れたら強調解除
-      dropZone.addEventListener('dragleave', function(e) {
-        document.getElementById('pdfDropOverlay').classList.remove('drag-over');
-      });
-
-      // ドロップ時にPDFを読み込む
-      dropZone.addEventListener('drop', function(e) {
-        e.preventDefault();
-        document.getElementById('pdfDropOverlay').classList.remove('drag-over');
-        const file = e.dataTransfer.files[0];
-        if (!file || file.type !== 'application/pdf') {
-          console.warn('PDFファイルをドロップしてください');
-          return;
-        }
-        file.arrayBuffer().then(function(buffer) {
-          loadPDF(buffer);
-        });
-      });
-    })();
 
     // 初期ページ表示を 0/0 に初期化する
     updatePageDisplay();

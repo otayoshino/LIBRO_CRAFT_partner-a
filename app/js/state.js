@@ -1,12 +1,8 @@
 export const state = {
   /* -------- 状態管理 -------- */
   currentPage: 1,
-  /** 総ページ数（PDF読み込み後に更新） */
+  /** 総ページ数（LIBRO book読み込み後に更新） */
   totalPages: 1,
-  /** PDF.js ドキュメントオブジェクト */
-  pdfDoc: null,
-  /** 現在進行中の PDF 描画タスク（競合防止用） */
-  _currentRenderTask: null,
   /** 描画世代カウンター：非同期待機中に新しい renderPage が呼ばれたを検知する */
   _renderVersion: 0,
   /** ズーム変更後の再描画デバウンスタイマー */
@@ -67,20 +63,19 @@ export const state = {
   annClipboard: [],
   /** 付箋シングル/ダブルクリック判定用タイマー */
   _stickyClickTimer: null,
-  /* ページのアスペクト比（幅 / 高さ）。PDF読み込み後に実際の比率で上書きされる */
+  /* ページのアスペクト比（幅 / 高さ）。LIBRO book読み込み後に実際の比率で上書きされる */
   PAGE_ASPECT: 420 / 560,
   /* 現在のフィットモード */
   fitMode: 'height',
   /**
    * LIBRO bookフォルダ読込時のページ画像一覧。
    * 各要素: { pageNum, width, height, imageUrl, _img（描画キャッシュ用Imageオブジェクト） }
-   * PDF読込時は null のまま（pdfDoc とは排他利用）。
    */
   bookPages: null,
   /**
    * LIBRO book読込時の見開き開始境界。index.json の configs['real-page-count'] の値で、
    * このページ数を超えるページ番号は見開き（1ページ画像に2ページ分を含む）であることを示す。
-   * PDF読込時や real-page-count 未設定の book では null のまま。
+   * real-page-count 未設定の book では null のまま。
    */
   realPageCount: null,
   /**

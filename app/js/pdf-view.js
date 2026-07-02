@@ -48,8 +48,8 @@ import { updateStatus } from './ui-common.js';
      */
     export function updatePageDisplay() {
 
-      // PDF・LIBRO book いずれも未読み込み時は 0/0 を表示
-      if (!state.pdfDoc && !state.bookPages) {
+      // LIBRO book 未読み込み時は 0/0 を表示
+      if (!state.bookPages) {
         document.getElementById('pageInput').value = 0;
         const totalPagesText = document.getElementById('totalPagesText');
         if (totalPagesText) totalPagesText.textContent = '/ 0';
@@ -69,8 +69,8 @@ import { updateStatus } from './ui-common.js';
       // ページ移動時に選択を全解除する
       deselectAllObjects();
 
-      // PDF・LIBRO book ページを描画
-      if (state.pdfDoc || state.bookPages) renderPage(state.currentPage);
+      // LIBRO book ページを描画
+      if (state.bookPages) renderPage(state.currentPage);
 
       // 前ページ・最初ページのボタン活性制御
       const navBtns = document.querySelectorAll('.nav-btn');
@@ -126,52 +126,12 @@ import { updateStatus } from './ui-common.js';
 
 
     /**
-     * PDFを読み込んで最初のページを表示する。
-     * @param {string|ArrayBuffer} source - PDFファイルのURLまたはArrayBuffer
-     */
-    export async function loadPDF(source) {
-      try {
-        // cMapUrl：日本語など CID フォントの文字マッピングに必須
-        // standardFontDataUrl：埋め込みフォントがない場合の代替フォントデータ
-        const BASE = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/';
-        // URLとArrayBufferの両方に対応
-        const loadOption = typeof source === 'string'
-          ? { url: source }
-          : { data: source };
-        state.pdfDoc = await pdfjsLib.getDocument({
-          ...loadOption,
-          cMapUrl:             BASE + 'cmaps/',
-          cMapPacked:          true,
-          standardFontDataUrl: BASE + 'standard_fonts/',
-        }).promise;
-        state.totalPages = state.pdfDoc.numPages;
-        state.realPageCount = null;
-        const pageInput = document.getElementById('pageInput');
-        if (pageInput) pageInput.dataset.max = state.totalPages;
-        state.currentPage = 1;
-        // 最初のページのアスペクト比を取得して state.PAGE_ASPECT を更新
-        const firstPage = await state.pdfDoc.getPage(1);
-        const vp = firstPage.getViewport({ scale: 1 });
-        state.PAGE_ASPECT = vp.width / vp.height;
-        resizePage();
-        updatePageDisplay();
-        // PDF読み込み成功後にドロップオーバーレイを非表示にする
-        document.getElementById('pdfDropOverlay').classList.add('hidden');
-      } catch (err) {
-        console.error('PDF読み込みエラー:', err);
-      }
-    }
-
-
-    /**
      * LIBRO bookフォルダのページ画像一覧を読み込んで最初のページを表示する。
-     * loadPDF の LIBRO book版。pdfDoc とは排他利用（読込時に pdfDoc を null にする）。
      * @param {Array<{pageNum:number, width:number, height:number, imageUrl:string}>} pages
      * @param {number|null} [realPageCount] - index.json の configs['real-page-count']。
      *   このページ数を超えるページは見開きであることを示す。未指定時はnull。
      */
     export function loadLibroBookPages(pages, realPageCount = null) {
-      state.pdfDoc = null;
       state.bookPages = pages;
       state.totalPages = pages.length;
       state.realPageCount = realPageCount;
@@ -184,8 +144,9 @@ import { updateStatus } from './ui-common.js';
       }
       resizePage();
       updatePageDisplay();
-      // 読込成功後にドロップオーバーレイを非表示にする
+      // 読込成功後にドロップオーバーレイを非表示にし、.pageの白背景・影を表示する
       document.getElementById('pdfDropOverlay').classList.add('hidden');
+      document.getElementById('pageLeft').classList.remove('no-book');
     }
 
 
@@ -206,10 +167,10 @@ import { updateStatus } from './ui-common.js';
 
 
     /**
-     * LIBRO bookのページ画像をcanvasに描画する。renderPage の book版。
+     * LIBRO bookのページ画像をcanvasに描画する。
      * @param {number} num - 描画するページ番号（1始まり）
      */
-    async function renderBookPage(num) {
+    export async function renderPage(num) {
       const pageData = state.bookPages[num - 1];
       if (!pageData || !pageData.imageUrl) return;
 
@@ -242,79 +203,6 @@ import { updateStatus } from './ui-common.js';
       canvas.style.width  = pageEl.offsetWidth  + 'px';
       canvas.style.height = pageEl.offsetHeight + 'px';
       ctx.drawImage(img, 0, 0, newW, newH);
-    }
-
-
-    /**
-     * 指定ページをcanvasに描画する。
-     * @param {number} num - 描画するページ番号（1始まり）
-     */
-    export async function renderPage(num) {
-      // LIBRO book読込時はページ画像を描画する（PDF描画とは排他）
-      if (state.bookPages) { await renderBookPage(num); return; }
-
-      if (!state.pdfDoc) return;
-
-      // 前の描画タスクをキャンセルして競合（ページ混じり）を防ぐ
-      if (state._currentRenderTask) {
-        state._currentRenderTask.cancel();
-        state._currentRenderTask = null;
-      }
-
-      // 世代番号を取得（await 中に新しい renderPage が呼ばれたら中断する）
-      const renderVersion = ++state._renderVersion;
-
-      const pdfPage = await state.pdfDoc.getPage(num);
-
-      // より新しい renderPage が呼ばれていた場合は描画をスキップ
-      if (renderVersion !== state._renderVersion) return;
-
-      const canvas  = document.getElementById('pdfCanvas');
-      const pageEl  = document.getElementById('pageLeft');
-      // 表示サイズに合わせてスケールを計算する（高解像度のためデバイスピクセル比を考慮）
-      const baseViewport = pdfPage.getViewport({ scale: 1 });
-
-      // ページごとにアスペクト比を更新（ページサイズが異なる PDF に対応）
-      const pageAspect = baseViewport.width / baseViewport.height;
-      if (Math.abs(pageAspect - state.PAGE_ASPECT) > 0.001) {
-        state.PAGE_ASPECT = pageAspect;
-        resizePage();
-      }
-
-      const dpr   = window.devicePixelRatio || 1;
-      // ズームレベルを乗算することで、拡大時も常に高解像度でレンダリングする
-      const scale = (pageEl.offsetWidth / baseViewport.width) * dpr * (state.zoomLevel / 100);
-      const viewport = pdfPage.getViewport({ scale });
-
-      // canvas サイズを更新し、確実にクリアする
-      // （同じサイズの場合 canvas.width 代入でもリセットされないため clearRect で明示クリア）
-      const newW = Math.round(viewport.width);
-      const newH = Math.round(viewport.height);
-      canvas.width  = newW;
-      canvas.height = newH;
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, newW, newH);
-
-      // CSS サイズはCSS transformで拡大される前のページサイズに合わせる
-      // （Canvas物理ピクセルはズームレベル分増えているが、表示CSSサイズはtransform前に揃える）
-      canvas.style.width  = pageEl.offsetWidth  + 'px';
-      canvas.style.height = pageEl.offsetHeight + 'px';
-
-      try {
-        state._currentRenderTask = pdfPage.render({
-          canvasContext: ctx,
-          viewport,
-          // 'print' インテントは特色（Separation/DeviceN 色空間）や高精度フォント配置に対応
-          intent: 'print',
-        });
-        await state._currentRenderTask.promise;
-      } catch (err) {
-        if (err?.name !== 'RenderingCancelledException') {
-          console.error('PDF描画エラー:', err);
-        }
-      } finally {
-        state._currentRenderTask = null;
-      }
     }
 
     /* ============================
@@ -475,8 +363,8 @@ import { updateStatus } from './ui-common.js';
       state.panOffsetY = 0;
       document.getElementById('pageContainer').style.transform = 'none';
 
-      // フィット変更後にページサイズが変わるため PDF・book を再描画してcanvasサイズを合わせる
-      if (state.pdfDoc || state.bookPages) renderPage(state.currentPage);
+      // フィット変更後にページサイズが変わるため book を再描画してcanvasサイズを合わせる
+      if (state.bookPages) renderPage(state.currentPage);
 
       updateAlignPanel();
       updateStatus('表示フィット: ' + { page: 'ページ全体', height: '高さ', width: '幅' }[mode]);

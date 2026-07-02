@@ -4,9 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ContentsBuilder モック</title>
-  <!-- PDF.js CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+  <!-- favicon.ico への自動リクエストで404が出るのを防ぐ -->
+  <link rel="icon" href="data:,">
   <!-- JSZip CDN（ZIP保存・読み込み用） -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <link rel="stylesheet" href="css/style.css">
@@ -361,13 +360,11 @@
       <div class="page-container" id="pageContainer">
 
         <!-- 単ページ表示 -->
-        <div class="page" id="pageLeft"
+        <div class="page no-book" id="pageLeft"
              onmousedown="onPageMouseDown(event)"
              onmousemove="onPageMouseMove(event)"
              onmouseup="onPageMouseUp(event)">
           <div id="pdfDropOverlay">
-            <span class="drop-icon">📄</span>
-            <span>PDFをここにドロップ</span>
             <button type="button" id="bookLoadBtn" onclick="loadAnnotationsFromZip()">LIBRO bookを読み込む（ZIP）</button>
           </div>
           <canvas id="pdfCanvas" class="page-content"></canvas>
