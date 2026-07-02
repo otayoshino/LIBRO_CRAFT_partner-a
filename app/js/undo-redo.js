@@ -67,6 +67,15 @@ import { showToast, updateStatus } from './ui-common.js';
               if (snap.shomeiId)    el.dataset.shomeiId  = snap.shomeiId;
               el.dataset.page = snap.pageNum || '1';
               el.style.cssText = snap.styleCssText;
+              // LIBRO由来の既存付箋（.libro-toggle）は子要素（画像2枚）と専用datasetを復元する
+              if (snap.libroToggle) {
+                el.dataset.libroToggle = snap.libroToggle;
+                if (snap.closedId)   el.dataset.closedId   = snap.closedId;
+                if (snap.openId)     el.dataset.openId     = snap.openId;
+                if (snap.closedFile) el.dataset.closedFile = snap.closedFile;
+                if (snap.openFile)   el.dataset.openFile   = snap.openFile;
+                if (snap.innerHTML !== undefined) el.innerHTML = snap.innerHTML;
+              }
               // 種別に応じてハンドラ・内容を設定
               if (el.classList.contains('sticky-note')) {
                 addStickyClickHandler(el);
@@ -147,21 +156,24 @@ import { showToast, updateStatus } from './ui-common.js';
           }
           // --- プロパティ変更の取り消し（複数対応） ---
           case 'prop': {
-            if (Array.isArray(op.targets)) {
-              op.targets.forEach(({ el, prevSavedData, prevStyleCssText, prevClassName, prevInnerHTML }) => {
-                if (prevSavedData    !== undefined) el.dataset.savedData = prevSavedData;
-                if (prevStyleCssText !== undefined) el.style.cssText = prevStyleCssText;
-                if (prevClassName    !== undefined) el.className = prevClassName;
-                if (prevInnerHTML    !== undefined) el.innerHTML = prevInnerHTML;
-                reinitElement(el);
-              });
-            } else {
-              const { el, prevSavedData, prevStyleCssText, prevClassName, prevInnerHTML } = op;
+            // stickyColorOverrideはconfirmAnnotationの付箋色変更時のみスナップショットに含まれるため、
+            // 含まれる場合のみ復元する（他の呼び出し元のUndoで誤って消してしまわないようhasOwnPropertyで判定）
+            const restoreOne = (snap) => {
+              const { el, prevSavedData, prevStyleCssText, prevClassName, prevInnerHTML } = snap;
               if (prevSavedData    !== undefined) el.dataset.savedData = prevSavedData;
               if (prevStyleCssText !== undefined) el.style.cssText = prevStyleCssText;
               if (prevClassName    !== undefined) el.className = prevClassName;
               if (prevInnerHTML    !== undefined) el.innerHTML = prevInnerHTML;
+              if (Object.prototype.hasOwnProperty.call(snap, 'prevStickyColorOverride')) {
+                if (snap.prevStickyColorOverride !== undefined) el.dataset.stickyColorOverride = snap.prevStickyColorOverride;
+                else delete el.dataset.stickyColorOverride;
+              }
               reinitElement(el);
+            };
+            if (Array.isArray(op.targets)) {
+              op.targets.forEach(restoreOne);
+            } else {
+              restoreOne(op);
             }
             // Undo直後のapplyLiveUpdateキャッシュをリセット
             applyLiveUpdate._prevX = parseFloat(document.getElementById('annPosX')?.value)  ?? undefined;

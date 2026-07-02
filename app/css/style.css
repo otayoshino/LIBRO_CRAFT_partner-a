@@ -1351,6 +1351,40 @@
       z-index: 20;
     }
 
+    /* LIBRO由来の既存付箋（.libro-toggle）：元の閉/開2枚のPNG画像をそのまま重ねて表示し、
+       state-visible/state-hiddenでどちらの画像を見せるか切り替える（単色opacityモデルは使わない）。
+       編集モード時の半透明表示（.sticky-note共通ルール）は他種別との統一感のため維持しつつ、
+       state-hiddenのopacity:0だけを打ち消して画像自体は常に見えるようにする（セレクタ特異性で上書き）。 */
+    .sticky-note.libro-toggle.state-hidden {
+      opacity: 1;
+      outline: none;
+    }
+    .sticky-note.libro-toggle .libro-toggle-closed,
+    .sticky-note.libro-toggle .libro-toggle-open {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      pointer-events: none;
+    }
+    .sticky-note.libro-toggle.state-visible .libro-toggle-closed { display: block; }
+    .sticky-note.libro-toggle.state-visible .libro-toggle-open   { display: none;  }
+    .sticky-note.libro-toggle.state-hidden  .libro-toggle-closed { display: none;  }
+    .sticky-note.libro-toggle.state-hidden  .libro-toggle-open   { display: block; }
+
+    /* 既存付箋の色を選び直した場合のプレビュー用オーバーレイ（閉側のみ差し替え、開側の元画像は無変更のまま維持） */
+    .sticky-note.libro-toggle .libro-toggle-color-override {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: none;
+    }
+    .sticky-note.libro-toggle[data-sticky-color-override] .libro-toggle-closed { display: none !important; }
+    .sticky-note.libro-toggle[data-sticky-color-override].state-visible .libro-toggle-color-override { display: block; }
+
     /* 編集モード時: グループ化済み付箋にグループ番号バッジを左下に表示 */
     body:not(.is-view-mode) .sticky-note[data-group-id]::after {
       content: attr(data-group-id);

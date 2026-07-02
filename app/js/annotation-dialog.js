@@ -63,7 +63,7 @@ import { pushUndo } from './undo-redo.js';
 
       document.body.appendChild(popup);
 
-      buildCommonFields(document.getElementById('qcFormCommon'), type, prevData, null);
+      buildCommonFields(document.getElementById('qcFormCommon'), type, prevData, null, el);
 
       if (type !== 'sticky') {
         buildSpecificFields(document.getElementById('qcFormSpecific'), type, prevData);
@@ -311,7 +311,7 @@ import { pushUndo } from './undo-redo.js';
     }
 
 
-    export function buildCommonFields(form, type, savedData, initRect) {
+    export function buildCommonFields(form, type, savedData, initRect, existingEl = null) {
       const px = initRect ? Math.round(initRect.x) : (parseInt(savedData.annPosX,   10) || 0);
       const py = initRect ? Math.round(initRect.y) : (parseInt(savedData.annPosY,   10) || 0);
       const pw = initRect ? Math.round(initRect.w) : (parseInt(savedData.annWidth,  10) || 100);
@@ -364,6 +364,16 @@ import { pushUndo } from './undo-redo.js';
       const colSel = document.createElement('select');
       colSel.className = 'd-select';
       colSel.id = 'annColor';
+      // LIBRO由来の既存付箋（.libro-toggle）は色プロパティを持たないため、
+      // 「既存付箋カラー」という専用選択肢を先頭に追加しデフォルト選択にする。
+      // 実際の色を選び直した場合のみ、confirmAnnotation側で新規画像を生成して色を持たせる。
+      const isLibroToggle = type === 'sticky' && existingEl?.dataset.libroToggle === '1';
+      if (isLibroToggle) {
+        const o = document.createElement('option');
+        o.value = 'existing';
+        o.textContent = '既存付箋カラー';
+        colSel.appendChild(o);
+      }
       const colorList = (type === 'sticky') ? STICKY_COLORS : ANN_COLOR_OPTIONS;
       colorList.forEach((c, i) => {
         const o = document.createElement('option');
@@ -371,7 +381,7 @@ import { pushUndo } from './undo-redo.js';
         o.textContent = c.label;
         colSel.appendChild(o);
       });
-      colSel.value = savedData.annColor || '0';
+      colSel.value = isLibroToggle ? 'existing' : (savedData.annColor || '0');
       colWrap.appendChild(colSel);
       colDd.appendChild(colWrap);
       form.appendChild(colDt);
@@ -836,8 +846,9 @@ import { pushUndo } from './undo-redo.js';
       // 新規作成時は state.pendingRect を初期値として使用
       const initRect = existingEl ? null : state.pendingRect;
 
-      // 共通フィールドを生成（常時表示）
-      buildCommonFields(commonForm, type, savedData, initRect);
+      // 共通フィールドを生成（常時表示）。LIBRO由来の既存付箋（.libro-toggle）の場合は
+      // 「既存付箋カラー」選択肢がデフォルト選択される（buildCommonFields内で判定）
+      buildCommonFields(commonForm, type, savedData, initRect, existingEl);
 
       // アイコン型でも塗り色（背景グラデーション）を変更可能にするため無効化しない
 
@@ -898,8 +909,16 @@ import { pushUndo } from './undo-redo.js';
       }
 
       if (type === 'sticky') {
-        // 色変換
-        const colorIdx = parseInt(savedData.annColor || '0', 10);
+        // LIBRO由来の既存付箋（.libro-toggle）は色プロパティを持たないため、
+        // ダイアログには「既存付箋カラー」という専用選択肢がデフォルト選択されている（buildCommonFields参照）。
+        // それが選ばれたままなら元画像（閉・開とも）を維持し、実際の色が選ばれた場合は
+        // 「閉」（解答を隠す面）だけを選択色のプレビューに差し替える。
+        // 「開」（解答等が描き込まれている可能性がある元画像）は常に無変更のまま維持する
+        // （他システム作成のbookでは開側に答えなどが直接描き込まれており、再生成できないため）。
+        const isLibroToggleNote = existingEl?.dataset.libroToggle === '1';
+        const colorSelection    = savedData.annColor;
+        const keepsOriginalImage = isLibroToggleNote && (colorSelection === undefined || colorSelection === 'existing');
+        const colorIdx = parseInt(colorSelection || '0', 10);
         const color    = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
 
         if (isUpdate) {
@@ -910,14 +929,32 @@ import { pushUndo } from './undo-redo.js';
             prevSavedData: existingEl.dataset.savedData,
             prevStyleCssText: existingEl.style.cssText,
             prevClassName: existingEl.className,
-            prevInnerHTML: existingEl.innerHTML
+            prevInnerHTML: existingEl.innerHTML,
+            prevStickyColorOverride: existingEl.dataset.stickyColorOverride,
           });
-          // 位置・サイズ・色を反映
+          // 位置・サイズを反映
           if (savedData.annPosX !== undefined) existingEl.style.left = parseInt(savedData.annPosX, 10) + 'px';
           if (savedData.annPosY !== undefined) existingEl.style.top  = parseInt(savedData.annPosY, 10) + 'px';
           if (savedData.annWidth !== undefined)  existingEl.style.width  = parseInt(savedData.annWidth, 10) + 'px';
           if (savedData.annHeight !== undefined) existingEl.style.height = parseInt(savedData.annHeight, 10) + 'px';
-          existingEl.style.background = color;
+
+          if (isLibroToggleNote && keepsOriginalImage) {
+            // 「既存付箋カラー」に戻した場合：色上書きを解除し、元の閉画像表示に戻す
+            delete existingEl.dataset.stickyColorOverride;
+          } else if (isLibroToggleNote) {
+            // 実際の色が選択された：閉のみ選択色のプレビューに差し替える（開・元datasetは無変更のまま維持）
+            existingEl.dataset.stickyColorOverride = String(colorIdx);
+            let overlay = existingEl.querySelector('.libro-toggle-color-override');
+            if (!overlay) {
+              overlay = document.createElement('div');
+              overlay.className = 'libro-toggle-color-override';
+              existingEl.appendChild(overlay);
+            }
+            overlay.style.background = color;
+          } else {
+            // 通常付箋：色を反映
+            existingEl.style.background = color;
+          }
           // ラベル（annLabel）があれば反映
           if (savedData.annLabel !== undefined) {
             let labelSpan = existingEl.querySelector('.ann-label');
@@ -929,7 +966,9 @@ import { pushUndo } from './undo-redo.js';
             labelSpan.textContent = savedData.annLabel;
           }
           existingEl.dataset.savedData = JSON.stringify(savedData);
-          updateStatus('付箋を更新しました');
+          updateStatus(isLibroToggleNote && !keepsOriginalImage
+            ? '付箋の色を変更しました（次回LIBRO書き出し時に閉側のみ新規画像を生成します。開側の元画像は維持されます）'
+            : '付箋を更新しました');
         } else {
           // 新規作成：連続作成用に設定を保存
           lastNewAnnData[type] = savedData;

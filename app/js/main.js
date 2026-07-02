@@ -46,6 +46,13 @@ import { pushUndo, redo, undo } from './undo-redo.js';
             kotaeOrigBg: note.dataset.kotaeOrigBg,
             styleCssText: note.style.cssText,
             pageNum:     note.dataset.page || '1',
+            // LIBRO由来の既存付箋（.libro-toggle）は子要素（画像2枚）と専用datasetの復元が必要
+            innerHTML:   note.dataset.libroToggle === '1' ? note.innerHTML : undefined,
+            libroToggle: note.dataset.libroToggle,
+            closedId:    note.dataset.closedId,
+            openId:      note.dataset.openId,
+            closedFile:  note.dataset.closedFile,
+            openFile:    note.dataset.openFile,
           });
         });
 

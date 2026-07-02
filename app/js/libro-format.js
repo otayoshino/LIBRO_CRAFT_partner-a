@@ -1,5 +1,7 @@
 import { mediaBlobs } from './state.js';
 import { ANNOTATION_TYPE_CONFIG } from './config.js';
+import { addStickyClickHandler } from './sticky.js';
+import { makeDraggable, makeResizable } from './annotation-interaction.js';
 
 /* ============================================================
    LIBRO bookフォルダ形式（index.json / p####.json / 暗号化ページ画像 /
@@ -143,8 +145,9 @@ function rectToStyle(rect, pageWidth, pageHeight) {
 
 
 /**
- * ページ内のannots[]を、ContentsBuilderの既知アノテーション（annotations.json互換オブジェクト）と
- * 編集不可アノテーション（未知パターン、およびHide/Showペアの生データ。書き出し時は無変更のまま書き戻す）
+ * ページ内のannots[]を、ContentsBuilderの既知アノテーション（annotations.json互換オブジェクト）、
+ * 付箋Hide/Showペア（togglePairs。位置・グループ編集および書き出しに対応）、
+ * 編集不可アノテーション（未知パターンのみ。書き出し時は無変更のまま書き戻す）
  * とに分類・変換する。
  * @param {Object} pageJson - p####.json のパース済みオブジェクト
  * @param {number} pageNum - 1始まりのページ番号
@@ -173,15 +176,16 @@ function convertPageAnnotations(pageJson, pageNum) {
     maxId = Math.max(maxId, closed._id || 0, open._id || 0);
     togglePairs.push({
       pageNum,
+      closedId:   closed._id,
+      openId:     open._id,
       closedFile: closed.filename,
       openFile:   open.filename,
       rect:       closed.rect,
       pageWidth,
       pageHeight,
     });
-    // ContentsBuilderは編集不可のため、書き出し時にそのまま書き戻せるよう生データも保持する
-    unknown.push({ pageNum, raw: a });
-    unknown.push({ pageNum, raw: b });
+    // 位置・グループ編集後に書き出し可能な既知アノテーションとして扱うため、
+    // 未知アノテーションへは登録しない（convertStickyGroupToLibroAnnotsで再生成する）
   });
 
   annots.forEach(a => {
@@ -328,6 +332,10 @@ export async function parseLibroBookZip(zip) {
       rect: tp.rect,
       pageWidth: tp.pageWidth,
       pageHeight: tp.pageHeight,
+      closedId:   tp.closedId,
+      openId:     tp.openId,
+      closedFile: tp.closedFile,
+      openFile:   tp.openFile,
       closedImageUrl: URL.createObjectURL(new Blob([closedBlob], { type: 'image/png' })),
       openImageUrl:   URL.createObjectURL(new Blob([openBlob],   { type: 'image/png' })),
     });
@@ -338,41 +346,52 @@ export async function parseLibroBookZip(zip) {
 
 
 /**
- * Hide/Showペア（付箋・答え表示等の開閉）を、クリックで画像を切り替えるDOM要素として#pageLeftに描画する。
- * ContentsBuilderの標準アノテーション種別（付箋/ページリンク等）とは異なり編集ダイアログの対象外だが、
- * ページ表示・クリックによる開閉動作は再現する。
+ * Hide/Showペア（付箋・答え表示等の開閉）を、位置移動・リサイズ・グループ化・書き出しに対応した
+ * インタラクティブな `.sticky-note.libro-toggle` 要素として#pageLeftに描画する。
+ * 色（見た目）は元のPNG画像そのままとし変更不可（openAnnotationSettingsDialog/confirmAnnotationが
+ * dataset.libroToggle を見て塗り色UIを無効化する）。クリック時の開閉・選択・グループ挙動は
+ * 通常の付箋と同じ addStickyClickHandler をそのまま再利用する。
  * @param {Array<Object>} togglePairs - parseLibroBookZip が返す togglePairs
  */
 export function renderTogglePairs(togglePairs) {
   const page = document.getElementById('pageLeft');
+  const pageRect = page.getBoundingClientRect();
+
   togglePairs.forEach(tp => {
     const [x, y, w, h] = tp.rect;
-    const leftPct   = (x / tp.pageWidth)  * 100;
-    const topPct    = (y / tp.pageHeight) * 100;
-    const widthPct  = (w / tp.pageWidth)  * 100;
-    const heightPct = (h / tp.pageHeight) * 100;
+    // 通常の付箋・アノテーションと同じ px 座標系（scaleAnnotations / makeDraggable / makeResizable が
+    // 前提とする形式）に変換して配置する
+    const leftPx   = (x / tp.pageWidth)  * pageRect.width;
+    const topPx    = (y / tp.pageHeight) * pageRect.height;
+    const widthPx  = (w / tp.pageWidth)  * pageRect.width;
+    const heightPx = (h / tp.pageHeight) * pageRect.height;
 
     const wrap = document.createElement('div');
-    wrap.className = 'libro-toggle';
-    wrap.dataset.page = tp.pageNum;
-    wrap.style.cssText =
-      `position:absolute; left:${leftPct}%; top:${topPct}%; width:${widthPct}%; height:${heightPct}%; cursor:pointer;`;
+    wrap.className = 'sticky-note libro-toggle state-visible';
+    wrap.dataset.type        = 'sticky';
+    wrap.dataset.id          = tp.closedId;
+    wrap.dataset.libroToggle = '1';
+    wrap.dataset.closedId    = tp.closedId;
+    wrap.dataset.openId      = tp.openId;
+    wrap.dataset.closedFile  = tp.closedFile;
+    wrap.dataset.openFile    = tp.openFile;
+    wrap.dataset.page        = tp.pageNum;
+    wrap.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
 
     const closedImg = document.createElement('img');
+    closedImg.className = 'libro-toggle-closed';
     closedImg.src = tp.closedImageUrl;
-    closedImg.style.cssText = 'width:100%; height:100%; display:block; pointer-events:none;';
 
     const openImg = document.createElement('img');
+    openImg.className = 'libro-toggle-open';
     openImg.src = tp.openImageUrl;
-    openImg.style.cssText = 'width:100%; height:100%; display:none; pointer-events:none;';
 
     wrap.appendChild(closedImg);
     wrap.appendChild(openImg);
-    wrap.addEventListener('click', () => {
-      const isClosed = closedImg.style.display !== 'none';
-      closedImg.style.display = isClosed ? 'none'  : 'block';
-      openImg.style.display   = isClosed ? 'block' : 'none';
-    });
+
+    addStickyClickHandler(wrap);
+    makeDraggable(wrap);
+    makeResizable(wrap);
 
     page.appendChild(wrap);
   });
@@ -381,9 +400,10 @@ export function renderTogglePairs(togglePairs) {
 
 /* ============================================================
    LIBRO bookフォルダ形式への書き出し（エクスポート）。
-   対応するのはページリンク／外部リンク／音声再生の3種別のみ
-   （LIBROの既知action種別 GoTo+FitPage / URI / Launch に対応するため）。
-   付箋（Hide/Show）の新規作成・書き出しは未対応。
+   ページリンク／外部リンク／音声再生（GoTo+FitPage / URI / Launch）に加え、
+   付箋（Hide/Show）の書き出しにも対応する。
+   付箋は「既存付箋（LIBRO由来、色変更不可・画像そのまま再利用）」と
+   「新規付箋（ContentsBuilder作成、色に応じてPNGを新規ラスタライズ）」を区別して扱う。
 ============================================================ */
 
 /**
@@ -458,6 +478,114 @@ export async function rasterizeMarkerPng(type, pxWidth, pxHeight) {
 
 
 /**
+ * 付箋の「閉」（解答を隠す状態）PNGを、指定色で塗った矩形としてラスタライズする。
+ * @param {string} color - CSS色（STICKY_COLOR_MAPの値）
+ * @param {number} pxWidth
+ * @param {number} pxHeight
+ * @returns {Promise<Uint8Array>}
+ */
+export async function rasterizeStickyClosedPng(color, pxWidth, pxHeight) {
+  const w = Math.max(1, Math.min(1200, pxWidth));
+  const h = Math.max(1, Math.min(1200, pxHeight));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = color || '#4488cc';
+  ctx.fillRect(0, 0, w, h);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+
+/**
+ * 付箋の「開」（解答が見えている状態）PNGを、完全透明の矩形としてラスタライズする。
+ * ContentsBuilderで新規作成した付箋には「開」側の元画像が存在しないため、
+ * 下地のページがそのまま見える状態を透明PNGで再現する。
+ * @param {number} pxWidth
+ * @param {number} pxHeight
+ * @returns {Promise<Uint8Array>}
+ */
+export async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
+  const w = Math.max(1, Math.min(1200, pxWidth));
+  const h = Math.max(1, Math.min(1200, pxHeight));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+
+/**
+ * 1グループ（グループ化されていない単独付箋の場合はメンバー1件）分の付箋を、
+ * LIBROの annots[] 要素（メンバーごとに「閉」「開」2件）に変換する。
+ * グループ内のどのメンバーをクリックしてもグループ全体が同時にトグルするよう、
+ * 全メンバーの「閉」id・「開」idをそれぞれの Hide/Show targets に列挙する
+ * （1メンバーのみの場合、実データで確認済みの1:1相互参照ペアと同一構造になる）。
+ *
+ * 「開」（解答が見えている状態）の元画像には、LIBRO由来の場合は解答等の内容が
+ * 描き込まれている可能性があり再生成できないため、closedMode/openModeを独立させ、
+ * 既存付箋の色だけを変更した場合は「開」画像を無変更のまま維持できるようにする。
+ * @param {Array<{closedId:number, openId:number, closedFile?:string, openFile?:string, style:string,
+ *   closedMode:'reuse'|'color', openMode:'reuse'|'transparent', color?:string}>} members
+ *   - style: 現在のDOM位置から算出した "left:x%;top:y%;width:w%;height:h%;" 形式
+ *   - closedMode/openMode='reuse': closedFile/openFileの画像をそのまま再利用（新規PNG生成なし）
+ *   - closedMode='color': colorをもとに新規PNGを生成（「閉」のみ）
+ *   - openMode='transparent': 完全透明PNGを新規生成（「開」のみ。新規付箋のみで発生）
+ * @param {number} pageWidth
+ * @param {number} pageHeight
+ * @param {JSZip} zip
+ * @param {string} baseDir
+ * @returns {Promise<{annotJsons:Array<Object>, newPngWrites:Array<{path:string, bytes:Uint8Array}>}>}
+ */
+export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, zip, baseDir) {
+  const closedIds = members.map(m => m.closedId);
+  const openIds   = members.map(m => m.openId);
+
+  const annotJsons = [];
+  const newPngWrites = [];
+
+  for (const m of members) {
+    const rect = styleToRect(m.style, pageWidth, pageHeight);
+    const closedFile = m.closedFile || libroMarkerFilename(m.closedId);
+    const openFile   = m.openFile   || libroMarkerFilename(m.openId);
+
+    if (m.closedMode === 'color') {
+      const closedBytes = await rasterizeStickyClosedPng(m.color, rect[2], rect[3]);
+      newPngWrites.push({ path: baseDir + closedFile, bytes: closedBytes });
+    }
+    if (m.openMode === 'transparent') {
+      const openBytes = await rasterizeStickyOpenPng(rect[2], rect[3]);
+      newPngWrites.push({ path: baseDir + openFile, bytes: openBytes });
+    }
+
+    annotJsons.push({
+      filename: closedFile,
+      rect,
+      actions: [
+        { action: 'Hide', targets: closedIds },
+        { action: 'Show', targets: openIds },
+      ],
+    });
+    annotJsons.push({
+      filename: openFile,
+      rect,
+      hidden: true,
+      actions: [
+        { action: 'Hide', targets: openIds },
+        { action: 'Show', targets: closedIds },
+      ],
+    });
+  }
+
+  return { annotJsons, newPngWrites };
+}
+
+
+/**
  * ContentsBuilderのアノテーションオブジェクトをLIBROの annots[] 要素に変換する
  * （convertPageAnnotationsの逆変換）。対応する既存マーカーPNGがzip内に無い場合は
  * 新規マーカーPNGを生成する。
@@ -504,10 +632,12 @@ export async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeig
  * @param {Array<{id:number, page:number, type:string, style:string, savedData:string}>} domAnnotations
  *   - LIBROに変換可能な種別（pagelink/externallink/audio）のDOM由来アノテーションデータ
  * @param {Array<{pageNum:number, raw:Object}>} passthroughAnnotations - state.libroUnknownAnnotations
- *   （未知アノテーション・Hide/Showペアの生データ。無変更のまま書き戻す）
+ *   （真に未知のアノテーションのみ。無変更のまま書き戻す）
+ * @param {Array<{pageNum:number, members:Array<Object>}>} [domStickyGroups] - 付箋のグループ一覧
+ *   （groupId未設定の付箋は単独1件のグループとして渡す。members仕様は convertStickyGroupToLibroAnnots 参照）
  * @returns {Promise<JSZip>}
  */
-export async function buildLibroBookExport(libroBook, domAnnotations, passthroughAnnotations) {
+export async function buildLibroBookExport(libroBook, domAnnotations, passthroughAnnotations, domStickyGroups = []) {
   const { zip, baseDir, indexJson } = libroBook;
   const pageMetaList = indexJson.pages || [];
 
@@ -520,6 +650,11 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
   passthroughAnnotations.forEach(({ pageNum, raw }) => {
     if (!passthroughByPage.has(pageNum)) passthroughByPage.set(pageNum, []);
     passthroughByPage.get(pageNum).push(raw);
+  });
+  const stickyGroupsByPage = new Map();
+  domStickyGroups.forEach(g => {
+    if (!stickyGroupsByPage.has(g.pageNum)) stickyGroupsByPage.set(g.pageNum, []);
+    stickyGroupsByPage.get(g.pageNum).push(g);
   });
 
   for (let i = 0; i < pageMetaList.length; i++) {
@@ -535,7 +670,7 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     const pageWidth  = pageJson.width;
     const pageHeight = pageJson.height;
 
-    // 未知・Hide/Showペアの生データは無変更のまま書き戻す（内部管理用の_idは除去）
+    // 未知アノテーションの生データは無変更のまま書き戻す（内部管理用の_idは除去）
     const passthrough = (passthroughByPage.get(pageNum) || []).map(({ _id, ...clean }) => clean);
 
     const converted = [];
@@ -546,7 +681,14 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
       converted.push(result.annotJson);
     }
 
-    pageJson.annots = [...passthrough, ...converted];
+    const stickyAnnots = [];
+    for (const group of (stickyGroupsByPage.get(pageNum) || [])) {
+      const { annotJsons, newPngWrites } = await convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, zip, baseDir);
+      newPngWrites.forEach(({ path, bytes }) => zip.file(path, bytes));
+      stickyAnnots.push(...annotJsons);
+    }
+
+    pageJson.annots = [...passthrough, ...converted, ...stickyAnnots];
 
     const usedIds = pageJson.annots
       .map(a => { const m = (a.filename || '').match(/(\d+)\.\w+$/); return m ? parseInt(m[1], 10) : null; })

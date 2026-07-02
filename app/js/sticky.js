@@ -16,11 +16,17 @@ import { pushUndo, redo } from './undo-redo.js';
         showToast('まず先に付箋を選択してください。');
         return;
       }
+      // LIBRO由来の既存付箋（.libro-toggle）は複製に新規PNGが必要になり「新規作成」と等価なため対象外とする
+      const sourceNotes = Array.from(selectedStickySet).filter(n => n.dataset.libroToggle !== '1');
+      if (sourceNotes.length === 0) {
+        showToast('LIBRO由来の既存付箋は複製できません。');
+        return;
+      }
       const page = document.getElementById('pageLeft');
       const OFFSET = 16; // コピー先のオフセット（px）
       const copies = [];
 
-      selectedStickySet.forEach(note => {
+      sourceNotes.forEach(note => {
         const clone = document.createElement('div');
         clone.className = 'sticky-note state-visible';
         clone.dataset.id   = ++state.annIdCounter;
@@ -191,6 +197,8 @@ import { pushUndo, redo } from './undo-redo.js';
         const color    = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
 
         selectedStickySet.forEach(note => {
+          // LIBRO由来の既存付箋（.libro-toggle）は元画像をそのまま使うため色変更対象外
+          if (note.dataset.libroToggle === '1') return;
           // 背景色を適用
           note.style.background = color;
           // savedData を取得・更新して再保存

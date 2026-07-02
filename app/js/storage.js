@@ -15,7 +15,8 @@ import { showToast, updateStatus } from './ui-common.js';
         export function saveAnnotations() {
           const page = document.getElementById('pageLeft');
           const pageRect = page.getBoundingClientRect();
-          const elements = page.querySelectorAll('.sticky-note, .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+          // LIBRO book由来の付箋（.libro-toggle）はLIBRO書き出し専用のため、通常のローカル保存対象からは除外する
+          const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
           const data = Array.from(elements).map(el => {
             // px値取得
             const left = parseFloat(el.style.left) || 0;
@@ -85,8 +86,8 @@ import { showToast, updateStatus } from './ui-common.js';
         export function restoreAnnotationsFromArray(arr) {
           const page = document.getElementById('pageLeft');
           const pageRect = page.getBoundingClientRect();
-          // 既存アノテーションを全削除
-          page.querySelectorAll('.sticky-note, .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(el => el.remove());
+          // 既存アノテーションを全削除（LIBRO book由来の付箋 .libro-toggle は対象外）
+          page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(el => el.remove());
           arr.forEach(obj => {
                 const el = document.createElement('div');
                 // ann-hidden-page はページ表示管理で付け直すため、className から除去してセット
@@ -337,7 +338,7 @@ import { showToast, updateStatus } from './ui-common.js';
     export async function saveAnnotationsAsZip() {
       const page = document.getElementById('pageLeft');
       const pageRect = page.getBoundingClientRect();
-      const elements = page.querySelectorAll('.sticky-note, .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+      const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
       const data = Array.from(elements).map(el => {
         const left = parseFloat(el.style.left) || 0;
         const top  = parseFloat(el.style.top)  || 0;
@@ -424,8 +425,8 @@ import { showToast, updateStatus } from './ui-common.js';
 
     /**
      * LIBRO bookとして読み込んだ内容を、LIBRO bookフォルダ形式のZIPとして書き出す。
-     * ページリンク・外部リンク・音声再生のみ対応（LIBROの既知action種別に対応するため）。
-     * それ以外の種別（付箋・動画・図・大問/答/証明ボタン等）が存在する場合はトーストで警告し、
+     * ページリンク・外部リンク・音声再生・付箋（Hide/Show）に対応する。
+     * それ以外の種別（動画・図・大問/答/証明ボタン等）が存在する場合はトーストで警告し、
      * 書き出し対象から除外する。
      */
     export async function saveAnnotationsAsLibroBook() {
@@ -436,7 +437,7 @@ import { showToast, updateStatus } from './ui-common.js';
 
       const page = document.getElementById('pageLeft');
       const pageRect = page.getBoundingClientRect();
-      const elements = page.querySelectorAll('.sticky-note, .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+      const elements = page.querySelectorAll('.ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
       const supportedTypes = new Set(['pagelink', 'externallink', 'audio']);
 
       const domAnnotations = [];
@@ -461,12 +462,62 @@ import { showToast, updateStatus } from './ui-common.js';
         });
       });
 
+      // 付箋（sticky-note）をグループ単位（groupId未設定は単独1件）でまとめ、
+      // LIBROのHide/Showペア（既存付箋は画像そのまま再利用、新規付箋は色から新規PNGを生成）に変換する
+      const groupBuckets = new Map();
+      page.querySelectorAll('.sticky-note').forEach(el => {
+        const gid = el.dataset.groupId || `__solo-${el.dataset.id}`;
+        if (!groupBuckets.has(gid)) groupBuckets.set(gid, []);
+        groupBuckets.get(gid).push(el);
+      });
+
+      const domStickyGroups = [];
+      groupBuckets.forEach(members => {
+        const pageNum = parseInt(members[0].dataset.page, 10) || 1;
+        const memberDescs = members.map(el => {
+          const left   = parseFloat(el.style.left)   || 0;
+          const top    = parseFloat(el.style.top)    || 0;
+          const width  = parseFloat(el.style.width)  || el.offsetWidth;
+          const height = parseFloat(el.style.height) || el.offsetHeight;
+          const style = `left:${(left / pageRect.width) * 100}%;top:${(top / pageRect.height) * 100}%;` +
+                        `width:${(width / pageRect.width) * 100}%;height:${(height / pageRect.height) * 100}%;`;
+
+          if (el.dataset.libroToggle === '1') {
+            // 既存付箋：id・画像は基本そのまま再利用する。
+            // 「開」（解答等が描き込まれている可能性がある元画像）は常に無変更のまま維持し、
+            // 色が上書きされた場合（dataset.stickyColorOverride）のみ「閉」だけを新規生成する。
+            const closedId = parseInt(el.dataset.closedId, 10);
+            const openId   = parseInt(el.dataset.openId, 10);
+            const closedFile = el.dataset.closedFile;
+            const openFile   = el.dataset.openFile;
+            if (el.dataset.stickyColorOverride) {
+              const colorIdx = parseInt(el.dataset.stickyColorOverride, 10);
+              const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+              return { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color, style };
+            }
+            return { closedId, openId, closedFile, openFile, closedMode: 'reuse', openMode: 'reuse', style };
+          }
+
+          // 新規付箋：閉id（dataset.id）は既存を再利用し、開idは初回のみ発行してdatasetにキャッシュする
+          // （再エクスポート時に毎回新規idを発行して不要なファイルが増えるのを防ぐため）
+          const closedId = parseInt(el.dataset.id, 10);
+          if (!el.dataset.stickyOpenId) el.dataset.stickyOpenId = String(++state.annIdCounter);
+          const openId = parseInt(el.dataset.stickyOpenId, 10);
+          let sd = {};
+          try { sd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
+          const colorIdx = parseInt(sd.annColor || '0', 10);
+          const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+          return { closedId, openId, closedMode: 'color', openMode: 'transparent', color, style };
+        });
+        domStickyGroups.push({ pageNum, members: memberDescs });
+      });
+
       if (unsupportedTypes.size > 0) {
         showToast(`LIBRO形式に非対応の種別（${[...unsupportedTypes].join('、')}）は書き出し対象から除外しました`);
       }
 
       try {
-        const zip = await buildLibroBookExport(state.libroBook, domAnnotations, state.libroUnknownAnnotations);
+        const zip = await buildLibroBookExport(state.libroBook, domAnnotations, state.libroUnknownAnnotations, domStickyGroups);
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(zipBlob);
         const a = document.createElement('a');

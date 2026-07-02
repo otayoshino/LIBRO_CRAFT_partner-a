@@ -771,11 +771,14 @@ import { pushUndo } from './undo-redo.js';
         const selectedAll      = getSelectedObjects();
         const isInMultiSel     = selectedAll.length > 1 && selectedAll.includes(el);
 
-        if (e.altKey && isInMultiSel) {
+        if (e.altKey && isInMultiSel && el.dataset.libroToggle !== '1') {
+          // LIBRO由来の既存付箋（.libro-toggle）は複製に新規PNGが必要になり「新規作成」と等価なため
+          // コピー対象から除外する（位置移動自体は通常ドラッグ／複数選択移動で引き続き可能）
+          const cloneableSelected = selectedAll.filter(n => n.dataset.libroToggle !== '1');
           // shomei-btn を含む場合は事前に新 ID を採番してリマップ表を作成
           const shomeiIdMap = new Map();
           const kotaeIdMap  = new Map();
-          selectedAll.forEach(orig => {
+          cloneableSelected.forEach(orig => {
             if (orig.classList.contains('shomei-btn') && orig.dataset.shomeiId) {
               const oldId = orig.dataset.shomeiId;
               if (!shomeiIdMap.has(oldId)) shomeiIdMap.set(oldId, `shomei-${++state.shomeiCounter}`);
@@ -786,7 +789,7 @@ import { pushUndo } from './undo-redo.js';
             }
           });
           // 全選択オブジェクトをクローン（各オブジェクトの開始位置も記録）
-          const clones = selectedAll.map(orig => {
+          const clones = cloneableSelected.map(orig => {
             const clone = orig.cloneNode(true);
             clone.dataset.id = ++state.annIdCounter;
             clone.classList.remove('is-selected');
@@ -922,7 +925,7 @@ import { pushUndo } from './undo-redo.js';
           document.addEventListener('mousemove', onMoveMulti);
           document.addEventListener('mouseup',   onUpMulti);
 
-          updateStatus(`Alt+ドラッグ：${selectedAll.length} 件のオブジェクトをコピーしました`);
+          updateStatus(`Alt+ドラッグ：${cloneableSelected.length} 件のオブジェクトをコピーしました`);
           return;
         }
 
