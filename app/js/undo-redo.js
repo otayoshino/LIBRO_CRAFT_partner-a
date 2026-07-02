@@ -1,6 +1,6 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { applyLiveUpdate, openAnnotationSettingsDialog } from './annotation-dialog.js';
-import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler } from './buttons.js';
+import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, UNDO_MAX } from './config.js';
 import { deselectAllObjects, getSelectedObjects, makeDraggable, makeResizable, reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { updateAnnotationVisibility } from './pdf-view.js';
@@ -81,14 +81,20 @@ import { showToast, updateStatus } from './ui-common.js';
                 addStickyClickHandler(el);
                 makeResizable(el);
               } else if (el.classList.contains('daimon-btn')) {
-                el.textContent = '大問';
                 addDaimonClickHandler(el);
+                let daimonSd = {};
+                try { daimonSd = JSON.parse(snap.savedData || '{}'); } catch (_) {}
+                renderButtonVisual(el, 'daimon', daimonSd);
               } else if (el.classList.contains('kotae-btn')) {
-                el.textContent = '答';
                 addKotaeClickHandler(el);
+                let kotaeSd = {};
+                try { kotaeSd = JSON.parse(snap.savedData || '{}'); } catch (_) {}
+                renderButtonVisual(el, 'kotae', kotaeSd);
               } else if (el.classList.contains('shomei-btn')) {
-                el.textContent = '証明';
                 addShomeiClickHandler(el);
+                let shomeiSd = {};
+                try { shomeiSd = JSON.parse(snap.savedData || '{}'); } catch (_) {}
+                renderButtonVisual(el, 'shomei', shomeiSd);
               } else {
                 // ann-object / ann-icon-obj
                 // savedData からラベルを再構築

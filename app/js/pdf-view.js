@@ -224,7 +224,10 @@ import { updateStatus } from './ui-common.js';
      */
     export function scaleAnnotations(ratio) {
       if (ratio === 1) return;
-      document.querySelectorAll('#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj').forEach(el => {
+      // LIBRO由来の大問ボタン（.daimon-btn.libro-toggle）はページ座標系の矩形にひもづくため
+      // 通常の付箋・アノテーションと同様に追従させる。ネイティブ作成の大問/答/証明ボタン
+      // （固定サイズの小さなUIボタン）はズームに追従させない現行仕様のまま対象外とする。
+      document.querySelectorAll('#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj, #pageLeft .daimon-btn.libro-toggle').forEach(el => {
         el.style.left = ((parseFloat(el.style.left) || 0) * ratio) + 'px';
         el.style.top  = ((parseFloat(el.style.top)  || 0) * ratio) + 'px';
         const w = parseFloat(el.style.width)  || el.offsetWidth;

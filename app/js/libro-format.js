@@ -2,6 +2,7 @@ import { mediaBlobs } from './state.js';
 import { ANNOTATION_TYPE_CONFIG } from './config.js';
 import { addStickyClickHandler } from './sticky.js';
 import { makeDraggable, makeResizable } from './annotation-interaction.js';
+import { addDaimonClickHandler, renderButtonVisual } from './buttons.js';
 
 /* ============================================================
    LIBRO bookフォルダ形式（index.json / p####.json / 暗号化ページ画像 /
@@ -128,6 +129,26 @@ function findTogglePairs(annots) {
 
 
 /**
+ * トグルペアが「大問ボタン」（押下で紐付く複数の他トグルペアを一括Hide/Showする）かどうかを判定する。
+ * 実データ（p0004.json）で確認したパターン：actions が4つ（グループ一括Hide/Show 1組＋自己Hide/Show 1組）
+ * で構成され、グループ側のtargetsが自分自身のペア以外の複数idを横断する。
+ * グループ付箋との判別は未検証のため、単一idしか横断しない場合は誤判定を避けて安全側（通常付箋）に倒す。
+ * @param {Object} closed
+ * @param {Object} open
+ * @returns {{ isDaimon: boolean, groupIds: number[] }}
+ */
+function detectDaimonGroup(closed, open) {
+  if (!Array.isArray(closed.actions) || closed.actions.length !== 4) return { isDaimon: false, groupIds: [] };
+  if (!Array.isArray(open.actions)   || open.actions.length   !== 4) return { isDaimon: false, groupIds: [] };
+  const flat = [];
+  closed.actions.forEach(act => { if (Array.isArray(act.targets)) flat.push(...act.targets); });
+  const selfIds = new Set([closed._id, open._id]);
+  const groupIds = [...new Set(flat.filter(id => !selfIds.has(id)))];
+  return { isDaimon: groupIds.length >= 2, groupIds };
+}
+
+
+/**
  * rect（ページ画像ピクセル座標系の絶対値） を、ページ幅・高さに対する%指定のstyle文字列に変換する。
  * @param {[number,number,number,number]} rect - [x, y, width, height]
  * @param {number} pageWidth
@@ -174,6 +195,7 @@ function convertPageAnnotations(pageJson, pageNum) {
     const closed = a.hidden ? b : a;
     const open   = a.hidden ? a : b;
     maxId = Math.max(maxId, closed._id || 0, open._id || 0);
+    const { isDaimon, groupIds } = detectDaimonGroup(closed, open);
     togglePairs.push({
       pageNum,
       closedId:   closed._id,
@@ -183,6 +205,8 @@ function convertPageAnnotations(pageJson, pageNum) {
       rect:       closed.rect,
       pageWidth,
       pageHeight,
+      kind:       isDaimon ? 'daimon' : 'sticky',
+      groupIds:   isDaimon ? groupIds : undefined,
     });
     // 位置・グループ編集後に書き出し可能な既知アノテーションとして扱うため、
     // 未知アノテーションへは登録しない（convertStickyGroupToLibroAnnotsで再生成する）
@@ -339,6 +363,8 @@ export async function parseLibroBookZip(zip) {
       openId:     tp.openId,
       closedFile: tp.closedFile,
       openFile:   tp.openFile,
+      kind:       tp.kind,
+      groupIds:   tp.groupIds,
       closedImageUrl: URL.createObjectURL(new Blob([closedBlob], { type: 'image/png' })),
       openImageUrl:   URL.createObjectURL(new Blob([openBlob],   { type: 'image/png' })),
     });
@@ -354,11 +380,19 @@ export async function parseLibroBookZip(zip) {
  * 色（見た目）は元のPNG画像そのままとし変更不可（openAnnotationSettingsDialog/confirmAnnotationが
  * dataset.libroToggle を見て塗り色UIを無効化する）。クリック時の開閉・選択・グループ挙動は
  * 通常の付箋と同じ addStickyClickHandler をそのまま再利用する。
+ *
+ * ただし kind==='daimon'（複数の他トグルペアを一括Hide/Showする大問ボタン）は、
+ * ネイティブの大問ボタン（.daimon-btn、buttons.js の createDaimonButton/addDaimonClickHandler）
+ * としてそのまま描画する。編集メニュー（スタイル・拡大率・画像素材）を完全に共通化するためで、
+ * 既存の閉/開2枚のPNGは「画像素材」として登録し（開側は押下時画像 pressed__ キーに割り当てる）、
+ * 未変更であれば実物の画像がそのまま使われる。紐付く答ボタン群は dataset.daimonId で
+ * リンクする（addDaimonClickHandler が閲覧モードでこのidを見て一括開閉する）。
  * @param {Array<Object>} togglePairs - parseLibroBookZip が返す togglePairs
  */
 export function renderTogglePairs(togglePairs) {
   const page = document.getElementById('pageLeft');
   const pageRect = page.getBoundingClientRect();
+  const wrapByKey = new Map(); // `${pageNum}:${id}` -> 要素（closedId・openId両方をキーに登録。答ボタンリンク解決用）
 
   togglePairs.forEach(tp => {
     const [x, y, w, h] = tp.rect;
@@ -368,6 +402,32 @@ export function renderTogglePairs(togglePairs) {
     const topPx    = (y / tp.pageHeight) * pageRect.height;
     const widthPx  = (w / tp.pageWidth)  * pageRect.width;
     const heightPx = (h / tp.pageHeight) * pageRect.height;
+
+    if (tp.kind === 'daimon') {
+      // 実物のPNG（閉/開）をネイティブ大問ボタンの「画像素材」として登録する
+      mediaBlobs[tp.closedFile] = tp.closedImageUrl;
+      mediaBlobs[`pressed__${tp.closedFile}`] = tp.openImageUrl;
+
+      const savedData = { btnPreset: '0', btnScale: '1', btnImageFile: tp.closedFile };
+      const el = document.createElement('div');
+      el.className        = 'daimon-btn libro-toggle';
+      el.dataset.type      = 'daimon';
+      el.dataset.id        = tp.closedId;
+      el.dataset.libroToggle = '1';
+      el.dataset.daimonId  = `libro-daimon-${tp.pageNum}-${tp.closedId}`;
+      el.dataset.page      = tp.pageNum;
+      el.dataset.savedData = JSON.stringify(savedData);
+      el.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
+      renderButtonVisual(el, 'daimon', savedData);
+
+      addDaimonClickHandler(el);
+      makeDraggable(el);
+
+      wrapByKey.set(`${tp.pageNum}:${tp.closedId}`, el);
+      wrapByKey.set(`${tp.pageNum}:${tp.openId}`,   el);
+      page.appendChild(el);
+      return;
+    }
 
     const wrap = document.createElement('div');
     wrap.className = 'sticky-note libro-toggle state-visible';
@@ -396,7 +456,22 @@ export function renderTogglePairs(togglePairs) {
     makeDraggable(wrap);
     makeResizable(wrap);
 
+    wrapByKey.set(`${tp.pageNum}:${tp.closedId}`, wrap);
+    wrapByKey.set(`${tp.pageNum}:${tp.openId}`,   wrap);
     page.appendChild(wrap);
+  });
+
+  // 大問ボタンに紐付く答ボタン群を dataset.daimonId でリンクする
+  // （ネイティブの大問ボタン機能 addDaimonClickHandler が閲覧モードでこのidを見て一括開閉する）
+  togglePairs.forEach(tp => {
+    if (tp.kind !== 'daimon') return;
+    const leaderEl = wrapByKey.get(`${tp.pageNum}:${tp.closedId}`);
+    if (!leaderEl) return;
+    const did = leaderEl.dataset.daimonId;
+    (tp.groupIds || []).forEach(gid => {
+      const followerWrap = wrapByKey.get(`${tp.pageNum}:${gid}`);
+      if (followerWrap && followerWrap !== leaderEl) followerWrap.dataset.daimonId = did;
+    });
   });
 }
 

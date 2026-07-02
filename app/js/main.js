@@ -80,6 +80,8 @@ import { pushUndo, redo, undo } from './undo-redo.js';
             zuId:        btn.dataset.zuId,
             styleCssText: btn.style.cssText,
             pageNum:     btn.dataset.page || '1',
+            savedData:   btn.dataset.savedData,
+            libroToggle: btn.dataset.libroToggle,
           });
           // 大問ボタン削除に伴う付箋の daimonId 変化を記録
           if (btn.classList.contains('daimon-btn')) {

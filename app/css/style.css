@@ -2151,6 +2151,15 @@
       user-select: none;
     }
 
+    /* LIBRO由来の大問ボタン（.daimon-btn.libro-toggle）：実物のPNG（annots由来）を
+       元のページ座標系の矩形にそのままフィットさせる（ネイティブの「自然サイズ表示」とは異なる）。
+       サイズはJS側でインラインstyleにより明示的に指定されるため、height:autoは打ち消される。 */
+    .daimon-btn.libro-toggle .btn-face {
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+    }
+
     /* ページの描画モードカーソル */
     .page.drawing-mode {
       cursor: crosshair !important;
