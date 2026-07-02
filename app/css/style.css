@@ -1876,6 +1876,21 @@
       color: #888;
     }
 
+    /* フィールド内のテキストリンク風ボタン（画像クリア等） */
+    .field-link-btn {
+      margin: 6px 0 0;
+      padding: 0;
+      border: none;
+      background: none;
+      color: #6fa8ff;
+      font-size: 11px;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .field-link-btn:hover {
+      color: #9cc4ff;
+    }
+
     /* ============================
        整列パネル
     ============================ */
@@ -2031,7 +2046,7 @@
       cursor: pointer;
     }
     .is-view-mode .daimon-btn:hover {
-      background: #3a5a90;
+      filter: brightness(0.85);
     }
 
     /* 答ボタン（ページ上に配置するボタン） */
@@ -2066,7 +2081,7 @@
       cursor: pointer;
     }
     .is-view-mode .kotae-btn:hover {
-      background: #8a4a3a;
+      filter: brightness(0.85);
     }
 
     /* 証明ボタン（ページ上に配置するボタン） */
@@ -2101,13 +2116,39 @@
       cursor: pointer;
     }
     .is-view-mode .shomei-btn:hover {
-      background: #6a3a90;
+      filter: brightness(0.85);
     }
     /* 編集モード時：塗り色より濃いめのリングで縁を強調表示する（.ann-object 等と同様の表現） */
     body:not(.is-view-mode) .daimon-btn,
     body:not(.is-view-mode) .kotae-btn,
     body:not(.is-view-mode) .shomei-btn {
       box-shadow: 0 2px 4px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(0,0,0,0.4);
+    }
+
+    /* 画像素材アップロード時：プリセット固定サイズ・背景・padding・角丸を打ち消し、画像素材の自然サイズで表示する */
+    .daimon-btn.has-custom-image,
+    .kotae-btn.has-custom-image,
+    .shomei-btn.has-custom-image {
+      min-width: 0;
+      height: auto;
+      padding: 0;
+      background: transparent;
+      border-radius: 0;
+      box-shadow: none;
+    }
+    body:not(.is-view-mode) .daimon-btn.has-custom-image,
+    body:not(.is-view-mode) .kotae-btn.has-custom-image,
+    body:not(.is-view-mode) .shomei-btn.has-custom-image {
+      box-shadow: none;
+      outline: 1px dashed rgba(0,0,0,0.3);
+      outline-offset: 2px;
+    }
+    .daimon-btn .btn-face,
+    .kotae-btn .btn-face,
+    .shomei-btn .btn-face {
+      display: block;
+      pointer-events: none;
+      user-select: none;
     }
 
     /* ページの描画モードカーソル */

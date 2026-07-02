@@ -1,11 +1,16 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, STICKY_COLORS, STICKY_COLOR_MAP } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, STICKY_COLORS, STICKY_COLOR_MAP } from './config.js';
 import { deactivateAnnotationMode, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
+import { generatePressedVariant, renderButtonVisual } from './buttons.js';
 import { mediaBlobs, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
 import { closeDialog, saveDialog } from './storage.js';
 import { updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
+
+
+    /** 大問/答/証明ボタンのtype一覧（共通判定に使用） */
+    const BUTTON_TYPES = new Set(['daimon', 'kotae', 'shomei']);
 
 
     /** 連続作成モード用：前回使用した設定を種別ごとに保存 */
@@ -68,6 +73,23 @@ import { pushUndo } from './undo-redo.js';
       if (type !== 'sticky') {
         buildSpecificFields(document.getElementById('qcFormSpecific'), type, prevData);
         document.getElementById('qcSepWrap').style.display = '';
+      }
+
+      if (BUTTON_TYPES.has(type)) {
+        // プリセット・拡大率・画像素材の変更を即座にボタンへライブプレビューする
+        const livePreview = () => {
+          const preset = document.getElementById('btnPreset')?.value;
+          const scale  = document.getElementById('btnScale')?.value;
+          const image  = document.getElementById('btnImageFile')?.value;
+          renderButtonVisual(el, type, { btnPreset: preset, btnScale: scale, btnImageFile: image });
+        };
+        ['btnPreset', 'btnScale', 'btnImageFile'].forEach(id => {
+          const fieldEl = document.getElementById(id);
+          if (fieldEl) {
+            fieldEl.addEventListener('input', livePreview);
+            fieldEl.addEventListener('change', livePreview);
+          }
+        });
       }
 
       // ポップアップを対象要素の右隣に表示（ビューポートを超えないよう補正）
@@ -333,6 +355,11 @@ import { pushUndo } from './undo-redo.js';
       posDd.appendChild(posRow);
       form.appendChild(posDd);
 
+      // 大問/答/証明ボタンは固定サイズCSS＋プリセット選択式のため、
+      // 汎用の「変形」(W/H)・「塗り」行は生成しない（buildSpecificFieldsの専用フィールドに置き換える）
+      const isButtonType = BUTTON_TYPES.has(type);
+
+      if (!isButtonType) {
       // --- 変形 ---
       const szDt = document.createElement('dt');
       szDt.textContent = '変形';
@@ -391,6 +418,7 @@ import { pushUndo } from './undo-redo.js';
       colDd.appendChild(colWrap);
       form.appendChild(colDt);
       form.appendChild(colDd);
+      }
 
       // アイコン型：W/H入力時に縦横比を維持して反対軸を自動更新（applyLiveUpdateより先に登録して先行実行させる）
       const _selectedIconObj = document.querySelector('.ann-icon-obj.is-selected');
@@ -568,6 +596,72 @@ import { pushUndo } from './undo-redo.js';
 
       if (type === 'sticky') {
         // 付箋固有：フィールドなし（内容入力は不要）
+        return;
+      }
+
+      if (BUTTON_TYPES.has(type)) {
+        // --- 大問/答/証明ボタン固有：プリセット・拡大率・画像素材 ---
+        const defaultPresetIdx = { daimon: '0', kotae: '1', shomei: '2' }[type] || '0';
+
+        // プリセットスタイル
+        const presetDt = document.createElement('dt');
+        presetDt.textContent = 'スタイル';
+        form.appendChild(presetDt);
+        const presetDd = document.createElement('dd');
+        const presetWrap = document.createElement('div');
+        presetWrap.className = 'd-select-wrap';
+        const presetSel = document.createElement('select');
+        presetSel.className = 'd-select';
+        presetSel.id = 'btnPreset';
+        BTN_COLOR_OPTIONS.forEach((c, i) => {
+          const o = document.createElement('option');
+          o.value = i;
+          o.textContent = c.label;
+          presetSel.appendChild(o);
+        });
+        presetSel.value = savedData.btnPreset !== undefined ? savedData.btnPreset : defaultPresetIdx;
+        presetWrap.appendChild(presetSel);
+        presetDd.appendChild(presetWrap);
+        form.appendChild(presetDd);
+
+        // 拡大率
+        const scaleDt = document.createElement('dt');
+        scaleDt.textContent = '拡大率';
+        form.appendChild(scaleDt);
+        const scaleDd = document.createElement('dd');
+        const scaleInput = document.createElement('input');
+        scaleInput.type = 'number';
+        scaleInput.className = 'd-input d-input-sm';
+        scaleInput.id = 'btnScale';
+        scaleInput.step = '0.1';
+        scaleInput.min = '0.5';
+        scaleInput.max = '3';
+        scaleInput.value = savedData.btnScale || '1';
+        scaleDd.appendChild(scaleInput);
+        form.appendChild(scaleDd);
+
+        // 画像素材（SVG/PNG）
+        const imgDt = document.createElement('dt');
+        imgDt.textContent = '画像素材';
+        form.appendChild(imgDt);
+        const imgDd = document.createElement('dd');
+        const hiddenFile = document.createElement('input');
+        hiddenFile.type = 'hidden';
+        hiddenFile.id = 'btnImageFile';
+        hiddenFile.value = savedData.btnImageFile || '';
+        imgDd.appendChild(hiddenFile);
+        _appendImageDropZone(imgDd, 'btnImageFile');
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'field-link-btn';
+        clearBtn.textContent = '画像をクリアして既定のボタンに戻す';
+        clearBtn.addEventListener('click', () => {
+          hiddenFile.value = '';
+          hiddenFile.dispatchEvent(new Event('change'));
+        });
+        imgDd.appendChild(clearBtn);
+        form.appendChild(imgDd);
+
         return;
       }
 
@@ -810,6 +904,72 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
+     * 大問/答/証明ボタンの画像素材（SVG/PNG）用ドロップゾーンを dd 要素に追加するヘルパー。
+     * ドロップされた画像をBlobURLに変換してmediaBlobsへ格納し、押下時バリアントも生成する。
+     * @param {HTMLElement} ddEl    - 追加先の dd 要素
+     * @param {string}      inputId - ファイル名（拡張子込み）を反映する hidden input の id
+     */
+    export function _appendImageDropZone(ddEl, inputId) {
+      const zone = document.createElement('div');
+      zone.className = 'file-drop-zone';
+      zone.innerHTML = `
+        <p>ここに SVG または PNG ファイルをドロップ</p>
+        <p class="drop-status"></p>
+      `;
+      const statusEl = zone.querySelector('.drop-status');
+      const hiddenInput = ddEl.querySelector(`#${inputId}`);
+      if (hiddenInput && hiddenInput.value) {
+        statusEl.textContent = `✔ ${hiddenInput.value} を使用中`;
+        statusEl.className = 'drop-status is-success';
+      }
+
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add('is-dragover');
+      });
+      zone.addEventListener('dragleave', (e) => {
+        e.stopPropagation();
+        zone.classList.remove('is-dragover');
+      });
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('is-dragover');
+
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        if (!/\.(svg|png)$/i.test(file.name)) {
+          statusEl.textContent = '✕ SVGまたはPNGファイルを指定してください';
+          statusEl.className = 'drop-status is-error';
+          return;
+        }
+
+        if (mediaBlobs[file.name]) URL.revokeObjectURL(mediaBlobs[file.name]);
+        mediaBlobs[file.name] = URL.createObjectURL(file);
+
+        statusEl.textContent = `読み込み中... (${file.name})`;
+        statusEl.className = 'drop-status';
+
+        generatePressedVariant(file).then(() => {
+          if (hiddenInput) {
+            hiddenInput.value = file.name;
+            hiddenInput.dispatchEvent(new Event('change'));
+          }
+          statusEl.textContent = `✔ ${file.name} を読み込みました`;
+          statusEl.className = 'drop-status is-success';
+        }).catch(err => {
+          statusEl.textContent = '✕ 押下時スタイルの生成に失敗しました';
+          statusEl.className = 'drop-status is-error';
+          console.error(err);
+        });
+      });
+
+      ddEl.appendChild(zone);
+    }
+
+
+    /**
      * アノテーション設定ダイアログを開く。
      * アノテーション設定ダイアログを開く。
      * 全種別共通：dialogConfigs からフィールドを生成する。
@@ -995,6 +1155,24 @@ import { pushUndo } from './undo-redo.js';
           pushUndo({ type: 'create', elements: [note] });
           updateStatus('付箋を配置しました（クリックで解答の表示/非表示）');
         }
+
+      } else if (BUTTON_TYPES.has(type)) {
+        // --- 大問/答/証明ボタン：座標・プリセット・拡大率・画像素材の更新のみ（生成はcreateXxxButton()が担当） ---
+        if (!isUpdate) { closeDialog(); return; }
+
+        pushUndo({
+          type: 'prop',
+          el: existingEl,
+          prevSavedData: existingEl.dataset.savedData,
+          prevStyleCssText: existingEl.style.cssText,
+          prevClassName: existingEl.className,
+          prevInnerHTML: existingEl.innerHTML,
+        });
+        if (savedData.annPosX !== undefined) existingEl.style.left = parseInt(savedData.annPosX, 10) + 'px';
+        if (savedData.annPosY !== undefined) existingEl.style.top  = parseInt(savedData.annPosY, 10) + 'px';
+        renderButtonVisual(existingEl, type, savedData);
+        existingEl.dataset.savedData = JSON.stringify(savedData);
+        updateStatus(`${ANNOTATION_TYPE_CONFIG[type]?.label || type}を更新しました`);
 
       } else {
         // --- 汎用アノテーション（ページリンク / Plusファイル / 外部リンク / 音声再生 / 動画再生） ---

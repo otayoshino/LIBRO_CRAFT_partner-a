@@ -1,7 +1,144 @@
+import { openEditPopup } from './annotation-dialog.js';
 import { makeDraggable } from './annotation-interaction.js';
-import { selectedStickySet, state } from './state.js';
+import { BTN_COLOR_OPTIONS } from './config.js';
+import { mediaBlobs, selectedStickySet, state } from './state.js';
 import { showToast, updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
+
+
+    /** ボタン種別ごとのデフォルト表示文言・プリセットindex */
+    const BTN_TYPE_DEFAULTS = {
+      daimon: { label: '大問', presetIdx: 0 },
+      kotae:  { label: '答',   presetIdx: 1 },
+      shomei: { label: '証明', presetIdx: 2 },
+    };
+
+
+    /**
+     * 大問/答/証明ボタンの見た目を savedData（プリセット・拡大率・画像素材）から確定する。
+     * ボタン生成時・編集確定時・アノテーション復元時のいずれからも共通で呼び出す。
+     * @param {HTMLElement} el       - daimon-btn/kotae-btn/shomei-btn 要素
+     * @param {string}      type     - 'daimon' | 'kotae' | 'shomei'
+     * @param {object}      savedData - { btnPreset, btnScale, btnImageFile }
+     */
+    export function renderButtonVisual(el, type, savedData = {}) {
+      const defaults = BTN_TYPE_DEFAULTS[type] || BTN_TYPE_DEFAULTS.daimon;
+      const scale = parseFloat(savedData.btnScale) || 1;
+      el.style.transform = scale !== 1 ? `scale(${scale})` : '';
+      el.style.transformOrigin = 'top left';
+
+      const imageFile = (savedData.btnImageFile || '').trim();
+      const imageUrl = imageFile ? mediaBlobs[imageFile] : null;
+
+      if (imageUrl) {
+        // 画像モード：プリセット固定サイズ・背景・padding を打ち消し、画像素材の自然サイズで表示する
+        el.classList.add('has-custom-image');
+        el.dataset.btnHasImage = '1';
+        el.style.background = '';
+        el.textContent = '';
+        let img = el.querySelector('.btn-face');
+        if (!img) {
+          img = document.createElement('img');
+          img.className = 'btn-face';
+          img.draggable = false;
+          el.appendChild(img);
+        }
+        img.src = imageUrl;
+      } else {
+        // プリセットモード：固定サイズCSSのまま背景色とラベルのみ変更する
+        el.classList.remove('has-custom-image');
+        delete el.dataset.btnHasImage;
+        const presetIdx = parseInt(savedData.btnPreset, 10);
+        const preset = BTN_COLOR_OPTIONS[Number.isInteger(presetIdx) ? presetIdx : defaults.presetIdx]
+                      || BTN_COLOR_OPTIONS[defaults.presetIdx];
+        el.style.background = preset.value;
+        el.textContent = defaults.label;
+      }
+    }
+
+
+    /**
+     * アップロードされたSVG/PNG画像から、押下時スタイル（同一形状で色反転）を生成しキャッシュする。
+     * 既に生成済み（mediaBlobsにキャッシュ済み）の場合は再生成しない。
+     * @param {File} file - アップロードされた画像ファイル
+     * @returns {Promise<string>} 生成された押下時画像のキー（mediaBlobsのキー）
+     */
+    export async function generatePressedVariant(file) {
+      const pressedKey = `pressed__${file.name}`;
+      if (mediaBlobs[pressedKey]) return pressedKey;
+
+      const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name);
+      let blob;
+
+      if (isSvg) {
+        const text = await file.text();
+        const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+        doc.querySelectorAll('[fill]').forEach(node => {
+          const fill = node.getAttribute('fill');
+          const inverted = invertColorString(fill);
+          if (inverted) node.setAttribute('fill', inverted);
+        });
+        const serialized = new XMLSerializer().serializeToString(doc);
+        blob = new Blob([serialized], { type: 'image/svg+xml' });
+      } else {
+        const bitmap = await createImageBitmap(file);
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const px = imageData.data;
+        for (let i = 0; i < px.length; i += 4) {
+          if (px[i + 3] === 0) continue; // 透明ピクセルは維持
+          px[i]     = 255 - px[i];
+          px[i + 1] = 255 - px[i + 1];
+          px[i + 2] = 255 - px[i + 2];
+        }
+        ctx.putImageData(imageData, 0, 0);
+        blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      }
+
+      mediaBlobs[pressedKey] = URL.createObjectURL(blob);
+      return pressedKey;
+    }
+
+
+    /**
+     * カスタム画像が設定されたボタンの押下時見た目を切り替える（画像未設定のボタンは何もしない）。
+     * @param {HTMLElement} btn      - daimon-btn/kotae-btn/shomei-btn 要素
+     * @param {boolean}     isPressed - true: 押下時（表示中）画像へ切替 / false: 通常時画像へ切替
+     */
+    function swapButtonPressedImage(btn, isPressed) {
+      if (btn.dataset.btnHasImage !== '1') return;
+      let savedData = {};
+      try { savedData = JSON.parse(btn.dataset.savedData || '{}'); } catch (_) {}
+      const imageFile = (savedData.btnImageFile || '').trim();
+      if (!imageFile) return;
+      const img = btn.querySelector('.btn-face');
+      if (!img) return;
+      const key = isPressed ? `pressed__${imageFile}` : imageFile;
+      if (mediaBlobs[key]) img.src = mediaBlobs[key];
+    }
+
+
+    /** #rgb / #rrggbb / rgb(...) 形式の色文字列を反転する。解釈できない場合は null を返す。 */
+    function invertColorString(colorStr) {
+      if (!colorStr || colorStr === 'none') return null;
+      const ctx = invertColorString._ctx || (invertColorString._ctx = document.createElement('canvas').getContext('2d'));
+      ctx.fillStyle = '#000';
+      try { ctx.fillStyle = colorStr; } catch (_) { return null; }
+      const computed = ctx.fillStyle; // ブラウザが #rrggbb / rgba(...) に正規化して返す
+      const m = computed.match(/^#([0-9a-f]{6})$/i);
+      if (m) {
+        const n = parseInt(m[1], 16);
+        const r = 255 - ((n >> 16) & 0xff);
+        const g = 255 - ((n >> 8) & 0xff);
+        const b = 255 - (n & 0xff);
+        return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+      }
+      return null;
+    }
 
 
     /**
@@ -45,9 +182,10 @@ import { pushUndo } from './undo-redo.js';
       el.dataset.type     = 'daimon';
       el.dataset.id       = ++state.annIdCounter;
       el.dataset.daimonId = did;
-      el.textContent      = '大問';
+      el.dataset.savedData = JSON.stringify({ btnPreset: '0', btnScale: '1' });
       el.style.left       = minLeft + 'px';
       el.style.top        = Math.max(0, minTop - 36) + 'px';
+      renderButtonVisual(el, 'daimon', { btnPreset: '0', btnScale: '1' });
 
       addDaimonClickHandler(el);
       makeDraggable(el);
@@ -71,6 +209,13 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} btn - 大問ボタン要素
      */
     export function addDaimonClickHandler(btn) {
+      // ダブルクリック：編集モード時にスタイル編集ポップアップを開く
+      btn.addEventListener('dblclick', (e) => {
+        if (document.body.classList.contains('is-view-mode')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openEditPopup(btn);
+      });
       btn.addEventListener('click', (e) => {
         if (!document.body.classList.contains('is-view-mode')) {
           // 編集モード：選択処理
@@ -127,6 +272,7 @@ import { pushUndo } from './undo-redo.js';
             t.classList.toggle('state-hidden',   allVisible);
           }
         });
+        swapButtonPressedImage(btn, !allVisible);
         updateStatus(allVisible ? '非表示にしました' : '表示しました');
       });
     }
@@ -166,9 +312,10 @@ import { pushUndo } from './undo-redo.js';
       el.dataset.type     = 'kotae';
       el.dataset.id       = ++state.annIdCounter;
       el.dataset.kotaeId  = kid;
-      el.textContent      = '答';
+      el.dataset.savedData = JSON.stringify({ btnPreset: '1', btnScale: '1' });
       el.style.left       = minLeft + 'px';
       el.style.top        = Math.max(0, minTop - 36) + 'px';
+      renderButtonVisual(el, 'kotae', { btnPreset: '1', btnScale: '1' });
 
       addKotaeClickHandler(el);
       makeDraggable(el);
@@ -191,6 +338,13 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} btn - 答ボタン要素
      */
     export function addKotaeClickHandler(btn) {
+      // ダブルクリック：編集モード時にスタイル編集ポップアップを開く
+      btn.addEventListener('dblclick', (e) => {
+        if (document.body.classList.contains('is-view-mode')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openEditPopup(btn);
+      });
       btn.addEventListener('click', (e) => {
         if (!document.body.classList.contains('is-view-mode')) {
           // 編集モード：選択処理
@@ -218,6 +372,7 @@ import { pushUndo } from './undo-redo.js';
           t.classList.toggle('state-visible', !allVisible);
           t.classList.toggle('state-hidden',   allVisible);
         });
+        swapButtonPressedImage(btn, !allVisible);
         updateStatus(allVisible ? '答を非表示にしました' : '答を表示しました');
       });
     }
@@ -263,9 +418,10 @@ import { pushUndo } from './undo-redo.js';
       el.dataset.type     = 'shomei';
       el.dataset.id       = ++state.annIdCounter;
       el.dataset.shomeiId = sid;
-      el.textContent      = '証明';
+      el.dataset.savedData = JSON.stringify({ btnPreset: '2', btnScale: '1' });
       el.style.left       = minLeft + 'px';
       el.style.top        = Math.max(0, minTop - 36) + 'px';
+      renderButtonVisual(el, 'shomei', { btnPreset: '2', btnScale: '1' });
 
       addShomeiClickHandler(el);
       makeDraggable(el);
@@ -293,6 +449,13 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} btn - 証明ボタン要素
      */
     export function addShomeiClickHandler(btn) {
+      // ダブルクリック：編集モード時にスタイル編集ポップアップを開く
+      btn.addEventListener('dblclick', (e) => {
+        if (document.body.classList.contains('is-view-mode')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openEditPopup(btn);
+      });
       btn.addEventListener('click', (e) => {
         if (!document.body.classList.contains('is-view-mode')) {
           // 編集モード：選択処理
@@ -329,6 +492,7 @@ import { pushUndo } from './undo-redo.js';
             delete t.dataset.shomeiOutline;
           }
         });
+        swapButtonPressedImage(btn, !allShowing);
         updateStatus(allShowing ? '証明を非表示にしました' : '証明を表示しました');
       });
     }

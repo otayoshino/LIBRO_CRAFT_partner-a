@@ -1,4 +1,5 @@
 import { applyLiveUpdate, buildAnnDialogFields } from './annotation-dialog.js';
+import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs } from './libro-format.js';
@@ -176,12 +177,10 @@ import { showToast, updateStatus } from './ui-common.js';
                 } else if (el.classList.contains('ann-icon-obj')) {
                   const cfg = ANNOTATION_TYPE_CONFIG[obj.type];
                   el.innerHTML = cfg ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>` : '';
-                } else if (el.classList.contains('daimon-btn')) {
-                  el.textContent = '大問';
-                } else if (el.classList.contains('kotae-btn')) {
-                  el.textContent = '答';
-                } else if (el.classList.contains('shomei-btn')) {
-                  el.textContent = '証明';
+                } else if (el.classList.contains('daimon-btn') || el.classList.contains('kotae-btn') || el.classList.contains('shomei-btn')) {
+                  let sd = {};
+                  try { sd = JSON.parse(obj.savedData || '{}'); } catch (_) {}
+                  renderButtonVisual(el, obj.type, sd);
                 } else if (el.classList.contains('zu-btn')) {
                   el.textContent = '図';
                 }
@@ -403,6 +402,23 @@ import { showToast, updateStatus } from './ui-common.js';
               }).catch(() => null));
             }
           }
+        } catch (_) {}
+      });
+
+      // btnImageFile を持つ大問/答/証明ボタンの画像素材もZIPに同梱（重複除去、押下時バリアントは含めず読込時に再生成する）
+      data.forEach(obj => {
+        if (!['daimon', 'kotae', 'shomei'].includes(obj.type)) return;
+        try {
+          const sd = JSON.parse(obj.savedData || '{}');
+          const fileName = (sd.btnImageFile || '').trim();
+          if (!fileName || collected.has(fileName)) return;
+          collected.add(fileName);
+          const src = mediaBlobs[fileName];
+          if (!src) return;
+          zip.file(fileName, fetch(src).then(r => {
+            if (!r.ok) throw new Error(`fetch failed: ${src}`);
+            return r.blob();
+          }).catch(() => null));
         } catch (_) {}
       });
 

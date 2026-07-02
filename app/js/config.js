@@ -61,3 +61,11 @@
       { label: '緑',   value: '#5ac46e' },
       { label: '黄',   value: '#f7e04b' },
     ];
+
+
+    /** 大問/答/証明ボタンのプリセットスタイル（既存の固定色をそのまま選択肢化） */
+    export const BTN_COLOR_OPTIONS = [
+      { label: '青（大問）', value: '#4a6fa8' },
+      { label: '赤（答）',   value: '#a85a4a' },
+      { label: '紫（証明）', value: '#7a4aa8' },
+    ];
