@@ -356,6 +356,14 @@
     ======================= -->
     <div class="view" id="viewArea">
 
+      <!-- スライドナビゲーションボタン（前後ページ送り） -->
+      <button class="slide-nav slide-nav--prev is-hidden" id="slideNavPrev" onclick="prevPage()" title="前のページ">
+        <svg width="24" height="24"><use href="icons/sprite.svg#icon-prev-page"></use></svg>
+      </button>
+      <button class="slide-nav slide-nav--next is-hidden" id="slideNavNext" onclick="nextPage()" title="次のページ">
+        <svg width="24" height="24"><use href="icons/sprite.svg#icon-next-page"></use></svg>
+      </button>
+
       <!-- ページ表示コンテナ -->
       <div class="page-container" id="pageContainer">
 

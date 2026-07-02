@@ -54,6 +54,8 @@ import { updateStatus } from './ui-common.js';
         const totalPagesText = document.getElementById('totalPagesText');
         if (totalPagesText) totalPagesText.textContent = '/ 0';
         updateSpreadBadge();
+        document.getElementById('slideNavPrev')?.classList.add('is-hidden');
+        document.getElementById('slideNavNext')?.classList.add('is-hidden');
         return;
       }
 
@@ -78,19 +80,25 @@ import { updateStatus } from './ui-common.js';
       const prevBtn  = navBtns[1];
       const nextBtn  = navBtns[2];
       const lastBtn  = navBtns[3];
+      const slideNavPrev = document.getElementById('slideNavPrev');
+      const slideNavNext = document.getElementById('slideNavNext');
       if (state.currentPage <= 1) {
         prevBtn?.classList.add('disabled');
         firstBtn?.classList.add('disabled');
+        slideNavPrev?.classList.add('is-hidden');
       } else {
         prevBtn?.classList.remove('disabled');
         firstBtn?.classList.remove('disabled');
+        slideNavPrev?.classList.remove('is-hidden');
       }
       if (state.currentPage >= state.totalPages) {
         nextBtn?.classList.add('disabled');
         lastBtn?.classList.add('disabled');
+        slideNavNext?.classList.add('is-hidden');
       } else {
         nextBtn?.classList.remove('disabled');
         lastBtn?.classList.remove('disabled');
+        slideNavNext?.classList.remove('is-hidden');
       }
       // 現在ページのアノテーションのみ表示する
       updateAnnotationVisibility();
