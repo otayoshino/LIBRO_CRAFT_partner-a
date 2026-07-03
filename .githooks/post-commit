@@ -1,2 +1,2 @@
 #!/bin/sh
-uv run python script/post_commit_sheet.py
+uv run script/post_commit_sheet.py

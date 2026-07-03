@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = [
+#   "gspread",
+#   "google-auth",
+# ]
+# ///
 """
 直近のコミット情報をGoogleスプレッドシートに1行追記するスクリプト。
 git hooks/post-commit から呼び出す想定。

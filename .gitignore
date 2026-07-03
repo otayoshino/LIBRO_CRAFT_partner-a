@@ -9,3 +9,6 @@ sample_books/
 
 ## シークレット
 secrets/
+
+## Python
+__pycache__/
