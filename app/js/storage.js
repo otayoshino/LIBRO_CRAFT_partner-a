@@ -303,7 +303,7 @@ import { showToast, updateStatus } from './ui-common.js';
      * @param {JSZip} zip - JSZip.loadAsync 済みのZIPオブジェクト
      */
     async function handleLibroBookZip(zip) {
-      const { pages, knownAnnotations, togglePairs, unknownAnnotations, maxAnnotId, baseDir, indexJson } =
+      const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, maxAnnotId, baseDir, indexJson } =
         await parseLibroBookZip(zip);
 
       // 再読込時に前回分のHide/Showペア要素が残らないようクリアする
@@ -320,6 +320,8 @@ import { showToast, updateStatus } from './ui-common.js';
       state.annIdCounter = Math.max(state.annIdCounter, maxAnnotId);
       // 未知アノテーション・Hide/Showペアの生データは編集不可のまま保持し、書き出し時にそのまま書き戻す
       state.libroUnknownAnnotations = unknownAnnotations;
+      // 大問ボタンは書き出し未対応のため、位置未編集・未削除の場合の書き戻し用に生データを保持する
+      state.libroDaimonPassthrough = daimonPassthrough;
       // 書き出し時に未変更ファイルをそのまま維持できるよう、元zip・書誌情報を保持する
       state.libroBook = { zip, baseDir, indexJson };
 
@@ -439,8 +441,9 @@ import { showToast, updateStatus } from './ui-common.js';
     /**
      * LIBRO bookとして読み込んだ内容を、LIBRO bookフォルダ形式のZIPとして書き出す。
      * ページリンク・外部リンク・音声再生・付箋（Hide/Show）に対応する。
-     * それ以外の種別（動画・図・大問/答/証明ボタン等）が存在する場合はトーストで警告し、
-     * 書き出し対象から除外する。
+     * LIBRO由来の大問ボタンは編集非対応のため、削除されていない限り生データを無変更のまま書き戻す
+     * （位置編集した場合は反映されない）。それ以外の種別（動画・図・答/証明ボタン、新規作成の大問ボタン等）
+     * が存在する場合はトーストで警告し、書き出し対象から除外する。
      */
     export async function saveAnnotationsAsLibroBook() {
       if (!state.libroBook) {
@@ -455,8 +458,15 @@ import { showToast, updateStatus } from './ui-common.js';
 
       const domAnnotations = [];
       const unsupportedTypes = new Set();
+      // LIBRO由来の大問ボタン（削除も位置編集もされていないもの）は、生データをそのまま
+      // 書き戻すため domAnnotations には含めず、キー（"page:closedId"）だけを記録する
+      const survivingDaimonIds = new Set();
       elements.forEach(el => {
         const type = el.dataset.type;
+        if (type === 'daimon' && el.dataset.libroToggle === '1') {
+          survivingDaimonIds.add(`${el.dataset.page}:${el.dataset.id}`);
+          return;
+        }
         if (!supportedTypes.has(type)) {
           if (type) unsupportedTypes.add(ANNOTATION_TYPE_CONFIG[type]?.label || type);
           return;
@@ -529,8 +539,14 @@ import { showToast, updateStatus } from './ui-common.js';
         showToast(`LIBRO形式に非対応の種別（${[...unsupportedTypes].join('、')}）は書き出し対象から除外しました`);
       }
 
+      // 削除されていない大問ボタンのみ、元のclosed/open生データを無変更のまま書き戻す
+      const daimonRawAnnots = state.libroDaimonPassthrough
+        .filter(({ pageNum, closedId }) => survivingDaimonIds.has(`${pageNum}:${closedId}`))
+        .flatMap(({ pageNum, closed, open }) => [{ pageNum, raw: closed }, { pageNum, raw: open }]);
+      const passthroughAnnotations = [...state.libroUnknownAnnotations, ...daimonRawAnnots];
+
       try {
-        const zip = await buildLibroBookExport(state.libroBook, domAnnotations, state.libroUnknownAnnotations, domStickyGroups);
+        const zip = await buildLibroBookExport(state.libroBook, domAnnotations, passthroughAnnotations, domStickyGroups);
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(zipBlob);
         const a = document.createElement('a');

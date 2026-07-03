@@ -85,6 +85,13 @@ export const state = {
    */
   libroUnknownAnnotations: [],
   /**
+   * LIBRO book読込時の大問ボタン（Hide/Showトグルペア、kind:'daimon'）の生アノテーションを
+   * ページごとに保持する（{ pageNum, closedId, closed, open }）。大問ボタンの書き出しは
+   * 未対応のため、位置編集されず削除もされていない場合に限り書き出し時にそのまま annots[] へ
+   * 書き戻す（位置編集した場合は反映されない既知の制約）。
+   */
+  libroDaimonPassthrough: [],
+  /**
    * LIBRO book zip読込時の元zip・書誌情報を保持する（書き出し時に未変更ファイルを
    * そのまま維持するため）。LIBRO book以外を読み込んだ場合は null のまま。
    * { zip: JSZip, baseDir: string, indexJson: Object }

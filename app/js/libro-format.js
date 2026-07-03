@@ -254,7 +254,7 @@ function rectToStyle(rect, pageWidth, pageHeight) {
  * （findTogglePairs/detectDaimonGroup）にフォールバックする。
  * @param {Object} pageJson - p####.json のパース済みオブジェクト
  * @param {number} pageNum - 1始まりのページ番号
- * @returns {{ known: Array<Object>, unknown: Array<Object>, togglePairs: Array<Object>, maxId: number }}
+ * @returns {{ known: Array<Object>, unknown: Array<Object>, togglePairs: Array<Object>, daimonPassthrough: Array<Object>, maxId: number }}
  */
 function convertPageAnnotations(pageJson, pageNum) {
   const annots = (pageJson.annots || []).map(a => {
@@ -272,10 +272,14 @@ function convertPageAnnotations(pageJson, pageNum) {
   const known  = [];
   const unknown = [];
   const togglePairs = [];
+  // 大問ボタン（kind:'daimon'）は書き出し未対応のため、位置編集されていない限り
+  // 元のannots[]を無変更のまま書き戻せるよう生データを保持する（closed/open2件1組）
+  const daimonPassthrough = [];
   let maxId = 0;
 
   metaResult.pairs.forEach(({ closed, open, groupId, type }) => {
     maxId = Math.max(maxId, closed._id || 0, open._id || 0);
+    const kind = type === 'daimon' ? 'daimon' : 'sticky';
     togglePairs.push({
       pageNum,
       closedId:   closed._id,
@@ -285,9 +289,10 @@ function convertPageAnnotations(pageJson, pageNum) {
       rect:       closed.rect,
       pageWidth,
       pageHeight,
-      kind:       type === 'daimon' ? 'daimon' : 'sticky',
+      kind,
       groupId,
     });
+    if (kind === 'daimon') daimonPassthrough.push({ pageNum, closedId: closed._id, closed, open });
   });
 
   pairs.forEach(([a, b]) => {
@@ -308,6 +313,7 @@ function convertPageAnnotations(pageJson, pageNum) {
       kind:       isDaimon ? 'daimon' : 'sticky',
       groupIds:   isDaimon ? groupIds : undefined,
     });
+    if (isDaimon) daimonPassthrough.push({ pageNum, closedId: closed._id, closed, open });
     // 位置・グループ編集後に書き出し可能な既知アノテーションとして扱うため、
     // 未知アノテーションへは登録しない（convertStickyGroupToLibroAnnotsで再生成する）
   });
@@ -359,7 +365,7 @@ function convertPageAnnotations(pageJson, pageNum) {
     }
   });
 
-  return { known, unknown, togglePairs, maxId };
+  return { known, unknown, togglePairs, daimonPassthrough, maxId };
 }
 
 
@@ -375,6 +381,7 @@ function convertPageAnnotations(pageJson, pageNum) {
  *   knownAnnotations: Array<Object>,
  *   togglePairs: Array<Object>,
  *   unknownAnnotations: Array<Object>,
+ *   daimonPassthrough: Array<Object>,
  *   maxAnnotId: number,
  *   baseDir: string,
  *   indexJson: Object,
@@ -393,6 +400,7 @@ export async function parseLibroBookZip(zip) {
   const knownAnnotations = [];
   const togglePairsRaw = [];
   const unknownAnnotations = [];
+  const daimonPassthrough = [];
   let maxAnnotId = 0;
 
   const pageMetaList = indexJson.pages || [];
@@ -439,9 +447,10 @@ export async function parseLibroBookZip(zip) {
     }
 
     // annots[] を既知/未知に分類・変換
-    const { known, unknown, togglePairs, maxId } = convertPageAnnotations(pageJson, pageNum);
+    const { known, unknown, togglePairs, daimonPassthrough: pageDaimonPassthrough, maxId } = convertPageAnnotations(pageJson, pageNum);
     knownAnnotations.push(...known);
     unknownAnnotations.push(...unknown);
+    daimonPassthrough.push(...pageDaimonPassthrough);
     togglePairsRaw.push(...togglePairs.map(tp => ({ ...tp, baseDir })));
     maxAnnotId = Math.max(maxAnnotId, maxId);
   }
@@ -471,7 +480,7 @@ export async function parseLibroBookZip(zip) {
     });
   }
 
-  return { pages, knownAnnotations, togglePairs, unknownAnnotations, maxAnnotId, baseDir, indexJson };
+  return { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, maxAnnotId, baseDir, indexJson };
 }
 
 
@@ -832,8 +841,9 @@ export async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeig
  * @param {{zip:JSZip, baseDir:string, indexJson:Object}} libroBook - state.libroBook
  * @param {Array<{id:number, page:number, type:string, style:string, savedData:string}>} domAnnotations
  *   - LIBROに変換可能な種別（pagelink/externallink/audio）のDOM由来アノテーションデータ
- * @param {Array<{pageNum:number, raw:Object}>} passthroughAnnotations - state.libroUnknownAnnotations
- *   （真に未知のアノテーションのみ。無変更のまま書き戻す）
+ * @param {Array<{pageNum:number, raw:Object}>} passthroughAnnotations - 無変更のまま書き戻すアノテーション
+ *   （state.libroUnknownAnnotations＝真に未知のもの、および削除・位置編集されていない大問ボタンの
+ *   closed/open生データを合流させたもの）
  * @param {Array<{pageNum:number, members:Array<Object>, groupId:string}>} [domStickyGroups] - 付箋のグループ一覧
  *   （groupId未設定の付箋は単独1件のグループとして渡す。groupIdはlibro-craft-metaのgroup-idとして
  *   埋め込まれ、再インポート時のグループ復元に使う。members仕様は convertStickyGroupToLibroAnnots 参照）
