@@ -252,9 +252,9 @@ import { updateStatus } from './ui-common.js';
 
       const ratio = newZoom / oldZoom;
 
-      // ズームレベルを更新してページをリサイズ（CSS scaleを更新するのみ。オブジェクト座標は変更しない）
+      // ズームレベルを更新してCSS scaleを適用する（オブジェクト座標・.pageLeftの基準サイズは変更しない）
       state.zoomLevel = newZoom;
-      resizePage();
+      applyZoomTransform();
 
       // パンオフセットを調整（マウス中心 or ビュー中心）
       // 公式: newPan = (M - viewCenter) * (1 - ratio) + oldPan * ratio
@@ -345,6 +345,18 @@ import { updateStatus } from './ui-common.js';
         page.style.height = h + 'px';
       }
       // ズームをCSS scaleで適用する（オブジェクトのleft/top/width/heightは変化しない）
+      applyZoomTransform();
+    }
+
+
+    /**
+     * 現在のズームレベルに応じたCSS transform（scale）のみを.pageLeftへ適用する。
+     * .pageLeftの基準サイズ（フィット計算結果のwidth/height）には触れないため、
+     * アノテーション座標系とのズレを起こさずにズームだけを反映できる。
+     * ホイールズーム等、頻繁に呼ばれる操作から利用する想定。
+     */
+    function applyZoomTransform() {
+      const page = document.getElementById('pageLeft');
       page.style.transform       = `scale(${state.zoomLevel / 100})`;
       page.style.transformOrigin = 'center center';
     }
