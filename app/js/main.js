@@ -2,7 +2,7 @@ import { closeQuickCreateDialog, confirmAnnotation, openQuickCreateDialog } from
 import { createDaimonButton, createKotaeButton, createShomeiButton } from './buttons.js';
 import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObjects, deactivateAnnotationMode, finalizeDragSelect, getPageRelativePos, onDragSelectMove, onDrawPreviewMove, onPageMouseDown, onPageMouseMove, onPageMouseUp, pasteClipboard, selectAllObjects } from './annotation-interaction.js';
 import { switchToViewMode } from './mode.js';
-import { applyZoomChange, goFirstPage, goLastPage, nextPage, prevPage, renderPage, resizePage, scaleAnnotations, setFit, updatePageDisplay, zoomIn, zoomOut } from './pdf-view.js';
+import { applyZoomChange, goFirstPage, goLastPage, nextPage, prevPage, resizePage, setFit, updatePageDisplay, zoomIn, zoomOut } from './pdf-view.js';
 import { selectedStickySet, state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
 import { closeDialog, handleAnnotationFile, handleZipFile, loadAnnotations, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsLibroBook, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';
@@ -446,23 +446,8 @@ import { pushUndo, redo, undo } from './undo-redo.js';
     // 初回リサイズ
     resizePage();
 
-    // ウィンドウリサイズ時に追従（アノテーションもページサイズ変化に追従する）
-    // ウィンドウリサイズ時は連続発火を抑えるためデバウンス処理を行う
-    let _resizeTimer = null;
-    window.addEventListener('resize', () => {
-      const page = document.getElementById('pageLeft');
-      const oldW = page.offsetWidth;
-      resizePage();
-      const newW = page.offsetWidth;
-      if (oldW > 0 && newW !== oldW) {
-        scaleAnnotations(newW / oldW);
-      }
-      // ページサイズ変化後にcanvasサイズを同期するため book を再描画する
-      if (state.bookPages) {
-        clearTimeout(_resizeTimer);
-        _resizeTimer = setTimeout(() => renderPage(state.currentPage), 150);
-      }
-    });
+    // 紙面はユーザが指定した拡大率・フィットモードで表示し、ウィンドウリサイズでは変更しない。
+    // ウィンドウ幅が狭い場合は overflow: hidden により見切れ、パン操作で移動して閲覧する。
 
     /* ============================
        マウスホイールによるズーム

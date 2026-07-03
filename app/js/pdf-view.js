@@ -307,14 +307,27 @@ import { updateStatus } from './ui-common.js';
       const padding = 48;
 
       // ベースサイズ（ズーム100%相当）を計算する。ズームはCSS transformで適用するため除外。
+      // ビュー幅・高さの両方を考慮し、はみ出す場合は収まる方の辺に合わせてアスペクト比を保つ。
       if (state.fitMode === 'height') {
-        const h = view.clientHeight - padding;
-        const w = h * state.PAGE_ASPECT;
+        const viewW = view.clientWidth  - padding;
+        const viewH = view.clientHeight - padding;
+        let h = viewH;
+        let w = h * state.PAGE_ASPECT;
+        if (w > viewW) {
+          w = viewW;
+          h = w / state.PAGE_ASPECT;
+        }
         page.style.height = h + 'px';
         page.style.width  = w + 'px';
       } else if (state.fitMode === 'width') {
-        const w = view.clientWidth - padding;
-        const h = w / state.PAGE_ASPECT;
+        const viewW = view.clientWidth  - padding;
+        const viewH = view.clientHeight - padding;
+        let w = viewW;
+        let h = w / state.PAGE_ASPECT;
+        if (h > viewH) {
+          h = viewH;
+          w = h * state.PAGE_ASPECT;
+        }
         page.style.width  = w + 'px';
         page.style.height = h + 'px';
       } else if (state.fitMode === 'page') {
