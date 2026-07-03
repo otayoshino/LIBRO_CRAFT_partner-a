@@ -1,7 +1,7 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { applyLiveUpdate, openAnnotationSettingsDialog } from './annotation-dialog.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, renderButtonVisual } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, UNDO_MAX } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, UNDO_MAX, renderAnnObjectContent } from './config.js';
 import { deselectAllObjects, getSelectedObjects, makeDraggable, makeResizable, reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { updateAnnotationVisibility } from './pdf-view.js';
 import { redoStack, undoStack } from './state.js';
@@ -97,17 +97,15 @@ import { showToast, updateStatus } from './ui-common.js';
                 renderButtonVisual(el, 'shomei', shomeiSd);
               } else {
                 // ann-object / ann-icon-obj
-                // savedData からラベルを再構築
+                // savedData からラベル・種別アイコンを再構築
                 try {
                   const sd  = JSON.parse(snap.savedData || '{}');
                   const cfg = ANNOTATION_TYPE_CONFIG?.[snap.type];
-                  if (el.classList.contains('ann-object') && !el.classList.contains('dt-page-color')) {
-                    const span = document.createElement('span');
-                    span.className = 'ann-label';
-                    span.textContent = (sd.annLabel || '').trim() || cfg?.label || snap.type;
-                    el.appendChild(span);
-                  } else if (el.classList.contains('ann-icon-obj')) {
+                  if (el.classList.contains('ann-icon-obj')) {
                     el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg?.iconSvg || ''}</svg>`;
+                  } else if (el.classList.contains('ann-object')) {
+                    const displayType = el.classList.contains('dt-page-color') ? 'page-color' : 'marker';
+                    renderAnnObjectContent(el, snap.type, displayType, sd.annLabel);
                   }
                 } catch (_) {}
                 addAnnClickHandler(el);

@@ -1302,10 +1302,13 @@
       color: #fff;
     }
 
-    /* 編集モード時：配置済みオブジェクトを半透明で表示（作成中であることを視覚的に示す） */
-    body:not(.is-view-mode) .ann-object   { opacity: 0.55; }
-    body:not(.is-view-mode) .ann-icon-obj { opacity: 0.55; }
-    body:not(.is-view-mode) .sticky-note  { opacity: 0.55; }
+    /* 編集モード時：配置済みオブジェクトを半透明で表示（作成中であることを視覚的に示す）。
+       紙面カラー型（.dt-page-color）は自身の背景アルファ値で薄さを表現しているため、
+       全体opacityを重ねるとさらに見づらくなる。除外して不透明のまま表示する。 */
+    body:not(.is-view-mode) .ann-object:not(.dt-page-color) { opacity: 0.8; }
+    body:not(.is-view-mode) .ann-object.dt-page-color        { opacity: 1; }
+    body:not(.is-view-mode) .ann-icon-obj                    { opacity: 0.8; }
+    body:not(.is-view-mode) .sticky-note                     { opacity: 0.55; }
 
     /* 編集モード時：縁を塗り色より濃いめの線で強調表示する。
        実際の塗り色（種別・ユーザー選択で異なる）に依存せず常に「濃いめ」になるよう、
@@ -1438,6 +1441,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 4px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.25);
       box-sizing: border-box;
       overflow: hidden;
@@ -1458,6 +1462,37 @@
     }
     body:not(.is-view-mode) .ann-object[data-type="pagelink"]:not(.dt-page-color) {
       box-shadow: none;
+    }
+
+    /* 種別アイコンオーバーレイ（編集モードのみ表示）。
+       マーカー型はラベルと横並び、紙面カラー型は単独中央表示。
+       背景色に依存せず視認できるよう白アイコン＋濃いドロップシャドウで縁取りし、
+       紙面カラー型はさらに半透明の暗色バッジ背景を敷いてコントラストを確保する
+       （矩形自体の透過は維持したまま、アイコン周辺のみ視認性を上げる）。 */
+    .ann-type-icon {
+      display: none;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      width: 14px;
+      height: 14px;
+    }
+    .ann-object.dt-page-color .ann-type-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.3);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+    .ann-type-icon svg {
+      width: 100%;
+      height: 100%;
+      fill: #fff;
+      filter: drop-shadow(0 0 1.5px rgba(0,0,0,0.9)) drop-shadow(0 1px 1px rgba(0,0,0,0.55));
+    }
+    body:not(.is-view-mode) .ann-object .ann-type-icon {
+      display: inline-flex;
     }
 
     /* リサイズハンドル（非アイコン型オブジェクトの選択時に四隅に表示） */
@@ -1563,11 +1598,29 @@
       font-size: 11px;
       color: #444;
     }
-    /* 紙面カラー型オブジェクト：編集モードは薄青破線枠、閲覧モードは透明 */
+    /* 紙面カラー型オブジェクト：編集モードは種別色の固定ピッチ破線枠＋薄い塗り、閲覧モードは透明。
+       outline: dashed はブラウザ標準実装で破線ピッチを制御できず、矩形が大きいほど間隔が広がってしまう。
+       background-image に4本の linear-gradient を重ねて4辺を個別描画する定番の技法で、
+       要素サイズに依存しない固定ピッチの破線を実現する。色は --ann-type-rgb（種別ごとにJSから設定）を参照し、
+       未設定時は青にフォールバックする。 */
     body:not(.is-view-mode) .ann-object.dt-page-color {
-      background: rgba(68, 114, 196, 0.08) !important;
-      outline: 2px dashed rgba(68, 114, 196, 0.5);
-      outline-offset: -2px;
+      --ann-dash: 5px;
+      --ann-gap: 4px;
+      --ann-bw: 2px;
+      background-color: rgba(var(--ann-type-rgb, 68,114,196), 0.16) !important;
+      background-image:
+        linear-gradient(90deg, rgba(var(--ann-type-rgb, 68,114,196), 0.9) 0, rgba(var(--ann-type-rgb, 68,114,196), 0.9) var(--ann-dash), transparent var(--ann-dash)),
+        linear-gradient(90deg, rgba(var(--ann-type-rgb, 68,114,196), 0.9) 0, rgba(var(--ann-type-rgb, 68,114,196), 0.9) var(--ann-dash), transparent var(--ann-dash)),
+        linear-gradient(0deg,  rgba(var(--ann-type-rgb, 68,114,196), 0.9) 0, rgba(var(--ann-type-rgb, 68,114,196), 0.9) var(--ann-dash), transparent var(--ann-dash)),
+        linear-gradient(0deg,  rgba(var(--ann-type-rgb, 68,114,196), 0.9) 0, rgba(var(--ann-type-rgb, 68,114,196), 0.9) var(--ann-dash), transparent var(--ann-dash));
+      background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+      background-size:
+        calc(var(--ann-dash) + var(--ann-gap)) var(--ann-bw),
+        calc(var(--ann-dash) + var(--ann-gap)) var(--ann-bw),
+        var(--ann-bw) calc(var(--ann-dash) + var(--ann-gap)),
+        var(--ann-bw) calc(var(--ann-dash) + var(--ann-gap));
+      background-position: 0 0, 0 100%, 0 0, 100% 0;
+      outline: none;
     }
     .is-view-mode .ann-object.dt-page-color {
       background: transparent !important;

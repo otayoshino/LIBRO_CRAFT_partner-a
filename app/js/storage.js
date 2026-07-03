@@ -1,6 +1,6 @@
 import { applyLiveUpdate, buildAnnDialogFields } from './annotation-dialog.js';
 import { renderButtonVisual } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility } from './pdf-view.js';
@@ -163,17 +163,14 @@ import { showToast, updateStatus } from './ui-common.js';
                 if (obj.shomeiOutline) el.dataset.shomeiOutline = obj.shomeiOutline;
                 if (obj.fuhyoji) el.dataset.fuhyoji = obj.fuhyoji;
                 // 内容再構築
-                if (el.classList.contains('ann-object') && !el.classList.contains('dt-page-color')) {
+                if (el.classList.contains('ann-object')) {
                   let label = '';
                   try {
                     const sd = JSON.parse(obj.savedData || '{}');
                     label = (sd.annLabel || '').trim() || (ANNOTATION_TYPE_CONFIG[obj.type]?.label || obj.type);
                   } catch (_) { label = ANNOTATION_TYPE_CONFIG[obj.type]?.label || obj.type; }
-                  const span = document.createElement('span');
-                  span.className = 'ann-label';
-                  span.textContent = label;
-                  el.innerHTML = '';
-                  el.appendChild(span);
+                  const displayType = el.classList.contains('dt-page-color') ? 'page-color' : 'marker';
+                  renderAnnObjectContent(el, obj.type, displayType, label);
                 } else if (el.classList.contains('ann-icon-obj')) {
                   const cfg = ANNOTATION_TYPE_CONFIG[obj.type];
                   el.innerHTML = cfg ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>` : '';

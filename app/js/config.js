@@ -39,6 +39,47 @@
     };
 
 
+    /**
+     * ANNOTATION_TYPE_CONFIG.color の rgba(...) 文字列から "R,G,B" 部分だけを取り出す。
+     * 紙面カラー型（.dt-page-color）の枠線・背景色を種別ごとに変えるため、
+     * CSSカスタムプロパティ --ann-type-rgb 経由でCSS側に渡す用途で使う。
+     */
+    export function annTypeRgbTriplet(rgbaColor) {
+      const m = /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/.exec(rgbaColor || '');
+      return m ? `${m[1]},${m[2]},${m[3]}` : '68,114,196';
+    }
+
+    /**
+     * マーカー型／紙面カラー型アノテーション要素（.ann-object）の中身（種別アイコン・ラベル）を構築する。
+     * 新規作成・更新・コピー貼付・Undo復元・保存データ復元の各箇所から共通で呼び出す
+     * （呼び出し前に位置・サイズ・classNameは設定済みであること。アイコン型 .ann-icon-obj は対象外）。
+     */
+    export function renderAnnObjectContent(el, type, displayType, label) {
+      const cfg = ANNOTATION_TYPE_CONFIG[type];
+      el.innerHTML = '';
+
+      if (displayType === 'page-color') {
+        el.style.setProperty('--ann-type-rgb', annTypeRgbTriplet(cfg?.color));
+      } else {
+        el.style.removeProperty('--ann-type-rgb');
+      }
+
+      if (cfg?.iconSvg) {
+        const iconWrap = document.createElement('span');
+        iconWrap.className = 'ann-type-icon';
+        iconWrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>`;
+        el.appendChild(iconWrap);
+      }
+
+      if (displayType !== 'page-color') {
+        const span = document.createElement('span');
+        span.className = 'ann-label';
+        span.textContent = (label || '').trim() || cfg?.label || type;
+        el.appendChild(span);
+      }
+    }
+
+
     /** アノテーションオブジェクトの塗り色選択肢 */
     export const ANN_COLOR_OPTIONS = [
       { label: '青',   value: 'rgba(68,136,204,0.6)' },

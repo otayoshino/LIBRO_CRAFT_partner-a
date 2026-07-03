@@ -1,7 +1,7 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { confirmAnnotation, openAnnotationSettingsDialog, openQuickCreateDialog } from './annotation-dialog.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, renderAnnObjectContent } from './config.js';
 import { selectedStickySet, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
 import { closeDialog } from './storage.js';
@@ -303,14 +303,10 @@ import { pushUndo } from './undo-redo.js';
               `height:${snap.height}px`,
               `background:${snap.background}`,
             ].join('; ') + ';';
-            // ラベルを savedData から復元
+            // ラベル・種別アイコンを savedData から復元
             try {
               const sd = JSON.parse(snap.savedData);
-              const cfg = ANNOTATION_TYPE_CONFIG[snap.type];
-              const labelSpan = document.createElement('span');
-              labelSpan.className   = 'ann-label';
-              labelSpan.textContent = (sd.annLabel || '').trim() || cfg?.label || snap.type;
-              el.appendChild(labelSpan);
+              renderAnnObjectContent(el, snap.type, 'marker', sd.annLabel);
             } catch (_) {}
             makeResizable(el);
           }

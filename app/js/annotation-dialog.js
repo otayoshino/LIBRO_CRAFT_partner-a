@@ -1,5 +1,5 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, STICKY_COLORS, STICKY_COLOR_MAP } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent } from './config.js';
 import { deactivateAnnotationMode, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
 import { generatePressedVariant, renderButtonVisual } from './buttons.js';
 import { mediaBlobs, state } from './state.js';
@@ -1207,26 +1207,19 @@ import { pushUndo } from './undo-redo.js';
             existingEl.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
             existingEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>`;
           } else if (displayType === 'page-color') {
-            // 紙面カラー型：ラベルなしの透明ホットスポット
+            // 紙面カラー型：ラベルなしの透明ホットスポット（編集モードのみ種別アイコンを中央表示）
             existingEl.className = 'ann-object dt-page-color';
             existingEl.style.width      = w + 'px';
             existingEl.style.height     = h + 'px';
             existingEl.style.background = '';
-            existingEl.innerHTML = '';
+            renderAnnObjectContent(existingEl, type, 'page-color');
           } else {
             // マーカー型に変更または絶対マーカー型のまま更新
             existingEl.className = 'ann-object';
             existingEl.style.width      = w + 'px';
             existingEl.style.height     = h + 'px';
             existingEl.style.background = bgColor;
-            let span = existingEl.querySelector('.ann-label');
-            if (!span) {
-              span = document.createElement('span');
-              span.className = 'ann-label';
-              existingEl.innerHTML = '';
-              existingEl.appendChild(span);
-            }
-            span.textContent = label;
+            renderAnnObjectContent(existingEl, type, 'marker', label);
           }
           // タイプ変更後にリサイズハンドルを再付与（icon ↔ marker 切り替え時にハンドルがなくなる問題を修正）
           if (displayType === 'icon') {
@@ -1250,17 +1243,15 @@ import { pushUndo } from './undo-redo.js';
             ann.style.cssText = `left:${x}px; top:${y}px; width:48px; height:48px; background:${iconBg};`;
             ann.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>`;
           } else if (displayType === 'page-color') {
-            // 紙面カラー型：ラベルなしの透明ホットスポット
+            // 紙面カラー型：ラベルなしの透明ホットスポット（編集モードのみ種別アイコンを中央表示）
             ann.className = 'ann-object dt-page-color';
             ann.style.cssText = `left:${x}px; top:${y}px; width:${w}px; height:${h}px;`;
+            renderAnnObjectContent(ann, type, 'page-color');
           } else {
-            // マーカー型：矩形ラベル
+            // マーカー型：矩形ラベル（編集モードは種別アイコンも横並び表示）
             ann.className = 'ann-object';
             ann.style.cssText = `left:${x}px; top:${y}px; width:${w}px; height:${h}px; background:${bgColor};`;
-            const labelSpan = document.createElement('span');
-            labelSpan.className   = 'ann-label';
-            labelSpan.textContent = label;
-            ann.appendChild(labelSpan);
+            renderAnnObjectContent(ann, type, 'marker', label);
           }
 
           // クリックハンドラを設定（コピー時の再利用のため関数化）
