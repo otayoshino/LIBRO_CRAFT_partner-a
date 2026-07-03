@@ -6,3 +6,6 @@ Thumbs.db
 
 ## 生成物は含めない
 sample_books/
+
+## シークレット
+secrets/
