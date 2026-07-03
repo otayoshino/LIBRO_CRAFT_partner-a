@@ -15,6 +15,21 @@ import { addDaimonClickHandler, renderButtonVisual } from './buttons.js';
 const PBVE_HEADER_LEN = 8;
 
 /**
+ * CRAFT独自の判別用メタデータのキー名（docs/libro_integration_計画書.md 4-3b参照）。
+ * Libro+側の公式スキーマとの衝突リスクを避けるため、衝突しうるキーをこの1個に限定する。
+ */
+const CRAFT_META_KEY = 'libro-craft-meta';
+
+/** libro-craft-meta のスキーマバージョン（互換性が必要な変更をする際に上げる） */
+const CRAFT_META_SCHEMA_VERSION = 1;
+
+/**
+ * annots[] 単位のlibro-craft-metaを付与しうる種別（Hide/Showトグル系のみ。
+ * pagelink/uri/launchはactions構成のみで一意判定できるため対象外）。
+ */
+const CRAFT_META_TOGGLE_TYPES = new Set(['sticky', 'kotae', 'daimon', 'shomei', 'zu']);
+
+/**
  * Pbve2000形式のデータを復号する。
  * 先頭8バイト（"Pbve2000"ヘッダー）を除去し、残りを 0xCC でXORすると元データが復元される。
  * @param {ArrayBuffer} buffer - 暗号化されたバイナリデータ
@@ -129,6 +144,51 @@ function findTogglePairs(annots) {
 
 
 /**
+ * annots[] 内の `libro-craft-meta` を持つ要素から、Hide/Showトグルペアをグループ単位で復元する。
+ * CRAFTが書き出したbookのみに存在するマーカーのため、構造ヒューリスティック（findTogglePairs/
+ * detectDaimonGroup）より優先して採用する（曖昧さのない確実な判定）。
+ *
+ * 同一 `group-id` を持つ要素同士が1つの論理トグル単位（付箋グループ等）のメンバー一式であり、
+ * その中でメンバーごとの closed/open の対応付けは `rect` の一致で復元する
+ * （convertStickyGroupToLibroAnnotsはメンバーごとに同一rectでclosed/open両方を生成するため）。
+ * @param {Array<Object>} annots - _id 付与済みのページ内annots配列
+ * @returns {{ pairs: Array<{closed:Object, open:Object, groupId:string, type:string}>, consumedIds: Set<number> }}
+ */
+function extractCraftMetaTogglePairs(annots) {
+  const byGroup = new Map(); // groupId -> { closed: Object[], open: Object[] }
+
+  annots.forEach(a => {
+    if (a._id == null) return;
+    const meta = a[CRAFT_META_KEY];
+    if (!meta || !CRAFT_META_TOGGLE_TYPES.has(meta.type)) return;
+    if (meta.role !== 'closed' && meta.role !== 'open') return;
+    const groupId = meta['group-id'];
+    if (!groupId) return;
+    if (!byGroup.has(groupId)) byGroup.set(groupId, { closed: [], open: [] });
+    byGroup.get(groupId)[meta.role].push(a);
+  });
+
+  const pairs = [];
+  const consumedIds = new Set();
+
+  byGroup.forEach((bucket, groupId) => {
+    const openPool = [...bucket.open];
+    bucket.closed.forEach(closed => {
+      const rectKey = JSON.stringify(closed.rect);
+      const idx = openPool.findIndex(o => JSON.stringify(o.rect) === rectKey);
+      if (idx === -1) return; // 対応するopenが見つからない場合はこのメンバーだけ復元を諦める
+      const [open] = openPool.splice(idx, 1);
+      pairs.push({ closed, open, groupId, type: closed[CRAFT_META_KEY].type });
+      consumedIds.add(closed._id);
+      consumedIds.add(open._id);
+    });
+  });
+
+  return { pairs, consumedIds };
+}
+
+
+/**
  * トグルペアが「大問ボタン」（押下で紐付く複数の他トグルペアを一括Hide/Showする）かどうかを判定する。
  * 実データ（p0004.json）で確認したパターン：actions が4つ（グループ一括Hide/Show 1組＋自己Hide/Show 1組）
  * で構成され、グループ側のtargetsが自分自身のペア以外の複数idを横断する。
@@ -188,6 +248,10 @@ function rectToStyle(rect, pageWidth, pageHeight) {
  * 付箋Hide/Showペア（togglePairs。位置・グループ編集および書き出しに対応）、
  * 編集不可アノテーション（未知パターンのみ。書き出し時は無変更のまま書き戻す）
  * とに分類・変換する。
+ *
+ * `libro-craft-meta` を持つ要素（CRAFT自身が書き出したbook由来）は最優先でグループ復元し、
+ * それ以外（他システム由来、または未知の構造）のみ既存の構造ヒューリスティック
+ * （findTogglePairs/detectDaimonGroup）にフォールバックする。
  * @param {Object} pageJson - p####.json のパース済みオブジェクト
  * @param {number} pageNum - 1始まりのページ番号
  * @returns {{ known: Array<Object>, unknown: Array<Object>, togglePairs: Array<Object>, maxId: number }}
@@ -201,12 +265,30 @@ function convertPageAnnotations(pageJson, pageNum) {
   const pageWidth  = pageJson.width;
   const pageHeight = pageJson.height;
 
-  const { pairs, pairedIds } = findTogglePairs(annots);
+  const metaResult = extractCraftMetaTogglePairs(annots);
+  const remainingAnnots = annots.filter(a => a._id == null || !metaResult.consumedIds.has(a._id));
+  const { pairs, pairedIds } = findTogglePairs(remainingAnnots);
 
   const known  = [];
   const unknown = [];
   const togglePairs = [];
   let maxId = 0;
+
+  metaResult.pairs.forEach(({ closed, open, groupId, type }) => {
+    maxId = Math.max(maxId, closed._id || 0, open._id || 0);
+    togglePairs.push({
+      pageNum,
+      closedId:   closed._id,
+      openId:     open._id,
+      closedFile: closed.filename,
+      openFile:   open.filename,
+      rect:       closed.rect,
+      pageWidth,
+      pageHeight,
+      kind:       type === 'daimon' ? 'daimon' : 'sticky',
+      groupId,
+    });
+  });
 
   pairs.forEach(([a, b]) => {
     // hidden:false（初期表示）側を閉状態、hidden:true側を開状態とする
@@ -232,7 +314,7 @@ function convertPageAnnotations(pageJson, pageNum) {
 
   annots.forEach(a => {
     if (a._id != null) maxId = Math.max(maxId, a._id);
-    if (a._id != null && pairedIds.has(a._id)) return; // ペア済みは処理済み
+    if (a._id != null && (pairedIds.has(a._id) || metaResult.consumedIds.has(a._id))) return; // ペア済みは処理済み
 
     const kind = classifyActions(a.actions);
     const style = rectToStyle(a.rect, pageWidth, pageHeight);
@@ -383,6 +465,7 @@ export async function parseLibroBookZip(zip) {
       openFile:   tp.openFile,
       kind:       tp.kind,
       groupIds:   tp.groupIds,
+      groupId:    tp.groupId,
       closedImageUrl: URL.createObjectURL(new Blob([closedBlob], { type: 'image/png' })),
       openImageUrl:   URL.createObjectURL(new Blob([openBlob],   { type: 'image/png' })),
     });
@@ -405,12 +488,24 @@ export async function parseLibroBookZip(zip) {
  * 既存の閉/開2枚のPNGは「画像素材」として登録し（開側は押下時画像 pressed__ キーに割り当てる）、
  * 未変更であれば実物の画像がそのまま使われる。紐付く答ボタン群は dataset.daimonId で
  * リンクする（addDaimonClickHandler が閲覧モードでこのidを見て一括開閉する）。
+ *
+ * `libro-craft-meta` の group-id により複数メンバーのグループ（CRAFT自身が書き出した付箋グループ）
+ * であることが判明した場合は、通常のCRAFT付箋グループと同じ dataset.groupId を設定する。
+ * これにより addStickyClickHandler の既存のグループ一括開閉ロジックがそのまま機能する。
  * @param {Array<Object>} togglePairs - parseLibroBookZip が返す togglePairs
  */
 export function renderTogglePairs(togglePairs) {
   const page = document.getElementById('pageLeft');
   const pageRect = page.getBoundingClientRect();
   const wrapByKey = new Map(); // `${pageNum}:${id}` -> 要素（closedId・openId両方をキーに登録。答ボタンリンク解決用）
+
+  // groupIdごとのメンバー数を数え、複数メンバーのグループのみdataset.groupIdを設定する
+  // （ソロ付箋のgroup-idはCRAFT側のgrp-N形式と衝突しない合成値のため、単独では設定不要）
+  const groupMemberCounts = new Map();
+  togglePairs.forEach(tp => {
+    if (!tp.groupId) return;
+    groupMemberCounts.set(tp.groupId, (groupMemberCounts.get(tp.groupId) || 0) + 1);
+  });
 
   togglePairs.forEach(tp => {
     const [x, y, w, h] = tp.rect;
@@ -457,6 +552,9 @@ export function renderTogglePairs(togglePairs) {
     wrap.dataset.closedFile  = tp.closedFile;
     wrap.dataset.openFile    = tp.openFile;
     wrap.dataset.page        = tp.pageNum;
+    if (tp.groupId && groupMemberCounts.get(tp.groupId) > 1) {
+      wrap.dataset.groupId = tp.groupId;
+    }
     wrap.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
 
     const closedImg = document.createElement('img');
@@ -635,9 +733,12 @@ export async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
  * @param {number} pageHeight
  * @param {JSZip} zip
  * @param {string} baseDir
+ * @param {string} groupId - グループ内の全メンバーが共有する一意なid（storage.jsのdata-group-id、
+ *   ソロ付箋は合成id）。libro-craft-metaの group-id としてメンバー全員の closed/open annotに
+ *   埋め込み、再インポート時に構造ヒューリスティックに頼らずグループを確実に復元できるようにする。
  * @returns {Promise<{annotJsons:Array<Object>, newPngWrites:Array<{path:string, bytes:Uint8Array}>}>}
  */
-export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, zip, baseDir) {
+export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, zip, baseDir, groupId) {
   const closedIds = members.map(m => m.closedId);
   const openIds   = members.map(m => m.openId);
 
@@ -665,6 +766,7 @@ export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHe
         { action: 'Hide', targets: closedIds },
         { action: 'Show', targets: openIds },
       ],
+      [CRAFT_META_KEY]: { type: 'sticky', role: 'closed', 'group-id': groupId },
     });
     annotJsons.push({
       filename: openFile,
@@ -674,6 +776,7 @@ export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHe
         { action: 'Hide', targets: openIds },
         { action: 'Show', targets: closedIds },
       ],
+      [CRAFT_META_KEY]: { type: 'sticky', role: 'open', 'group-id': groupId },
     });
   }
 
@@ -723,14 +826,17 @@ export async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeig
  * ContentsBuilderの現在の状態からLIBRO book zipを書き出す。
  * 保持している元zip（インスタンスをそのまま変更）に対し、annots[]が変わったページの
  * p####.jsonと、新規マーカーPNG・新規音声（Pbve2000暗号化）のみを上書き・追加する。
- * ページ画像・既存のannots PNG・既存の音声・index.jsonは一切書き換えない。
+ * ページ画像・既存のannots PNG・既存の音声は一切書き換えない。
+ * index.jsonは configs.libro-craft-meta（book全体マーカー、docs/libro_integration_計画書.md 4-3b参照）
+ * の追記のみ行い、既存のoutline等は変更しない。
  * @param {{zip:JSZip, baseDir:string, indexJson:Object}} libroBook - state.libroBook
  * @param {Array<{id:number, page:number, type:string, style:string, savedData:string}>} domAnnotations
  *   - LIBROに変換可能な種別（pagelink/externallink/audio）のDOM由来アノテーションデータ
  * @param {Array<{pageNum:number, raw:Object}>} passthroughAnnotations - state.libroUnknownAnnotations
  *   （真に未知のアノテーションのみ。無変更のまま書き戻す）
- * @param {Array<{pageNum:number, members:Array<Object>}>} [domStickyGroups] - 付箋のグループ一覧
- *   （groupId未設定の付箋は単独1件のグループとして渡す。members仕様は convertStickyGroupToLibroAnnots 参照）
+ * @param {Array<{pageNum:number, members:Array<Object>, groupId:string}>} [domStickyGroups] - 付箋のグループ一覧
+ *   （groupId未設定の付箋は単独1件のグループとして渡す。groupIdはlibro-craft-metaのgroup-idとして
+ *   埋め込まれ、再インポート時のグループ復元に使う。members仕様は convertStickyGroupToLibroAnnots 参照）
  * @returns {Promise<JSZip>}
  */
 export async function buildLibroBookExport(libroBook, domAnnotations, passthroughAnnotations, domStickyGroups = []) {
@@ -779,7 +885,7 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
 
     const stickyAnnots = [];
     for (const group of (stickyGroupsByPage.get(pageNum) || [])) {
-      const { annotJsons, newPngWrites } = await convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, zip, baseDir);
+      const { annotJsons, newPngWrites } = await convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, zip, baseDir, group.groupId);
       newPngWrites.forEach(({ path, bytes }) => zip.file(path, bytes));
       stickyAnnots.push(...annotJsons);
     }
@@ -793,6 +899,12 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
 
     zip.file(pageJsonPath, JSON.stringify(pageJson));
   }
+
+  // book全体マーカー：このbookが（少なくとも一度）CRAFTで書き出されたことを示す。
+  // 既存の configs（generator等）は上書きせず併存させる。
+  indexJson.configs = indexJson.configs || {};
+  indexJson.configs[CRAFT_META_KEY] = { editor: 'libro_craft', 'schema-version': CRAFT_META_SCHEMA_VERSION };
+  zip.file(baseDir + 'index.json', JSON.stringify(indexJson));
 
   // 新規追加された音声ファイル（元zipにまだ存在しないもの）のみPbve2000暗号化して追加
   const referencedAudio = new Set();

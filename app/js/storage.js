@@ -488,7 +488,7 @@ import { showToast, updateStatus } from './ui-common.js';
       });
 
       const domStickyGroups = [];
-      groupBuckets.forEach(members => {
+      groupBuckets.forEach((members, gid) => {
         const pageNum = parseInt(members[0].dataset.page, 10) || 1;
         const memberDescs = members.map(el => {
           const left   = parseFloat(el.style.left)   || 0;
@@ -525,7 +525,7 @@ import { showToast, updateStatus } from './ui-common.js';
           const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
           return { closedId, openId, closedMode: 'color', openMode: 'transparent', color, style };
         });
-        domStickyGroups.push({ pageNum, members: memberDescs });
+        domStickyGroups.push({ pageNum, members: memberDescs, groupId: gid });
       });
 
       if (unsupportedTypes.size > 0) {

@@ -184,31 +184,33 @@ ContentsBuilder 内部データ構造 ──エクスポート──▶ Libro an
 
 ```json
 {
-  "filename": "annots/0920.png",
-  "rect": [309, 666, 194, 116],
-  "hidden": true,
+  "filename": "annots/0101.png",
+  "rect": [100, 200, 50, 100],
   "actions": [ "...既存のHide/Show定義..." ],
   "libro-craft-meta": {
-    "type": "daimon",
-    "role": "leader",
-    "group-id": "g-0920"
+    "type": "sticky",
+    "role": "closed",
+    "group-id": "grp-42"
   }
 }
 ```
 
-- `type`：`ANNOTATION_TYPE_CONFIG` の種別（`sticky`/`kotae`/`daimon`/`shomei`/`zu`）と対応させる
-- `role`：トグルの閉/開状態（`closed`/`open`）。大問グループのリーダー/メンバーなど追加の区別が必要な種別は今後詳細設計する
-- `group-id`：同一の論理単位（複数画像重ねのトグル一式、大問グループのメンバー一式など）に属する `annots[]` 要素同士を紐付けるID。複数画像重ねクラスタ（`p0016.json` id4503系列）や大問グループの二層構造（マスター＋個別開閉メンバー）はこのIDで解決する想定
+- `type`：`ANNOTATION_TYPE_CONFIG` の種別（`sticky`/`kotae`/`daimon`/`shomei`/`zu`）と対応させる。現状エクスポート実装があるのは `sticky` のみ（`kotae`/`daimon`/`shomei`/`zu` は書き出し自体が未実装のため、`type` にこれらの値が入ることは今のところ無い）
+- `role`：この要素1件の状態を表す `closed`（閉/初期表示）または `open`（開/解答表示）。CRAFT付箋グループの「マスター一括トグル＋個別メンバー」という二層構造は現行の編集UI（`groupStickyNotes`/`toggleStickyGroup`）に存在しない（全メンバーが対等に連動するN対N対称モデルのみ）ため、`leader`/`member` のような追加区分は導入していない。二層構造の編集UI自体が実装されるタイミングで本フィールドの拡張を検討する
+- `group-id`：同一の論理トグル単位（付箋グループの全メンバー）に属する `annots[]` 要素同士を紐付けるID。CRAFT側の `data-group-id`（`grp-N`）をそのまま使う。グループ化されていない単独付箋にも一意な合成id（`__solo-<id>`）を割り当て、常に付与する。1グループにつき `role:"closed"` の要素と `role:"open"` の要素が同数（メンバー数分）存在し、同一メンバーのclosed/open対応は同一 `rect` を持つことで復元する（`convertStickyGroupToLibroAnnots` がメンバーごとに同一rectでclosed/open両方を生成するため、新規フィールド無しで一意に対応付けできる）
+- 複数画像重ねクラスタ（`p0016.json` id4503系列相当の、1状態が複数枚のPNGで構成されるケース）はCRAFTの編集UI・エクスポート実装のいずれにも存在しないため対象外。他システム由来bookで発生した場合は引き続き構造ヒューリスティックのフォールバックに委ねる
 
 #### インポート時の判定優先順位
 
-1. `libro-craft-meta` が存在し内容が有効な場合：それを最優先で採用する（構造ヒューリスティック不要・確実に判定できる）
-2. 存在しない場合（他システム由来のbook）：既存の構造ヒューリスティック（`findTogglePairs`/`detectDaimonGroup`）にフォールバックする（現状の安全側動作を維持）
+1. `libro-craft-meta` が存在し内容が有効な場合：それを最優先で採用する（構造ヒューリスティック不要・確実に判定できる）。ページ内で `libro-craft-meta` 付き要素と無し要素が混在していても、前者はメタデータから、後者は構造ヒューリスティックから、それぞれ独立してグループ復元する
+2. 存在しない場合（他システム由来のbook、またはCRAFT書き出し前の要素）：既存の構造ヒューリスティック（`findTogglePairs`/`detectDaimonGroup`）にフォールバックする（現状の安全側動作を維持）
+
+実装：`app/js/libro-format.js` の `extractCraftMetaTogglePairs()`（インポート側）、`convertStickyGroupToLibroAnnots()`（エクスポート側、`libro-craft-meta` 付与）、`buildLibroBookExport()`（book全体マーカーを `index.json` に書き込み）。`renderTogglePairs()` は `group-id` を持つ2件以上のメンバーに対し、通常のCRAFT付箋グループと同じ `dataset.groupId` を設定し、既存のグループ一括開閉ロジック（`addStickyClickHandler`）をそのまま再利用する。
 
 #### 未検証・未確定事項
 
 - Libro+ 本番ビューアが実際にこの未知キーを無視して問題なく動作するかの実機最終確認（開発チームへのヒアリングでは「無視される」との回答済み）
-- `role`・`group-id` の具体的な値の設計は、大問グループの二層構造（個別開閉メンバー＋マスター一括開閉）と複数画像重ねクラスタの両方に対応できる形で、実装着手時に詳細を詰める
+- `daimon`/`kotae`/`shomei`/`zu` のエクスポート自体が未実装（4-4の#4参照）。これらの書き出しに着手する際、大問グループの二層構造（個別開閉メンバー＋マスター一括開閉）をCRAFTの編集UIでどう表現するかも合わせて設計する必要があり、その時点で `role` の値を拡張する可能性がある
 
 ### 4-4. 実装が必要な機能
 
@@ -242,7 +244,7 @@ ContentsBuilder 内部データ構造 ──エクスポート──▶ Libro an
 ## 次のステップ
 
 - [ ] アノテーションID割り当てルールの検証（複数ページ・複数annotを含むbookサンプルでの `annot-range` 規則の確認）
-- [ ] `libro-craft-meta`（4-3b）の `role`/`group-id` 詳細設計と、エクスポート/インポート両処理への実装
+- [x] `libro-craft-meta`（4-3b）の `role`/`group-id` 詳細設計と、エクスポート/インポート両処理への実装（付箋グループのみ。daimon/kotae/shomei/zuは書き出し自体が未実装のため対象外）
 - [ ] 本番アップロード先の接続方式の確認（Libro担当者への確認事項）
 - [ ] 付箋の画像化（テキスト→PNG変換）の実装方式の検討（Canvas API等）
 - [ ] 上記をふまえた詳細設計・実装スケジュールの策定
