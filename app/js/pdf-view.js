@@ -357,8 +357,12 @@ import { updateStatus } from './ui-common.js';
      */
     function applyZoomTransform() {
       const page = document.getElementById('pageLeft');
-      page.style.transform       = `scale(${state.zoomLevel / 100})`;
+      const scale = state.zoomLevel / 100;
+      page.style.transform       = `scale(${scale})`;
       page.style.transformOrigin = 'center center';
+      // アノテーション矩形の枠線・破線幅がズームに連動して太く/細くなるのを防ぐため、
+      // 逆数スケールをCSS変数として渡す（各borderWidth等はcalc(値 * var(--zoom-inv-scale))で参照）
+      page.style.setProperty('--zoom-inv-scale', 1 / scale);
     }
 
 

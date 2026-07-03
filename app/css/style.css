@@ -1312,15 +1312,17 @@
 
     /* 編集モード時：縁を塗り色より濃いめの線で強調表示する。
        実際の塗り色（種別・ユーザー選択で異なる）に依存せず常に「濃いめ」になるよう、
-       半透明の黒を内側に重ねるリング（inset box-shadow）で表現する。 */
+       半透明の黒を内側に重ねるリング（inset box-shadow）で表現する。
+       リング幅は --zoom-inv-scale（1/ズーム倍率、applyZoomTransformで.pageLeftに設定）で
+       打ち消し、紙面の拡大縮小によらず画面上で常に同じ太さに見えるようにする。 */
     body:not(.is-view-mode) .ann-object:not(.dt-page-color) {
-      box-shadow: 0 2px 6px rgba(0,0,0,0.25), inset 0 0 0 2px rgba(0,0,0,0.4);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25), inset 0 0 0 calc(2px * var(--zoom-inv-scale, 1)) rgba(0,0,0,0.4);
     }
     body:not(.is-view-mode) .ann-icon-obj {
-      box-shadow: inset 4px 4px 4px rgba(255,255,255,0.15), inset -4px -4px 4px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.4), inset 0 0 0 2px rgba(0,0,0,0.35);
+      box-shadow: inset 4px 4px 4px rgba(255,255,255,0.15), inset -4px -4px 4px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.4), inset 0 0 0 calc(2px * var(--zoom-inv-scale, 1)) rgba(0,0,0,0.35);
     }
     body:not(.is-view-mode) .sticky-note {
-      box-shadow: inset 0 0 0 2px rgba(0,0,0,0.4);
+      box-shadow: inset 0 0 0 calc(2px * var(--zoom-inv-scale, 1)) rgba(0,0,0,0.4);
     }
 
 
@@ -1347,11 +1349,13 @@
     /* 解答が見えている状態：透明 */
     .sticky-note.state-hidden {
       opacity: 0;
-      outline: 1px dashed rgba(0,0,0,0.3);
+      outline: dashed rgba(0,0,0,0.3);
+      outline-width: calc(1px * var(--zoom-inv-scale, 1));
     }
 
     .sticky-note.is-selected {
-      outline: 2px solid #4488ff !important;
+      outline: solid #4488ff !important;
+      outline-width: calc(2px * var(--zoom-inv-scale, 1)) !important;
       z-index: 20;
     }
 
@@ -1451,7 +1455,8 @@
     }
 
     .ann-object.is-selected {
-      outline: 2px solid #4488ff;
+      outline: solid #4488ff;
+      outline-width: calc(2px * var(--zoom-inv-scale, 1));
       z-index: 20;
       overflow: visible;
     }
@@ -1529,10 +1534,12 @@
       cursor: move;
       z-index: 10;
       user-select: none;
-      border: 2px solid rgba(255,255,255,0.5);
+      border: solid rgba(255,255,255,0.5);
+      border-width: calc(2px * var(--zoom-inv-scale, 1));
     }
     .ann-icon-obj.is-selected {
-      outline: 2px solid #4488ff;
+      outline: solid #4488ff;
+      outline-width: calc(2px * var(--zoom-inv-scale, 1));
       z-index: 20;
     }
     .ann-icon-obj svg {
@@ -1602,11 +1609,12 @@
        outline: dashed はブラウザ標準実装で破線ピッチを制御できず、矩形が大きいほど間隔が広がってしまう。
        background-image に4本の linear-gradient を重ねて4辺を個別描画する定番の技法で、
        要素サイズに依存しない固定ピッチの破線を実現する。色は --ann-type-rgb（種別ごとにJSから設定）を参照し、
-       未設定時は青にフォールバックする。 */
+       未設定時は青にフォールバックする。破線ピッチ・線幅は --zoom-inv-scale を掛けて
+       ズーム倍率を打ち消し、拡大縮小によらず画面上で常に同じ太さ・間隔に見えるようにする。 */
     body:not(.is-view-mode) .ann-object.dt-page-color {
-      --ann-dash: 5px;
-      --ann-gap: 4px;
-      --ann-bw: 2px;
+      --ann-dash: calc(5px * var(--zoom-inv-scale, 1));
+      --ann-gap: calc(4px * var(--zoom-inv-scale, 1));
+      --ann-bw: calc(2px * var(--zoom-inv-scale, 1));
       background-color: rgba(var(--ann-type-rgb, 68,114,196), 0.16) !important;
       background-image:
         linear-gradient(90deg, rgba(var(--ann-type-rgb, 68,114,196), 0.9) 0, rgba(var(--ann-type-rgb, 68,114,196), 0.9) var(--ann-dash), transparent var(--ann-dash)),
@@ -2015,7 +2023,8 @@
       position: absolute;
       pointer-events: none;
       box-sizing: border-box;
-      border: 2px dashed rgba(104,152,216,0.8);
+      border: dashed rgba(104,152,216,0.8);
+      border-width: calc(2px * var(--zoom-inv-scale, 1));
       background: transparent;
       z-index: 900;
       overflow: visible;
@@ -2093,8 +2102,9 @@
       cursor: move;
     }
     .daimon-btn.is-selected {
-      outline: 2px solid #ff5500;
-      outline-offset: 2px;
+      outline: solid #ff5500;
+      outline-width: calc(2px * var(--zoom-inv-scale, 1));
+      outline-offset: calc(2px * var(--zoom-inv-scale, 1));
     }
     .is-view-mode .daimon-btn {
       cursor: pointer;
@@ -2128,8 +2138,9 @@
       cursor: move;
     }
     .kotae-btn.is-selected {
-      outline: 2px solid #ff5500;
-      outline-offset: 2px;
+      outline: solid #ff5500;
+      outline-width: calc(2px * var(--zoom-inv-scale, 1));
+      outline-offset: calc(2px * var(--zoom-inv-scale, 1));
     }
     .is-view-mode .kotae-btn {
       cursor: pointer;
@@ -2163,8 +2174,9 @@
       cursor: move;
     }
     .shomei-btn.is-selected {
-      outline: 2px solid #ff5500;
-      outline-offset: 2px;
+      outline: solid #ff5500;
+      outline-width: calc(2px * var(--zoom-inv-scale, 1));
+      outline-offset: calc(2px * var(--zoom-inv-scale, 1));
     }
     .is-view-mode .shomei-btn {
       cursor: pointer;
