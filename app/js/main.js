@@ -1,4 +1,5 @@
 import { closeQuickCreateDialog, confirmAnnotation, openQuickCreateDialog } from './annotation-dialog.js';
+import { checkAndPromptRestore, startAutoSaveInterval } from './autosave.js';
 import { createDaimonButton, createKotaeButton, createShomeiButton } from './buttons.js';
 import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObjects, deactivateAnnotationMode, finalizeDragSelect, getPageRelativePos, onDragSelectMove, onDrawPreviewMove, onPageMouseDown, onPageMouseMove, onPageMouseUp, pasteClipboard, selectAllObjects } from './annotation-interaction.js';
 import { switchToViewMode } from './mode.js';
@@ -487,6 +488,14 @@ import { pushUndo, redo, undo } from './undo-redo.js';
 
     // 初期ページ表示を 0/0 に初期化する
     updatePageDisplay();
+
+    /* ============================
+       編集状態のオートセーブ（IndexedDB）
+    ============================ */
+    // 前回セッションのオートセーブデータがあれば復元確認を行う
+    checkAndPromptRestore();
+    // デバウンス保存が先延ばしになり続けるケースの保険として、一定間隔でも保存する
+    startAutoSaveInterval();
 
 
 

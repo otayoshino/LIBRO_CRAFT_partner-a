@@ -1,5 +1,6 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { applyLiveUpdate, openAnnotationSettingsDialog } from './annotation-dialog.js';
+import { scheduleAutoSave } from './autosave.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, UNDO_MAX, renderAnnObjectContent } from './config.js';
 import { deselectAllObjects, getSelectedObjects, makeDraggable, makeResizable, reinitElement, updateAlignPanel } from './annotation-interaction.js';
@@ -25,7 +26,8 @@ import { showToast, updateStatus } from './ui-common.js';
       if (undoStack.length > UNDO_MAX) undoStack.shift();
       // 新しい操作が発生したので Redo 履歴をリセット
       redoStack.length = 0;
-
+      // 状態が変化したのでオートセーブを予約する
+      scheduleAutoSave();
     }
 
 
@@ -234,6 +236,8 @@ import { showToast, updateStatus } from './ui-common.js';
         // Undo の逆操作を Redo スタックに積む
         redoStack.push(op);
         if (redoStack.length > UNDO_MAX) redoStack.shift();
+        // 状態が変化したのでオートセーブを予約する
+        scheduleAutoSave();
       } catch (err) {
         // エラー内容を右下デバッグUIに表示
         const el = document.getElementById('undoDebug');
@@ -323,6 +327,8 @@ import { showToast, updateStatus } from './ui-common.js';
       // Redo 履歴を Undo スタックに戻す（redoStack はクリアしない）
       undoStack.push(op);
       if (undoStack.length > UNDO_MAX) undoStack.shift();
+      // 状態が変化したのでオートセーブを予約する
+      scheduleAutoSave();
       updateAnnotationVisibility();
       updateStatus('操作をやり直しました');
       updateAlignPanel();
