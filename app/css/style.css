@@ -1604,7 +1604,7 @@
        色は --ann-type-rgb（種別ごとにJSから設定）を参照し、未設定時は青にフォールバックする。
        線幅は --zoom-inv-scale を掛けてズーム倍率を打ち消し、拡大縮小によらず画面上で常に同じ太さに見えるようにする。 */
     body:not(.is-view-mode) .ann-object.dt-page-color {
-      --ann-bw: calc(2px * var(--zoom-inv-scale, 1));
+      --ann-bw: calc(1px * var(--zoom-inv-scale, 1));
       background-color: rgba(var(--ann-type-rgb, 68,114,196), 0.16) !important;
       border: var(--ann-bw) solid rgba(var(--ann-type-rgb, 68,114,196), 0.9);
       outline: none;
