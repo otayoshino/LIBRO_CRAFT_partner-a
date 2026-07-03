@@ -15,7 +15,9 @@ import { showToast, updateStatus } from './ui-common.js';
          */
         export function saveAnnotations() {
           const page = document.getElementById('pageLeft');
-          const pageRect = page.getBoundingClientRect();
+          // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
+          // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
+          const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
           // LIBRO book由来の付箋（.libro-toggle）はLIBRO書き出し専用のため、通常のローカル保存対象からは除外する
           const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
           const data = Array.from(elements).map(el => {
@@ -86,7 +88,9 @@ import { showToast, updateStatus } from './ui-common.js';
          */
         export function restoreAnnotationsFromArray(arr) {
           const page = document.getElementById('pageLeft');
-          const pageRect = page.getBoundingClientRect();
+          // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
+          // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
+          const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
           // 既存アノテーションを全削除（LIBRO book由来の付箋 .libro-toggle は対象外）
           page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(el => el.remove());
           arr.forEach(obj => {
@@ -335,7 +339,9 @@ import { showToast, updateStatus } from './ui-common.js';
      */
     export async function saveAnnotationsAsZip() {
       const page = document.getElementById('pageLeft');
-      const pageRect = page.getBoundingClientRect();
+      // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
+      // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
+      const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
       const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
       const data = Array.from(elements).map(el => {
         const left = parseFloat(el.style.left) || 0;
@@ -452,7 +458,9 @@ import { showToast, updateStatus } from './ui-common.js';
       }
 
       const page = document.getElementById('pageLeft');
-      const pageRect = page.getBoundingClientRect();
+      // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
+      // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
+      const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
       const elements = page.querySelectorAll('.ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
       const supportedTypes = new Set(['pagelink', 'externallink', 'audio']);
 
