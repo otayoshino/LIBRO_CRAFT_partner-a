@@ -66,4 +66,5 @@ LIBRO の book フォルダ形式（`index.json` / `p####.json` / 暗号化ペ�
 | [add-annotation-type](.claude/skills/add-annotation-type/SKILL.md) | 新規アノテーション種別の追加 |
 | [ui-change-constraints](.claude/skills/ui-change-constraints/SKILL.md) | CSS/HTML/レイアウトなどUI変更作業 |
 | [git-commit-convention](.claude/skills/git-commit-convention/SKILL.md) | コミット作成時のメッセージ規約 |
+| [git-hooks](.claude/skills/git-hooks/SKILL.md) | post-commitフックによる開発ログのGoogleスプレッドシート自動記録 |
 | [web-verify](.claude/skills/web-verify/SKILL.md) | UI・機能変更後のWeb画面目視確認手順 |

@@ -17,6 +17,10 @@ SPREADSHEET_ID: str = "113RueYrs2clAqzevWCYmbx7tXR83z-y6tyC_ylTW3M8"  # スプ�
 SHEET_NAME: str = "開発ログ"  # 書き込み先のシート(タブ)名
 
 
+# .claude/skills/git-commit-convention/SKILL.md で定義されているプレフィックス
+KNOWN_COMMIT_TYPES = {"feat", "fix", "refactor", "chore"}
+
+
 def get_latest_commit() -> tuple[str, str, str]:
     """直近のコミットの (ハッシュ, 作者, メッセージ) を取得する"""
     result = subprocess.run(
@@ -29,7 +33,15 @@ def get_latest_commit() -> tuple[str, str, str]:
     return commit_hash, author, message
 
 
-def append_to_sheet(commit_hash: str, author: str, message: str) -> None:
+def parse_commit_type(message: str) -> str:
+    """コミットメッセージ先頭の `feat:` 等のプレフィックスからコミットタイプを抽出する"""
+    prefix, sep, _ = message.partition(":")
+    if sep and prefix.strip() in KNOWN_COMMIT_TYPES:
+        return prefix.strip()
+    return ""
+
+
+def append_to_sheet(commit_hash: str, author: str, commit_type: str, message: str) -> None:
     """スプレッドシートの末尾に1行追記する"""
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=scopes)
@@ -37,13 +49,14 @@ def append_to_sheet(commit_hash: str, author: str, message: str) -> None:
 
     sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sheet.append_row([timestamp, commit_hash, author, message])
+    sheet.append_row([timestamp, commit_hash, author, commit_type, message])
 
 
 def main() -> None:
     try:
         commit_hash, author, message = get_latest_commit()
-        append_to_sheet(commit_hash, author, message)
+        commit_type = parse_commit_type(message)
+        append_to_sheet(commit_hash, author, commit_type, message)
         print(f"✅ スプレッドシートに記録しました: {commit_hash}")
     except Exception as e:
         # フックの失敗でコミット自体を止めたくないので、エラーは表示だけして正常終了させる
