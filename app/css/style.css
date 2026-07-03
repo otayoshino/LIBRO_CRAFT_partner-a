@@ -18,6 +18,10 @@
       color: #333;
       -webkit-user-select: none;
       user-select: none;
+      /* アノテーション選択状態のハイライト色（全種別共通）。
+         背景色が同系色（青系ページリンク等）でも視認できるよう、
+         白ハロー＋この色の二重リングで表現する（.is-selected 系ルール参照）。 */
+      --ann-selected-color: #4488ff;
     }
 
     button {
@@ -1294,7 +1298,10 @@
     .is-view-mode .zu-btn.is-selected,
     .is-view-mode .zu-obj.is-selected,
     .is-view-mode .kotae-btn.is-selected,
-    .is-view-mode .shomei-btn.is-selected { outline: none; }
+    .is-view-mode .shomei-btn.is-selected {
+      outline: none;
+      box-shadow: none !important;
+    }
 
     /* 閲覧モードボタン */
     .mode-btn.toEdit {
@@ -1354,8 +1361,9 @@
     }
 
     .sticky-note.is-selected {
-      outline: solid #4488ff !important;
-      outline-width: calc(2px * var(--zoom-inv-scale, 1)) !important;
+      --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
+      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
+                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
       z-index: 20;
     }
 
@@ -1454,9 +1462,12 @@
       user-select: none;
     }
 
+    /* 選択中：白ハロー＋アクセント色の二重リング（box-shadowを2枚重ねて表現）。
+       種別ごとの通常時box-shadow（ドロップシャドウ等）より優先させるため!importantで上書きする。 */
     .ann-object.is-selected {
-      outline: solid #4488ff;
-      outline-width: calc(2px * var(--zoom-inv-scale, 1));
+      --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
+      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
+                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
       z-index: 20;
       overflow: visible;
     }
@@ -1501,7 +1512,7 @@
       width: 8px;
       height: 8px;
       background: #fff;
-      border: 2px solid #4488ff;
+      border: 2px solid var(--ann-selected-color);
       border-radius: 2px;
       z-index: 30;
       box-sizing: border-box;
@@ -1533,8 +1544,9 @@
       border-width: calc(2px * var(--zoom-inv-scale, 1));
     }
     .ann-icon-obj.is-selected {
-      outline: solid #4488ff;
-      outline-width: calc(2px * var(--zoom-inv-scale, 1));
+      --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
+      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
+                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
       z-index: 20;
     }
     .ann-icon-obj svg {
@@ -2092,9 +2104,9 @@
       cursor: move;
     }
     .daimon-btn.is-selected {
-      outline: solid #ff5500;
-      outline-width: calc(2px * var(--zoom-inv-scale, 1));
-      outline-offset: calc(2px * var(--zoom-inv-scale, 1));
+      --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
+      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
+                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
     }
     .is-view-mode .daimon-btn {
       cursor: pointer;
@@ -2128,9 +2140,9 @@
       cursor: move;
     }
     .kotae-btn.is-selected {
-      outline: solid #ff5500;
-      outline-width: calc(2px * var(--zoom-inv-scale, 1));
-      outline-offset: calc(2px * var(--zoom-inv-scale, 1));
+      --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
+      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
+                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
     }
     .is-view-mode .kotae-btn {
       cursor: pointer;
@@ -2164,9 +2176,9 @@
       cursor: move;
     }
     .shomei-btn.is-selected {
-      outline: solid #ff5500;
-      outline-width: calc(2px * var(--zoom-inv-scale, 1));
-      outline-offset: calc(2px * var(--zoom-inv-scale, 1));
+      --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
+      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
+                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
     }
     .is-view-mode .shomei-btn {
       cursor: pointer;
