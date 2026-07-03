@@ -5,7 +5,14 @@ description: LIBRO の book フォルダ形式（index.json / p####.json / 暗�
 
 # LIBRO 連携（book フォルダ形式との相互変換）
 
-現状は計画段階（未実装）。詳細仕様は [docs/libro_integration_計画書.md](../../../docs/libro_integration_計画書.md) に集約されているので、実装前に必ず読むこと。ここでは実装時に見落としやすい要点のみをまとめる。
+実装は [app/js/libro-format.js](../../../app/js/libro-format.js) に集約されている。詳細仕様は [docs/libro_integration_計画書.md](../../../docs/libro_integration_計画書.md) に集約されているので、実装前に必ず読むこと。ここでは実装時に見落としやすい要点のみをまとめる。
+
+## 実装状況
+
+- **インポート**（`parseLibroBookZip`）：既知・未知を問わず全アノテーションを読み込み、既知種別は編集可能なDOMオブジェクトへ、未知アノテーション・大問ボタンのHide/Showペアは編集不可のpassthroughデータとして保持する。
+- **エクスポート**（`buildLibroBookExport` / `convertAnnotationToLibroAnnot`）：`pagelink`（`GoTo`+`FitPage`）・`externallink`（`URI`）・`audio`（`Launch`）の3種別のみLIBRO actionへ変換して書き出せる。それ以外（`video` / `plusfile` / `zu` / `kotae` / `shomei`）は変換ロジックが無く、新規作成分は書き出し時に失われる。
+- **付箋グループ**（`convertStickyGroupToLibroAnnots`）：Hide/Showトグルペアとして書き出し対応済み。`libro-craft-meta`（独自メタデータ、`CRAFT_META_KEY`）に `role`/`group-id` を埋め込み再インポート時にグループ復元する。
+- **大問ボタン**（`daimon`）：位置編集・削除をしていない場合に限り、読込時の生データをそのまま書き戻すpassthrough方式で消失を防いでいる（位置編集した場合は反映されない既知の制約）。
 
 ## bookフォルダ構成の要点
 
@@ -44,4 +51,4 @@ description: LIBRO の book フォルダ形式（index.json / p####.json / 暗�
 - `index.json` 更新の要否
 - Hide/Show ペアを `targets` 関係性のみから一意に復元できるか
 
-これらに影響する実装を行う場合は、[開発方針.md](../../../開発方針.md) のマイルストーンとあわせてユーザーに確認すること。
+これらに影響する実装を行う場合は、[docs/開発方針.md](../../../docs/開発方針.md) のマイルストーンとあわせてユーザーに確認すること。

@@ -18,43 +18,49 @@ python server.py
 
 ## アーキテクチャ
 
-### 単一ファイル構成
+### ファイル構成
 
-アプリ本体は [app/index.html](app/index.html) 一つに HTML/CSS/JavaScript がすべて記述されている（約8000行）。モジュール分割・ビルドツールは使用していない。CDN経由で `JSZip`（ZIP入出力）を読み込む。
+- [app/index.html](app/index.html)：HTML本体のみ（約400行）。`<head>` で `js/vendor/jszip.min.js`（JSZip セルフホスト版、CDN不使用）を読み込み、`<body>` 末尾で [app/js/main.js](app/js/main.js) を `type="module"` として読み込む。
+- `app/js/`：ES Modules で分割されたJavaScript本体（`main.js` / `config.js` / `state.js` / `mode.js` / `page-view.js` / `storage.js` / `autosave.js` / `undo-redo.js` / `buttons.js` / `sticky.js` / `annotation-dialog.js` / `annotation-interaction.js` / `annotation-actions.js` / `libro-format.js` / `ui-common.js`、計約7500行）。ビルドツールは使用せずブラウザネイティブのESモジュールとして読み込む。`main.js` 末尾の `Object.assign(window, {...})` で、HTML側の `onclick` などインラインハンドラから呼べる関数をグローバル公開している。
+- `app/css/style.css`：CSS本体。`app/icons/sprite.svg`：SVGアイコンスプライト。
 
 ### 状態管理
 
-グローバル変数によるシンプルな状態管理（クラスやフレームワークは使用しない）:
+`app/js/state.js` の `state` オブジェクトによるシンプルな状態管理（クラスやフレームワークは使用しない）:
+
 - `currentPage` / `totalPages` / `bookPages`：LIBRO bookページ表示関連
-- `zoomLevel` / フィットモード：拡大縮小・フィット状態
+- `zoomLevel` / `fitMode`：拡大縮小・フィット状態
 - `annIdCounter` / `daimonCounter` / `kotaeCounter` / `shomeiCounter` / `stickyGroupCounter`：アノテーションID採番
-- `mediaBlobs`：ZIP内の音声・動画・PDFファイルを BlobURL に変換してキャッシュ
-- `STORAGE_KEY`（`ContentsBuilder_v2_annotations`）：`localStorage` への自動保存キー
-- Undo/Redo は `pushUndo(op)` / `undo()` / `redo()` によるコマンド履歴方式
+- `mediaBlobs`（`state.js` でモジュールスコープの定数として定義）：ZIP内の音声・動画・PDFファイルを BlobURL に変換してキャッシュ
+- `STORAGE_KEY`（`config.js`、値は `ContentsBuilder_v2_annotations`）：`localStorage` への自動保存キー
+- Undo/Redo は `app/js/undo-redo.js` の `pushUndo(op)` / `undo()` / `redo()` によるコマンド履歴方式
 
 ### アノテーション種別
 
-`ANNOTATION_TYPE_CONFIG`（app/index.html 内）に種別ごとのラベル・色・アイコンSVGを定義。種別: `pagelink`（ページリンク）, `plusfile`, `externallink`（外部リンク）, `audio`（音声再生）, `video`（動画再生）, `sticky`（付箋）, `zu`（図）, `kotae`（答ボタン）, `daimon`（大問ボタン）, `shomei`（証明ボタン）。
+`ANNOTATION_TYPE_CONFIG`（[app/js/config.js](app/js/config.js)）に種別ごとのラベル・色・アイコンSVGを定義。種別: `pagelink`（ページリンク）, `plusfile`, `externallink`（外部リンク）, `audio`（音声再生）, `video`（動画再生）, `sticky`（付箋）, `zu`（図）, `kotae`（答ボタン）, `daimon`（大問ボタン）, `shomei`（証明ボタン）。
 
 新規種別を追加する場合の修正箇所チェックリストは [add-annotation-type Skill](.claude/skills/add-annotation-type/SKILL.md) を参照。
 
-### 保存・読み込みの2系統
+### 保存・読み込みの3系統
 
-- **localStorage**：`saveAnnotations()` / `loadAnnotations()` による自動保存（ページ内で完結）
-- **ZIP入出力**：`saveAnnotationsAsZip()` / `handleZipFile()` による `annotations.json` ＋ メディアファイル一式のエクスポート／インポート（JSZip使用）。将来的な LIBRO 連携（book フォルダ形式との相互変換）の暫定的な代替手段（[docs/libro_integration_計画書.md](docs/libro_integration_計画書.md) の「4-1. データフロー」参照）。
+- **localStorage**：`saveAnnotations()` / `loadAnnotations()`（[app/js/storage.js](app/js/storage.js)）による自動保存（ページ内で完結）
+- **独自ZIP形式**：`saveAnnotationsAsZip()` による `annotations.json` ＋ メディアファイル一式のエクスポート
+- **LIBRO book形式**：`saveAnnotationsAsLibroBook()` によるLIBRO bookフォルダ形式（暗号化ページ画像＋JSON）でのエクスポート。ページリンク・外部リンク・音声再生の3種別のみ対応、他は未対応（詳細は [libro-integration Skill](.claude/skills/libro-integration/SKILL.md)）
+
+読み込みはいずれも `handleZipFile()` が入口で、ZIPルート直下に `index.json` があればLIBRO book形式、なければ独自ZIP形式として自動判別する。
 
 ### モード切替
 
-`switchToViewMode()` / `switchToEditMode()` によりオーサリング（編集）モードと閲覧モードを切り替える。編集モードでは `activateAnnotationMode(type)` によりページ上へのアノテーション配置（ドラッグ描画）が可能になる。
+`switchToViewMode()` / `switchToEditMode()`（[app/js/mode.js](app/js/mode.js)）によりオーサリング（編集）モードと閲覧モードを切り替える。編集モードでは `activateAnnotationMode(type)` によりページ上へのアノテーション配置（ドラッグ描画）が可能になる。
 
-### LIBRO 連携（計画中・未実装）
+### LIBRO 連携
 
-LIBRO の book フォルダ形式（`index.json` / `p####.json` / 暗号化ページ画像 / `annots/` / `sounds/`）との相互変換は計画段階。詳細仕様と実装ルールは [libro-integration Skill](.claude/skills/libro-integration/SKILL.md)（元資料: [docs/libro_integration_計画書.md](docs/libro_integration_計画書.md)）を参照。
+LIBRO の book フォルダ形式（`index.json` / `p####.json` / 暗号化ページ画像 / `annots/` / `sounds/`）との相互変換は [app/js/libro-format.js](app/js/libro-format.js) に実装済み（インポートは全種別対応、エクスポートはページリンク・外部リンク・音声再生のみ対応で他は未対応）。詳細仕様と実装ルールは [libro-integration Skill](.claude/skills/libro-integration/SKILL.md)（元資料: [docs/libro_integration_計画書.md](docs/libro_integration_計画書.md)）を参照。
 
 ## 開発時の注意事項
 
 - コミットメッセージは日本語で記述する。
-- UI・デザイン変更を行う際の制約事項（変更禁止のCSS・レイアウト、位置保存形式の移行方針）は [ui-change-constraints Skill](.claude/skills/ui-change-constraints/SKILL.md) を参照。
+- UI・デザイン変更を行う際の制約事項（変更禁止のCSS・レイアウト、位置保存形式の後方互換ルール）は [ui-change-constraints Skill](.claude/skills/ui-change-constraints/SKILL.md) を参照。
 
 ## 関連Skill
 
@@ -68,3 +74,4 @@ LIBRO の book フォルダ形式（`index.json` / `p####.json` / 暗号化ペ�
 | [git-commit-convention](.claude/skills/git-commit-convention/SKILL.md) | コミット作成時のメッセージ規約 |
 | [git-hooks](.claude/skills/git-hooks/SKILL.md) | post-commitフックによる開発ログのGoogleスプレッドシート自動記録 |
 | [web-verify](.claude/skills/web-verify/SKILL.md) | UI・機能変更後のWeb画面目視確認手順 |
+| [doc-refactor](.claude/skills/doc-refactor/SKILL.md) | ドキュメントとコードの乖離点検・整理 |
