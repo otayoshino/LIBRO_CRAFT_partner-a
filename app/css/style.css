@@ -1879,8 +1879,8 @@
       border-color: #777;
     }
     .quick-popup .side-detail-form .disp-type-option.is-active {
-      background: #444;
-      border-color: #444;
+      background: #4472c4;
+      border-color: #4472c4;
       color: #fff;
     }
     .quick-popup .side-detail-form .disp-type-preview--marker {
@@ -1892,6 +1892,17 @@
     }
     .quick-popup .side-detail-form .disp-type-label {
       color: #555;
+    }
+    /* ハイライト時は背景が濃色になるため、内側のラベル・アイコンも視認できる色に上書き */
+    .quick-popup .side-detail-form .disp-type-option.is-active .disp-type-label {
+      color: #fff;
+    }
+    .quick-popup .side-detail-form .disp-type-option.is-active .disp-type-preview--icon svg {
+      fill: #fff;
+    }
+    .quick-popup .side-detail-form .disp-type-option.is-active .disp-type-preview--page-color {
+      border-color: rgba(255,255,255,0.9);
+      background: rgba(255,255,255,0.2);
     }
     .quick-popup .detail-section-sep {
       color: #888;
