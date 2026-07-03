@@ -603,7 +603,15 @@ import { pushUndo } from './undo-redo.js';
           let frozenDx   = null;
           let frozenDy   = null;
 
+          // ダブルクリックの2回目のmousedownがわずかに動いただけでリサイズ扱いになるのを防ぐ
+          const DRAG_THRESHOLD = 4;
+          let hasMoved = false;
+
           const onMove = (ev) => {
+            if (!hasMoved) {
+              if (Math.abs(ev.clientX - startX) < DRAG_THRESHOLD && Math.abs(ev.clientY - startY) < DRAG_THRESHOLD) return;
+              hasMoved = true;
+            }
             // マウス移動量（視覚座標）をscaleで除してベース座標に変換する
             const scale = state.zoomLevel / 100;
             let dx = (ev.clientX - startX) / scale;
@@ -867,7 +875,15 @@ import { pushUndo } from './undo-redo.js';
           let shiftSnapX2 = null, shiftSnapY2 = null;
           let frozenDx2   = null, frozenDy2   = null;
 
+          // ダブルクリックの2回目のmousedownがわずかに動いただけでドラッグ扱いになるのを防ぐ
+          const DRAG_THRESHOLD = 4;
+          let hasMoved = false;
+
           const onMoveMulti = (ev) => {
+            if (!hasMoved) {
+              if (Math.abs(ev.clientX - startX) < DRAG_THRESHOLD && Math.abs(ev.clientY - startY) < DRAG_THRESHOLD) return;
+              hasMoved = true;
+            }
             // マウス移動量（視覚座標）をscaleで除してベース座標に変換する
             const scale = state.zoomLevel / 100;
             let dx = (ev.clientX - startX) / scale;
@@ -940,7 +956,15 @@ import { pushUndo } from './undo-redo.js';
           let shiftSnapXM = null, shiftSnapYM = null;
           let frozenDxM   = null, frozenDyM   = null;
 
+          // ダブルクリックの2回目のmousedownがわずかに動いただけでドラッグ扱いになるのを防ぐ
+          const DRAG_THRESHOLD = 4;
+          let hasMoved = false;
+
           const onMoveM = (ev) => {
+            if (!hasMoved) {
+              if (Math.abs(ev.clientX - startX) < DRAG_THRESHOLD && Math.abs(ev.clientY - startY) < DRAG_THRESHOLD) return;
+              hasMoved = true;
+            }
             // マウス移動量（視覚座標）をscaleで除してベース座標に変換する
             const scale = state.zoomLevel / 100;
             let dx = (ev.clientX - startX) / scale;
@@ -1050,7 +1074,15 @@ import { pushUndo } from './undo-redo.js';
         let frozenDx   = null; // 固定軸で凍結する dx 値
         let frozenDy   = null; // 固定軸で凍結する dy 値
 
+        // ダブルクリックの2回目のmousedownがわずかに動いただけでドラッグ扱いになるのを防ぐ
+        const DRAG_THRESHOLD = 4;
+        let hasMoved = false;
+
         const onMove = (ev) => {
+          if (!hasMoved) {
+            if (Math.abs(ev.clientX - startX) < DRAG_THRESHOLD && Math.abs(ev.clientY - startY) < DRAG_THRESHOLD) return;
+            hasMoved = true;
+          }
           // マウス移動量（視覚座標）をscaleで除してベース座標に変換する
           const scale = state.zoomLevel / 100;
           let dx = (ev.clientX - startX) / scale;
@@ -1194,7 +1226,15 @@ import { pushUndo } from './undo-redo.js';
           let frozenDx   = null;
           let frozenDy   = null;
 
+          // ダブルクリックの2回目のmousedownがわずかに動いただけでリサイズ扱いになるのを防ぐ
+          const DRAG_THRESHOLD = 4;
+          let hasMoved = false;
+
           const onMove = (ev) => {
+            if (!hasMoved) {
+              if (Math.abs(ev.clientX - startX) < DRAG_THRESHOLD && Math.abs(ev.clientY - startY) < DRAG_THRESHOLD) return;
+              hasMoved = true;
+            }
             // マウス移動量（視覚座標）をscaleで除してベース座標に変換する
             const scale = state.zoomLevel / 100;
             let dx = (ev.clientX - startX) / scale;
