@@ -61,6 +61,7 @@ LIBRO の book フォルダ形式（`index.json` / `p####.json` / 暗号化ペ�
 
 - コミットメッセージは日本語で記述する。
 - UI・デザイン変更を行う際の制約事項（変更禁止のCSS・レイアウト、位置保存形式の後方互換ルール）は [ui-change-constraints Skill](.claude/skills/ui-change-constraints/SKILL.md) を参照。
+- 非同期処理（await連鎖等）でユーザーが処理待ちを意識する10秒以上のブロッキングが見込まれる場合は、逐次実装のまま高速化を図るのではなく、バッチ並列化・Web Worker化など実装方式自体を再検討すること。
 
 ## 関連Skill
 
