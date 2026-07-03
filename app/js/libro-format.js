@@ -132,7 +132,13 @@ function findTogglePairs(annots) {
  * トグルペアが「大問ボタン」（押下で紐付く複数の他トグルペアを一括Hide/Showする）かどうかを判定する。
  * 実データ（p0004.json）で確認したパターン：actions が4つ（グループ一括Hide/Show 1組＋自己Hide/Show 1組）
  * で構成され、グループ側のtargetsが自分自身のペア以外の複数idを横断する。
- * グループ付箋との判別は未検証のため、単一idしか横断しない場合は誤判定を避けて安全側（通常付箋）に倒す。
+ *
+ * この形状はグループ付箋の一括開閉マスタートグル（p0016.json id4500⇄4512で実例確認）と構造的に同一だが、
+ * 実データ比較の結果、真の大問ボタンは配下の各トグルペアが必ず1:1で完結するため、
+ * グループ側Hide/Showそれぞれのtargets件数（自己/パートナーid除く）が一致する一方、
+ * グループ付箋マスターは3+ノードの絡み合い等でこの件数が食い違うことを確認した。
+ * これを追加の判別条件とする（件数が一致しない場合は誤判定を避けて安全側＝通常付箋に倒す）。
+ * ただし絡み合いのない綺麗な1:1グループ付箋マスターは依然として区別不能な既知の限界が残る。
  * @param {Object} closed
  * @param {Object} open
  * @returns {{ isDaimon: boolean, groupIds: number[] }}
@@ -140,10 +146,22 @@ function findTogglePairs(annots) {
 function detectDaimonGroup(closed, open) {
   if (!Array.isArray(closed.actions) || closed.actions.length !== 4) return { isDaimon: false, groupIds: [] };
   if (!Array.isArray(open.actions)   || open.actions.length   !== 4) return { isDaimon: false, groupIds: [] };
-  const flat = [];
-  closed.actions.forEach(act => { if (Array.isArray(act.targets)) flat.push(...act.targets); });
+
+  const hideActions = closed.actions.filter(act => act.action === 'Hide' && Array.isArray(act.targets));
+  const showActions = closed.actions.filter(act => act.action === 'Show' && Array.isArray(act.targets));
+  if (hideActions.length !== 2 || showActions.length !== 2) return { isDaimon: false, groupIds: [] };
+
+  // 自己トグル用のHide/Showはtargetsが1件のみのため、要素数が多い方を「グループ側」とみなす
+  const groupHideAction = hideActions[0].targets.length >= hideActions[1].targets.length ? hideActions[0] : hideActions[1];
+  const groupShowAction = showActions[0].targets.length >= showActions[1].targets.length ? showActions[0] : showActions[1];
+
   const selfIds = new Set([closed._id, open._id]);
-  const groupIds = [...new Set(flat.filter(id => !selfIds.has(id)))];
+  const hideOthers = groupHideAction.targets.filter(id => !selfIds.has(id));
+  const showOthers = groupShowAction.targets.filter(id => !selfIds.has(id));
+
+  if (hideOthers.length !== showOthers.length) return { isDaimon: false, groupIds: [] };
+
+  const groupIds = [...new Set([...hideOthers, ...showOthers])];
   return { isDaimon: groupIds.length >= 2, groupIds };
 }
 
