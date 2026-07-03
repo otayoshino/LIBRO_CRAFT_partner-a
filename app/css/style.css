@@ -1500,7 +1500,9 @@
       display: inline-flex;
     }
 
-    /* リサイズハンドル（非アイコン型オブジェクトの選択時に四隅に表示） */
+    /* リサイズハンドル（非アイコン型オブジェクトの選択時に四隅に表示）
+       中心が矩形の角・辺の中点と重なるよう幅8pxの半分＝4pxで配置し、
+       ズームで大きさ・ヒットエリアが変わらないよう逆数スケールで打ち消す */
     .resize-handle {
       display: none;
       position: absolute;
@@ -1511,16 +1513,17 @@
       border-radius: 2px;
       z-index: 30;
       box-sizing: border-box;
+      transform: scale(var(--zoom-inv-scale, 1));
     }
     body:not(.is-view-mode) .is-selected > .resize-handle { display: block; }
-    .resize-handle[data-corner="tl"] { top: -5px;               left: -5px;              cursor: nw-resize; }
-    .resize-handle[data-corner="tc"] { top: -5px;               left: calc(50% - 4px);   cursor: n-resize;  }
-    .resize-handle[data-corner="tr"] { top: -5px;               right: -5px;             cursor: ne-resize; }
-    .resize-handle[data-corner="ml"] { top: calc(50% - 4px);    left: -5px;              cursor: w-resize;  }
-    .resize-handle[data-corner="mr"] { top: calc(50% - 4px);    right: -5px;             cursor: e-resize;  }
-    .resize-handle[data-corner="bl"] { bottom: -5px;            left: -5px;              cursor: sw-resize; }
-    .resize-handle[data-corner="bc"] { bottom: -5px;            left: calc(50% - 4px);   cursor: s-resize;  }
-    .resize-handle[data-corner="br"] { bottom: -5px;            right: -5px;             cursor: se-resize; }
+    .resize-handle[data-corner="tl"] { top: -4px;               left: -4px;              cursor: nw-resize; }
+    .resize-handle[data-corner="tc"] { top: -4px;               left: calc(50% - 4px);   cursor: n-resize;  }
+    .resize-handle[data-corner="tr"] { top: -4px;               right: -4px;             cursor: ne-resize; }
+    .resize-handle[data-corner="ml"] { top: calc(50% - 4px);    left: -4px;              cursor: w-resize;  }
+    .resize-handle[data-corner="mr"] { top: calc(50% - 4px);    right: -4px;             cursor: e-resize;  }
+    .resize-handle[data-corner="bl"] { bottom: -4px;            left: -4px;              cursor: sw-resize; }
+    .resize-handle[data-corner="bc"] { bottom: -4px;            left: calc(50% - 4px);   cursor: s-resize;  }
+    .resize-handle[data-corner="br"] { bottom: -4px;            right: -4px;             cursor: se-resize; }
 
     /* アイコン型アノテーションオブジェクト（ページ上配置） */
     .ann-icon-obj {
