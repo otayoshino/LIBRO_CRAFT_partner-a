@@ -10,7 +10,7 @@ app/index.html (387行) はエントリHTMLのみ。実装は app/js/*.js に ES
 
 - `state.js` — 唯一のグローバル状態オブジェクト `state`（currentPage, zoomLevel, annIdCounter 等の全カウンター・フラグを1つのオブジェクトに集約）。加えて `mediaBlobs`, `undoStack`/`redoStack`, `selectedStickySet` を個別 export。CLAUDE.md が言う「グローバル変数によるシンプルな状態管理」は実際にはこの単一 `state` オブジェクトに統合済み。
 - `config.js` — `STORAGE_KEY`（localStorage キー）と `ANNOTATION_TYPE_CONFIG`（アノテーション種別ごとのラベル・色・アイコン定義）。新規アノテーション種別追加はここが起点（`.claude/skills/add-annotation-type/SKILL.md` 参照）。
-- `pdf-view.js` — PDF読み込み・ページ描画・ズーム/フィット。
+- `page-view.js` — LIBRO bookページ描画・ページナビゲーション・ズーム/フィット（旧 pdf-view.js。PDF自体は扱わないため改名）。
 - `annotation-interaction.js` (最大, 1482行) — ページ上でのドラッグ配置・ドラッグ選択・整列・コピペなど操作系。
 - `annotation-dialog.js` (1068行) — アノテーション編集ダイアログ（クイック作成・確定処理）。
 - `annotation-actions.js` — アノテーションに対する個別アクション。

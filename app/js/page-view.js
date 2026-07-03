@@ -153,7 +153,7 @@ import { updateStatus } from './ui-common.js';
       resizePage();
       updatePageDisplay();
       // 読込成功後にドロップオーバーレイを非表示にし、.pageの白背景・影を表示する
-      document.getElementById('pdfDropOverlay').classList.add('hidden');
+      document.getElementById('pageDropOverlay').classList.add('hidden');
       document.getElementById('pageLeft').classList.remove('no-book');
     }
 
@@ -192,7 +192,7 @@ import { updateStatus } from './ui-common.js';
       }
       if (renderVersion !== state._renderVersion) return;
 
-      const canvas = document.getElementById('pdfCanvas');
+      const canvas = document.getElementById('pageCanvas');
       const pageEl  = document.getElementById('pageLeft');
       const pageAspect = pageData.width / pageData.height;
       if (Math.abs(pageAspect - state.PAGE_ASPECT) > 0.001) {

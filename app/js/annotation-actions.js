@@ -1,6 +1,6 @@
 import { openAnnotationSettingsDialog, openEditPopup } from './annotation-dialog.js';
 import { ANNOTATION_TYPE_CONFIG } from './config.js';
-import { updatePageDisplay } from './pdf-view.js';
+import { updatePageDisplay } from './page-view.js';
 import { mediaBlobs, selectedStickySet, state } from './state.js';
 import { closeDialog, resolveMediaSrc } from './storage.js';
 import { showToast, updateStatus } from './ui-common.js';

@@ -4,7 +4,7 @@ import { scheduleAutoSave } from './autosave.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, UNDO_MAX, renderAnnObjectContent } from './config.js';
 import { deselectAllObjects, getSelectedObjects, makeDraggable, makeResizable, reinitElement, updateAlignPanel } from './annotation-interaction.js';
-import { updateAnnotationVisibility } from './pdf-view.js';
+import { updateAnnotationVisibility } from './page-view.js';
 import { redoStack, undoStack } from './state.js';
 import { addStickyClickHandler, applyStickyHideUndo } from './sticky.js';
 import { closeDialog } from './storage.js';

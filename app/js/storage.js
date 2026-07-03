@@ -3,7 +3,7 @@ import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs } from './libro-format.js';
-import { loadLibroBookPages, updateAnnotationVisibility } from './pdf-view.js';
+import { loadLibroBookPages, updateAnnotationVisibility } from './page-view.js';
 import { mediaBlobs, state } from './state.js';
 import { showToast, updateStatus } from './ui-common.js';
 

@@ -3,7 +3,7 @@ import { checkAndPromptRestore, startAutoSaveInterval } from './autosave.js';
 import { createDaimonButton, createKotaeButton, createShomeiButton } from './buttons.js';
 import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObjects, deactivateAnnotationMode, finalizeDragSelect, getPageRelativePos, onDragSelectMove, onDrawPreviewMove, onPageMouseDown, onPageMouseMove, onPageMouseUp, pasteClipboard, selectAllObjects } from './annotation-interaction.js';
 import { switchToViewMode } from './mode.js';
-import { applyZoomChange, goFirstPage, goLastPage, nextPage, prevPage, resizePage, setFit, updatePageDisplay, zoomIn, zoomOut } from './pdf-view.js';
+import { applyZoomChange, goFirstPage, goLastPage, nextPage, prevPage, resizePage, setFit, updatePageDisplay, zoomIn, zoomOut } from './page-view.js';
 import { selectedStickySet, state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
 import { closeDialog, handleAnnotationFile, handleZipFile, loadAnnotations, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsLibroBook, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';

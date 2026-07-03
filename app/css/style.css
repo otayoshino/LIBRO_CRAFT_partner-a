@@ -641,7 +641,7 @@
     }
 
     /* book未読込時のオーバーレイ（読込ボタンのみを中央に表示し、背景・枠は持たない） */
-    #pdfDropOverlay {
+    #pageDropOverlay {
       position: absolute;
       inset: 0;
       display: flex;
@@ -655,7 +655,7 @@
       z-index: 10;
     }
 
-    #pdfDropOverlay.hidden {
+    #pageDropOverlay.hidden {
       display: none;
     }
 
