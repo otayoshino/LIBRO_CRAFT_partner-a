@@ -1461,19 +1461,18 @@
       overflow: visible;
     }
 
-    /* ページリンク種別はドロップシャドウ不要（編集・閲覧モード共通） */
+    /* ページリンク種別はドロップシャドウ・角丸不要（矩形として表示、編集・閲覧モード共通） */
     .ann-object[data-type="pagelink"] {
       box-shadow: none;
+      border-radius: 0;
     }
     body:not(.is-view-mode) .ann-object[data-type="pagelink"]:not(.dt-page-color) {
       box-shadow: none;
     }
 
     /* 種別アイコンオーバーレイ（編集モードのみ表示）。
-       マーカー型はラベルと横並び、紙面カラー型は単独中央表示。
-       背景色に依存せず視認できるよう白アイコン＋濃いドロップシャドウで縁取りし、
-       紙面カラー型はさらに半透明の暗色バッジ背景を敷いてコントラストを確保する
-       （矩形自体の透過は維持したまま、アイコン周辺のみ視認性を上げる）。 */
+       マーカー型はラベルと横並び、紙面カラー型は単独中央表示（サイズ・見た目は共通）。
+       背景色に依存せず視認できるよう白アイコン＋濃いドロップシャドウで縁取りする。 */
     .ann-type-icon {
       display: none;
       flex: 0 0 auto;
@@ -1482,13 +1481,6 @@
       pointer-events: none;
       width: 14px;
       height: 14px;
-    }
-    .ann-object.dt-page-color .ann-type-icon {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: rgba(0, 0, 0, 0.3);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     }
     .ann-type-icon svg {
       width: 100%;
@@ -1608,29 +1600,13 @@
       font-size: 11px;
       color: #444;
     }
-    /* 紙面カラー型オブジェクト：編集モードは種別色の固定ピッチ破線枠＋薄い塗り、閲覧モードは透明。
-       outline: dashed はブラウザ標準実装で破線ピッチを制御できず、矩形が大きいほど間隔が広がってしまう。
-       background-image に4本の linear-gradient を重ねて4辺を個別描画する定番の技法で、
-       要素サイズに依存しない固定ピッチの破線を実現する。色は --ann-type-rgb（種別ごとにJSから設定）を参照し、
-       未設定時は青にフォールバックする。破線ピッチ・線幅は --zoom-inv-scale を掛けて
-       ズーム倍率を打ち消し、拡大縮小によらず画面上で常に同じ太さ・間隔に見えるようにする。 */
+    /* 紙面カラー型オブジェクト：編集モードは種別色の実線枠＋薄い塗り、閲覧モードは透明。
+       色は --ann-type-rgb（種別ごとにJSから設定）を参照し、未設定時は青にフォールバックする。
+       線幅は --zoom-inv-scale を掛けてズーム倍率を打ち消し、拡大縮小によらず画面上で常に同じ太さに見えるようにする。 */
     body:not(.is-view-mode) .ann-object.dt-page-color {
-      --ann-dash: calc(5px * var(--zoom-inv-scale, 1));
-      --ann-gap: calc(4px * var(--zoom-inv-scale, 1));
       --ann-bw: calc(2px * var(--zoom-inv-scale, 1));
       background-color: rgba(var(--ann-type-rgb, 68,114,196), 0.16) !important;
-      background-image:
-        linear-gradient(90deg, rgba(var(--ann-type-rgb, 68,114,196), 0.9) 0, rgba(var(--ann-type-rgb, 68,114,196), 0.9) var(--ann-dash), transparent var(--ann-dash)),
-        linear-gradient(90deg, rgba(var(--ann-type-rgb, 68,114,196), 0.9) 0, rgba(var(--ann-type-rgb, 68,114,196), 0.9) var(--ann-dash), transparent var(--ann-dash)),
-        linear-gradient(0deg,  rgba(var(--ann-type-rgb, 68,114,196), 0.9) 0, rgba(var(--ann-type-rgb, 68,114,196), 0.9) var(--ann-dash), transparent var(--ann-dash)),
-        linear-gradient(0deg,  rgba(var(--ann-type-rgb, 68,114,196), 0.9) 0, rgba(var(--ann-type-rgb, 68,114,196), 0.9) var(--ann-dash), transparent var(--ann-dash));
-      background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
-      background-size:
-        calc(var(--ann-dash) + var(--ann-gap)) var(--ann-bw),
-        calc(var(--ann-dash) + var(--ann-gap)) var(--ann-bw),
-        var(--ann-bw) calc(var(--ann-dash) + var(--ann-gap)),
-        var(--ann-bw) calc(var(--ann-dash) + var(--ann-gap));
-      background-position: 0 0, 0 100%, 0 0, 100% 0;
+      border: var(--ann-bw) solid rgba(var(--ann-type-rgb, 68,114,196), 0.9);
       outline: none;
     }
     .is-view-mode .ann-object.dt-page-color {
