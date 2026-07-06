@@ -115,7 +115,7 @@
     }
 
     /* ページブロック背景をナビバーと同色に */
-    .nav .blk.page {
+    .nav .blk.page-nav {
       background: #647cc0;
     }
 
