@@ -746,7 +746,6 @@ import { pushUndo } from './undo-redo.js';
       form.appendChild(colDt);
       const colDd = document.createElement('dd');
       colDd.dataset.fieldGroup = 'fill';
-      colDd.className = 'color-row';
       colDd.style.display = showColorInit ? '' : 'none';
       const colWrap = document.createElement('div');
       colWrap.className = 'd-select-wrap';
