@@ -105,6 +105,12 @@ export const state = {
    * { zip: JSZip, baseDir: string, indexJson: Object }
    */
   libroBook: null,
+  /**
+   * 現在開いているbook（zip）の識別子。LIBRO book形式ではbaseDir（book folder名）、
+   * 独自ZIP形式ではファイル名を使う。オートセーブ復元プロンプトを、開いたbookに
+   * 対応するスナップショットのときだけ出すための識別に使う。
+   */
+  currentBookId: null,
 };
 
     /* -------- メディアBlobキャッシュ -------- */

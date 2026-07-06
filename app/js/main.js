@@ -1,5 +1,5 @@
 import { closeQuickCreateDialog, confirmAnnotation, openQuickCreateDialog } from './annotation-dialog.js';
-import { checkAndPromptRestore, startAutoSaveInterval } from './autosave.js';
+import { startAutoSaveInterval } from './autosave.js';
 import { createDaimonButton, createKotaeButton, createShomeiButton } from './buttons.js';
 import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObjects, deactivateAnnotationMode, finalizeDragSelect, getPageRelativePos, onDragSelectMove, onDrawPreviewMove, onPageMouseDown, onPageMouseMove, onPageMouseUp, pasteClipboard, selectAllObjects } from './annotation-interaction.js';
 import { switchToViewMode } from './mode.js';
@@ -493,8 +493,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
     /* ============================
        編集状態のオートセーブ（IndexedDB）
     ============================ */
-    // 前回セッションのオートセーブデータがあれば復元確認を行う
-    checkAndPromptRestore();
+    // オートセーブ復元確認は、対応するbookのzipを読み込んだタイミングで行う（storage.js側）
     // デバウンス保存が先延ばしになり続けるケースの保険として、一定間隔でも保存する
     startAutoSaveInterval();
 

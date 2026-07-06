@@ -79,7 +79,7 @@ import { showToast } from './ui-common.js';
         const db = await openAutoSaveDB();
         await new Promise((resolve, reject) => {
           const tx = db.transaction(STORE_NAME, 'readwrite');
-          tx.objectStore(STORE_NAME).put({ data, savedAt: Date.now() }, SNAPSHOT_KEY);
+          tx.objectStore(STORE_NAME).put({ data, savedAt: Date.now(), bookId: state.currentBookId }, SNAPSHOT_KEY);
           tx.oncomplete = resolve;
           tx.onerror = () => reject(tx.error);
         });
@@ -124,15 +124,18 @@ import { showToast } from './ui-common.js';
     }
 
     /**
-     * 起動時にオートセーブ済みデータの有無を確認し、あれば復元するか確認ダイアログを出す。
-     * アプリ起動時に一度だけ呼び出す。
+     * 指定bookに対応するオートセーブ済みデータの有無を確認し、あれば復元するか確認ダイアログを出す。
+     * zip（book）の読み込み完了後に、そのbookIdを渡して呼び出す。
+     * スナップショットのbookIdが一致しない場合は、別bookの編集中データのため警告を出さない。
+     * @param {string} bookId - 読み込んだbookの識別子
      */
-    export async function checkAndPromptRestore() {
+    export async function checkAndPromptRestoreForBook(bookId) {
       try {
         const snapshot = await getAutoSaveSnapshot();
         if (!snapshot || !Array.isArray(snapshot.data) || snapshot.data.length === 0) return;
+        if (!bookId || snapshot.bookId !== bookId) return;
         const savedAt = new Date(snapshot.savedAt).toLocaleString('ja-JP');
-        const restore = window.confirm(`自動保存された編集内容があります（${savedAt} 保存）。\n復元しますか？`);
+        const restore = window.confirm(`このbookの自動保存された編集内容があります（${savedAt} 保存）。\n復元しますか？`);
         if (restore) {
           restoreAnnotationsFromArray(snapshot.data);
           showToast('オートセーブデータから復元しました');

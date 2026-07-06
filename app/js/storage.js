@@ -1,4 +1,5 @@
 import { applyLiveUpdate, buildAnnDialogFields } from './annotation-dialog.js';
+import { checkAndPromptRestoreForBook } from './autosave.js';
 import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
@@ -255,7 +256,7 @@ import { showToast, updateStatus } from './ui-common.js';
 
         // ルート直下にindex.jsonがあればLIBRO bookフォルダ形式として扱う
         if (isLibroBookZip(zip)) {
-          await handleLibroBookZip(zip);
+          await handleLibroBookZip(zip, file.name);
           return;
         }
 
@@ -293,9 +294,13 @@ import { showToast, updateStatus } from './ui-common.js';
         }
         const jsonText = await jsonFile.async('string');
         const arr = JSON.parse(jsonText);
+        // 独自ZIP形式にはbook folder名が無いため、ファイル名をbook識別子として使う
+        const bookId = file.name;
+        state.currentBookId = bookId;
         restoreAnnotationsFromArray(arr);
         const mediaCount = Object.keys(mediaBlobs).length;
         showToast(`ZIPから復元しました（メディア: ${mediaCount}件）`);
+        await checkAndPromptRestoreForBook(bookId);
       } catch (e) {
         showToast('ZIP読込エラー: ファイルが壊れているか形式が正しくありません');
         console.error(e);
@@ -309,8 +314,9 @@ import { showToast, updateStatus } from './ui-common.js';
      * オブジェクトとして復元し、未知のアノテーションは編集UIに出さず内部に保持するのみとする
      * （書き出しは現段階では未対応）。
      * @param {JSZip} zip - JSZip.loadAsync 済みのZIPオブジェクト
+     * @param {string} fallbackName - book folder名が空の場合に使うbook識別子（元zipファイル名）
      */
-    async function handleLibroBookZip(zip) {
+    async function handleLibroBookZip(zip, fallbackName) {
       const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths } =
         await parseLibroBookZip(zip);
 
@@ -338,11 +344,16 @@ import { showToast, updateStatus } from './ui-common.js';
       // unencryptedAssetPathsは、別オーサリングツール由来で実際には暗号化されていなかった
       // 音声・アノテーション画像のパス一覧（書き出し時に強制暗号化する対象）
       state.libroBook = { zip, baseDir, indexJson, unencryptedAssetPaths };
+      // book識別子：LIBRO book folder名（baseDir）。folder無し（index.jsonがzipルート直下）の場合は
+      // 元zipファイル名にフォールバックする
+      const bookId = baseDir || fallbackName;
+      state.currentBookId = bookId;
 
       const unencryptedNote = unencryptedAssetPaths.size > 0
         ? `、未暗号化ファイル${unencryptedAssetPaths.size}件を検出（保存時に暗号化します）`
         : '';
       showToast(`LIBRO bookを読み込みました（${pages.length}ページ、未知アノテーション${unknownAnnotations.length}件${unencryptedNote}）`);
+      await checkAndPromptRestoreForBook(bookId);
     }
 
 
