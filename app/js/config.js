@@ -91,7 +91,7 @@
      */
     export function renderAnnImageContent(el, savedData) {
       const src = mediaBlobs[savedData?.annIconImage] || '';
-      el.innerHTML = src ? `<img src="${src}" alt="">` : '';
+      el.innerHTML = src ? `<img src="${src}" alt="" draggable="false">` : '';
     }
 
 

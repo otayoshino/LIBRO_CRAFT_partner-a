@@ -760,6 +760,7 @@ import { pushUndo } from './undo-redo.js';
         addShomeiClickHandler(el);
       } else if (el.dataset.type) {
         addAnnClickHandler(el);
+        makeDraggable(el);
         if (el.classList.contains('ann-icon-obj') || el.classList.contains('ann-image-obj')) {
           // アイコン型・画像アイコン型：縦横比を維持してリサイズ（最小サイズ 14px）
           makeResizable(el, { lockAspectRatio: true, minSize: 14 });
