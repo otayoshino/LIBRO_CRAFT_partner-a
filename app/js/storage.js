@@ -2,7 +2,7 @@ import { applyLiveUpdate, buildAnnDialogFields } from './annotation-dialog.js';
 import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
-import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs } from './libro-format.js';
+import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, styleToRect } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility } from './page-view.js';
 import { mediaBlobs, state } from './state.js';
 import { showToast, updateStatus } from './ui-common.js';
@@ -307,17 +307,18 @@ import { showToast, updateStatus } from './ui-common.js';
      * @param {JSZip} zip - JSZip.loadAsync 済みのZIPオブジェクト
      */
     async function handleLibroBookZip(zip) {
-      const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, maxAnnotId, baseDir, indexJson } =
+      const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson } =
         await parseLibroBookZip(zip);
 
       // 再読込時に前回分のHide/Showペア要素が残らないようクリアする
       // （restoreAnnotationsFromArray は標準アノテーション種別のみクリアするため別途対応）
-      document.querySelectorAll('#pageLeft .libro-toggle').forEach(el => el.remove());
+      document.querySelectorAll('#pageLeft .libro-toggle, #pageLeft .libro-network-slot').forEach(el => el.remove());
 
       const realPageCount = indexJson.configs?.['real-page-count'] ?? null;
       loadLibroBookPages(pages, realPageCount);
       restoreAnnotationsFromArray(knownAnnotations);
       renderTogglePairs(togglePairs);
+      renderNetworkGroups(networkGroups);
       updateAnnotationVisibility();
 
       // 新規アノテーションのID採番が既存IDと衝突しないよう、カウンターを引き上げる
@@ -326,6 +327,9 @@ import { showToast, updateStatus } from './ui-common.js';
       state.libroUnknownAnnotations = unknownAnnotations;
       // 大問ボタンは書き出し未対応のため、位置未編集・未削除の場合の書き戻し用に生データを保持する
       state.libroDaimonPassthrough = daimonPassthrough;
+      // 拡張トグルネットワーク（色分けボタン・ステップボタン等）は位置・サイズ編集のみ対応。
+      // 書き出し時に編集後のrectを反映した生データを書き戻すため保持する
+      state.libroNetworkPassthrough = networkGroups;
       // 書き出し時に未変更ファイルをそのまま維持できるよう、元zip・書誌情報を保持する
       state.libroBook = { zip, baseDir, indexJson };
 
@@ -551,7 +555,33 @@ import { showToast, updateStatus } from './ui-common.js';
       const daimonRawAnnots = state.libroDaimonPassthrough
         .filter(({ pageNum, closedId }) => survivingDaimonIds.has(`${pageNum}:${closedId}`))
         .flatMap(({ pageNum, closed, open }) => [{ pageNum, raw: closed }, { pageNum, raw: open }]);
-      const passthroughAnnotations = [...state.libroUnknownAnnotations, ...daimonRawAnnots];
+
+      // 拡張トグルネットワーク（色分けボタン・ステップボタン等）：スロットの現在DOM位置から
+      // rectだけ上書きし、actions/filename/hidden等の元データはそのまま書き戻す。
+      // 対応するDOM要素が見つからない場合（未描画・削除済み）は元rectを維持する安全側フォールバック。
+      const networkRawAnnots = [];
+      state.libroNetworkPassthrough.forEach(net => {
+        const slotRects = net.slots.map((slot, slotIndex) => {
+          const el = document.querySelector(
+            `.libro-network-slot[data-network-id="${net.networkId}"][data-slot-index="${slotIndex}"]`
+          );
+          if (!el) return slot.rect;
+          const left   = parseFloat(el.style.left)   || 0;
+          const top    = parseFloat(el.style.top)    || 0;
+          const width  = parseFloat(el.style.width)  || el.offsetWidth;
+          const height = parseFloat(el.style.height) || el.offsetHeight;
+          const style = `left:${(left / pageRect.width) * 100}%;top:${(top / pageRect.height) * 100}%;` +
+                        `width:${(width / pageRect.width) * 100}%;height:${(height / pageRect.height) * 100}%;`;
+          return styleToRect(style, net.pageWidth, net.pageHeight);
+        });
+        net.members.forEach(raw => {
+          const slotIndex = net.slots.findIndex(s => s.memberIds.includes(raw._id));
+          const rect = slotIndex >= 0 ? slotRects[slotIndex] : raw.rect;
+          networkRawAnnots.push({ pageNum: net.pageNum, raw: { ...raw, rect } });
+        });
+      });
+
+      const passthroughAnnotations = [...state.libroUnknownAnnotations, ...daimonRawAnnots, ...networkRawAnnots];
 
       try {
         const zip = await buildLibroBookExport(state.libroBook, domAnnotations, passthroughAnnotations, domStickyGroups);

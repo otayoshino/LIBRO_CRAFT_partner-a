@@ -104,6 +104,18 @@ function classifyActions(actions) {
 
 
 /**
+ * actions[] 内の全targetsを1つの配列にまとめる（Hide/Show問わず全て平坦化する）。
+ * @param {Array<Object>} actions
+ * @returns {Array<number>}
+ */
+function flattenTargets(actions) {
+  const out = [];
+  (actions || []).forEach(act => { if (Array.isArray(act.targets)) out.push(...act.targets); });
+  return out;
+}
+
+
+/**
  * annots[] 内のHide/Show（付箋・答え表示等の開閉）ペアを、targetsの相互参照から自動判定する。
  * 双方が互いをtargetsに含む場合のみペアとして確定する（片方向のみの参照はペア扱いしない）。
  * @param {Array<Object>} annots - _id 付与済みのページ内annots配列
@@ -120,16 +132,14 @@ function findTogglePairs(annots) {
     if (a._id == null || pairedIds.has(a._id)) return;
     if (classifyActions(a.actions) !== 'toggle') return;
 
-    const targets = [];
-    a.actions.forEach(act => { if (Array.isArray(act.targets)) targets.push(...act.targets); });
+    const targets = flattenTargets(a.actions);
 
     for (const t of targets) {
       const other = byId.get(t);
       if (!other || other === a || pairedIds.has(other._id)) continue;
       if (classifyActions(other.actions) !== 'toggle') continue;
 
-      const otherTargets = [];
-      other.actions.forEach(act => { if (Array.isArray(act.targets)) otherTargets.push(...act.targets); });
+      const otherTargets = flattenTargets(other.actions);
       if (otherTargets.includes(a._id)) {
         pairs.push([a, other]);
         pairedIds.add(a._id);
@@ -227,6 +237,59 @@ function detectDaimonGroup(closed, open) {
 
 
 /**
+ * 「拡張トグルネットワーク」（色分けボタン・ステップボタン等、1:1ペアやdetectDaimonGroupの
+ * 形状に収まらない、3要素以上が絡むHide/Show構造）の閉包（connected component）を求める。
+ * seedIdsから開始し、各要素のactions[].targetsに現れるidを再帰的に辿る。excludeIdsに含まれる
+ * id（他の確立済みペア・他の大問ボタン・他のネットワークに既に取り込まれたid）は取り込まない
+ * ことで、それらの領域への侵食を防ぐ。
+ * @param {Array<number>} seedIds
+ * @param {Map<number,Object>} byId
+ * @param {Set<number>} excludeIds
+ * @returns {Set<number>}
+ */
+function expandNetworkClosure(seedIds, byId, excludeIds) {
+  const visited = new Set(seedIds);
+  const queue = [...seedIds];
+  while (queue.length) {
+    const id = queue.shift();
+    const annot = byId.get(id);
+    if (!annot) continue;
+    flattenTargets(annot.actions).forEach(t => {
+      if (excludeIds.has(t) || visited.has(t)) return;
+      visited.add(t);
+      queue.push(t);
+    });
+  }
+  return visited;
+}
+
+
+/**
+ * 拡張トグルネットワークのメンバーidを、同一rectを共有する「スロット」単位にグルーピングする。
+ * 色分けボタン・ステップボタンはいずれも「同一矩形に重なる1〜N枚の画像を切り替える」構造の
+ * 繰り返しであるため、rectの一致でスロットを復元できる。
+ * @param {Array<number>} memberIds
+ * @param {Map<number,Object>} byId
+ * @param {number} pageNum
+ * @param {number} pageWidth
+ * @param {number} pageHeight
+ * @param {string} networkId
+ * @returns {{ pageNum:number, networkId:string, pageWidth:number, pageHeight:number,
+ *   slots: Array<{rect:Array<number>, memberIds:Array<number>}>, members: Array<Object> }}
+ */
+function buildNetworkGroup(memberIds, byId, pageNum, pageWidth, pageHeight, networkId) {
+  const members = memberIds.map(id => byId.get(id)).filter(Boolean);
+  const slotMap = new Map(); // JSON化したrect -> スロット
+  members.forEach(m => {
+    const key = JSON.stringify(m.rect);
+    if (!slotMap.has(key)) slotMap.set(key, { rect: m.rect, memberIds: [] });
+    slotMap.get(key).memberIds.push(m._id);
+  });
+  return { pageNum, networkId, pageWidth, pageHeight, slots: [...slotMap.values()], members };
+}
+
+
+/**
  * rect（ページ画像ピクセル座標系の絶対値） を、ページ幅・高さに対する%指定のstyle文字列に変換する。
  * @param {[number,number,number,number]} rect - [x, y, width, height]
  * @param {number} pageWidth
@@ -254,7 +317,7 @@ function rectToStyle(rect, pageWidth, pageHeight) {
  * （findTogglePairs/detectDaimonGroup）にフォールバックする。
  * @param {Object} pageJson - p####.json のパース済みオブジェクト
  * @param {number} pageNum - 1始まりのページ番号
- * @returns {{ known: Array<Object>, unknown: Array<Object>, togglePairs: Array<Object>, daimonPassthrough: Array<Object>, maxId: number }}
+ * @returns {{ known: Array<Object>, unknown: Array<Object>, togglePairs: Array<Object>, daimonPassthrough: Array<Object>, networks: Array<Object>, maxId: number }}
  */
 function convertPageAnnotations(pageJson, pageNum) {
   const annots = (pageJson.annots || []).map(a => {
@@ -268,6 +331,8 @@ function convertPageAnnotations(pageJson, pageNum) {
   const metaResult = extractCraftMetaTogglePairs(annots);
   const remainingAnnots = annots.filter(a => a._id == null || !metaResult.consumedIds.has(a._id));
   const { pairs, pairedIds } = findTogglePairs(remainingAnnots);
+  const byId = new Map();
+  remainingAnnots.forEach(a => { if (a._id != null) byId.set(a._id, a); });
 
   const known  = [];
   const unknown = [];
@@ -275,6 +340,11 @@ function convertPageAnnotations(pageJson, pageNum) {
   // 大問ボタン（kind:'daimon'）は書き出し未対応のため、位置編集されていない限り
   // 元のannots[]を無変更のまま書き戻せるよう生データを保持する（closed/open2件1組）
   const daimonPassthrough = [];
+  // 拡張トグルネットワーク（色分けボタン・ステップボタン等、1:1ペア/大問ボタンの形状に
+  // 収まらない、3要素以上が絡むHide/Show構造）。位置・サイズ編集のみ対応し、書き出しは
+  // 元のactionsを保持したまま生データをpassthroughする（buildNetworkGroup参照）。
+  const networks = [];
+  const networkConsumedIds = new Set();
   let maxId = 0;
 
   metaResult.pairs.forEach(({ closed, open, groupId, type }) => {
@@ -301,26 +371,68 @@ function convertPageAnnotations(pageJson, pageNum) {
     const open   = a.hidden ? a : b;
     maxId = Math.max(maxId, closed._id || 0, open._id || 0);
     const { isDaimon, groupIds } = detectDaimonGroup(closed, open);
-    togglePairs.push({
-      pageNum,
-      closedId:   closed._id,
-      openId:     open._id,
-      closedFile: closed.filename,
-      openFile:   open.filename,
-      rect:       closed.rect,
-      pageWidth,
-      pageHeight,
-      kind:       isDaimon ? 'daimon' : 'sticky',
-      groupIds:   isDaimon ? groupIds : undefined,
-    });
-    if (isDaimon) daimonPassthrough.push({ pageNum, closedId: closed._id, closed, open });
-    // 位置・グループ編集後に書き出し可能な既知アノテーションとして扱うため、
-    // 未知アノテーションへは登録しない（convertStickyGroupToLibroAnnotsで再生成する）
+    if (isDaimon) {
+      togglePairs.push({
+        pageNum,
+        closedId:   closed._id,
+        openId:     open._id,
+        closedFile: closed.filename,
+        openFile:   open.filename,
+        rect:       closed.rect,
+        pageWidth,
+        pageHeight,
+        kind:       'daimon',
+        groupIds,
+      });
+      daimonPassthrough.push({ pageNum, closedId: closed._id, closed, open });
+      return;
+    }
+
+    // 大問ボタンの形状に一致しないペア：自分自身以外に参照している「余剰target」が
+    // あるかどうかで、通常の1:1トグル（sticky）か拡張トグルネットワークかを判定する。
+    // 判定は「他ペアへの侵食を防ぐフィルタ前」のrawExtraで行う。もし余剰が他の
+    // 確立済みペアに全て属していて絡み取り込むid（leftover）が0件になった場合でも、
+    // 大問ボタンに似た「他の独立ペアを一括Hide/Showする remote control」構造である可能性が
+    // あり、convertStickyGroupToLibroAnnotsの単純2アクション再生成に通すと元のactionsが
+    // 破壊されるため、rawExtraが1件以上ある時点でsticky扱いにはせず必ずネットワーク
+    // （最小の場合は自分自身2件のみ）として安全側にpassthroughする。
+    const selfIds = new Set([closed._id, open._id]);
+    const rawExtra = [...new Set(flattenTargets(closed.actions).concat(flattenTargets(open.actions)))]
+      .filter(id => !selfIds.has(id));
+
+    if (rawExtra.length === 0) {
+      // 余剰なし＝綺麗な1:1トグル（通常の付箋・答・証明ボタン等）
+      togglePairs.push({
+        pageNum,
+        closedId:   closed._id,
+        openId:     open._id,
+        closedFile: closed.filename,
+        openFile:   open.filename,
+        rect:       closed.rect,
+        pageWidth,
+        pageHeight,
+        kind:       'sticky',
+      });
+      // 位置・グループ編集後に書き出し可能な既知アノテーションとして扱うため、
+      // 未知アノテーションへは登録しない（convertStickyGroupToLibroAnnotsで再生成する）
+      return;
+    }
+
+    // 余剰targetが残る＝色分けボタン・ステップボタン等の拡張トグルネットワーク。
+    // 他の確立済みペア・大問・他ネットワークの領域には侵食しない（BFSのシードから除外）。
+    const leftover = rawExtra
+      .filter(id => !pairedIds.has(id))
+      .filter(id => !networkConsumedIds.has(id));
+    const excludeIds = new Set([...pairedIds, ...networkConsumedIds]);
+    selfIds.forEach(id => excludeIds.delete(id));
+    const memberIds = expandNetworkClosure([...selfIds, ...leftover], byId, excludeIds);
+    memberIds.forEach(id => networkConsumedIds.add(id));
+    networks.push(buildNetworkGroup([...memberIds], byId, pageNum, pageWidth, pageHeight, `net-${pageNum}-${closed._id}`));
   });
 
   annots.forEach(a => {
     if (a._id != null) maxId = Math.max(maxId, a._id);
-    if (a._id != null && (pairedIds.has(a._id) || metaResult.consumedIds.has(a._id))) return; // ペア済みは処理済み
+    if (a._id != null && (pairedIds.has(a._id) || metaResult.consumedIds.has(a._id) || networkConsumedIds.has(a._id))) return; // 処理済み
 
     const kind = classifyActions(a.actions);
     const style = rectToStyle(a.rect, pageWidth, pageHeight);
@@ -365,7 +477,7 @@ function convertPageAnnotations(pageJson, pageNum) {
     }
   });
 
-  return { known, unknown, togglePairs, daimonPassthrough, maxId };
+  return { known, unknown, togglePairs, daimonPassthrough, networks, maxId };
 }
 
 
@@ -382,6 +494,7 @@ function convertPageAnnotations(pageJson, pageNum) {
  *   togglePairs: Array<Object>,
  *   unknownAnnotations: Array<Object>,
  *   daimonPassthrough: Array<Object>,
+ *   networkGroups: Array<Object>,
  *   maxAnnotId: number,
  *   baseDir: string,
  *   indexJson: Object,
@@ -401,6 +514,7 @@ export async function parseLibroBookZip(zip) {
   const togglePairsRaw = [];
   const unknownAnnotations = [];
   const daimonPassthrough = [];
+  const networksRaw = [];
   let maxAnnotId = 0;
 
   const pageMetaList = indexJson.pages || [];
@@ -447,11 +561,12 @@ export async function parseLibroBookZip(zip) {
     }
 
     // annots[] を既知/未知に分類・変換
-    const { known, unknown, togglePairs, daimonPassthrough: pageDaimonPassthrough, maxId } = convertPageAnnotations(pageJson, pageNum);
+    const { known, unknown, togglePairs, daimonPassthrough: pageDaimonPassthrough, networks, maxId } = convertPageAnnotations(pageJson, pageNum);
     knownAnnotations.push(...known);
     unknownAnnotations.push(...unknown);
     daimonPassthrough.push(...pageDaimonPassthrough);
     togglePairsRaw.push(...togglePairs.map(tp => ({ ...tp, baseDir })));
+    networksRaw.push(...networks.map(net => ({ ...net, baseDir })));
     maxAnnotId = Math.max(maxAnnotId, maxId);
   }
 
@@ -480,7 +595,22 @@ export async function parseLibroBookZip(zip) {
     });
   }
 
-  return { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, maxAnnotId, baseDir, indexJson };
+  // 拡張トグルネットワーク（色分けボタン・ステップボタン等）用のannots画像（平文PNG）をBlobURL化する。
+  // 生データ（member.raw、書き出し時にそのまま書き戻す）にはURLを書き込まず、
+  // 表示専用のimagesテーブル（id -> blobUrl）として並置する。
+  const networkGroups = [];
+  for (const net of networksRaw) {
+    const images = new Map();
+    for (const m of net.members) {
+      const entry = zip.file(net.baseDir + m.filename);
+      if (!entry) continue;
+      const blob = await entry.async('blob');
+      images.set(m._id, URL.createObjectURL(new Blob([blob], { type: 'image/png' })));
+    }
+    networkGroups.push({ ...net, images });
+  }
+
+  return { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson };
 }
 
 
@@ -601,6 +731,90 @@ export function renderTogglePairs(togglePairs) {
 }
 
 
+/**
+ * 拡張トグルネットワーク（色分けボタン・ステップボタン等）のスロットに閲覧モード用の
+ * クリック連動を設定する。クリック時、そのスロット内で現在表示中のフレームのうち
+ * 最前面（DOM末尾＝最後にShowされたもの）が持つ元のactions[]（data-actions）をそのまま
+ * 再生し、同一ページ内の対応する member-id を持つフレームのis-visibleを付け外しする
+ * 汎用インタプリタ方式。actionsを持たない受動的なフレームはクリックしても何も起きない。
+ *
+ * 実データ（ステップボタン）ではShow時に以前のフレームを明示的にHideしない構造
+ * （最新のフレームが手前に重なることを前提にしている）が存在するため、Showしたフレームは
+ * 常に親スロットの末尾（最前面）へ移動する。これにより複数フレームが同時にis-visibleでも
+ * 見た目・次クリック時の判定の両方で「最後に表示したもの」が正しく優先される。
+ * 編集モードでは選択・ダイアログ等には対応せず、ドラッグ・リサイズのみ可能（何もしない）。
+ * @param {HTMLElement} slotEl
+ */
+function addNetworkClickHandler(slotEl) {
+  slotEl.addEventListener('click', () => {
+    if (!document.body.classList.contains('is-view-mode')) return;
+    const visibleFrames = slotEl.querySelectorAll('.libro-network-frame.is-visible');
+    if (visibleFrames.length === 0) return;
+    const visibleFrame = visibleFrames[visibleFrames.length - 1];
+    let actions = [];
+    try { actions = JSON.parse(visibleFrame.dataset.actions || '[]'); } catch (_) {}
+    actions.forEach(act => {
+      if (act.action !== 'Hide' && act.action !== 'Show') return;
+      (Array.isArray(act.targets) ? act.targets : []).forEach(id => {
+        document.querySelectorAll(`.libro-network-frame[data-member-id="${id}"]`).forEach(frame => {
+          const show = act.action === 'Show';
+          frame.classList.toggle('is-visible', show);
+          if (show) frame.parentElement?.appendChild(frame);
+        });
+      });
+    });
+  });
+}
+
+
+/**
+ * 拡張トグルネットワーク（色分けボタン・ステップボタン等）を、位置・サイズ編集に対応した
+ * `.libro-network-slot` 要素として#pageLeftに描画する。1スロット＝同一矩形を共有する
+ * 画像群（1〜N枚）で、内部の`.libro-network-frame`のうちis-visibleが付いた1枚のみ表示する。
+ * 選択・削除・Undo・編集ダイアログには対応しない（位置・サイズ編集専用、既知の制限）。
+ * @param {Array<Object>} networkGroups - parseLibroBookZip が返す networkGroups
+ */
+export function renderNetworkGroups(networkGroups) {
+  const page = document.getElementById('pageLeft');
+  const pageRect = page.getBoundingClientRect();
+
+  networkGroups.forEach(net => {
+    net.slots.forEach((slot, slotIndex) => {
+      const [x, y, w, h] = slot.rect;
+      const leftPx   = (x / net.pageWidth)  * pageRect.width;
+      const topPx    = (y / net.pageHeight) * pageRect.height;
+      const widthPx  = (w / net.pageWidth)  * pageRect.width;
+      const heightPx = (h / net.pageHeight) * pageRect.height;
+
+      const slotEl = document.createElement('div');
+      slotEl.className = 'libro-network-slot';
+      slotEl.dataset.type      = 'libro-network-node';
+      slotEl.dataset.networkId = net.networkId;
+      slotEl.dataset.slotIndex = String(slotIndex);
+      slotEl.dataset.page      = net.pageNum;
+      slotEl.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
+
+      slot.memberIds.forEach(id => {
+        const member = net.members.find(m => m._id === id);
+        if (!member) return;
+        const frame = document.createElement('img');
+        frame.className = 'libro-network-frame';
+        frame.src = net.images.get(id) || '';
+        frame.dataset.memberId = String(id);
+        frame.dataset.actions  = JSON.stringify(member.actions || []);
+        if (!member.hidden) frame.classList.add('is-visible');
+        slotEl.appendChild(frame);
+      });
+
+      addNetworkClickHandler(slotEl);
+      makeDraggable(slotEl);
+      makeResizable(slotEl);
+      page.appendChild(slotEl);
+    });
+  });
+}
+
+
 /* ============================================================
    LIBRO bookフォルダ形式への書き出し（エクスポート）。
    ページリンク／外部リンク／音声再生（GoTo+FitPage / URI / Launch）に加え、
@@ -628,7 +842,7 @@ function libroMarkerFilename(id) {
  * @param {number} pageHeight
  * @returns {[number,number,number,number]} [x, y, width, height]
  */
-function styleToRect(style, pageWidth, pageHeight) {
+export function styleToRect(style, pageWidth, pageHeight) {
   const pct = (name) => {
     const m = (style || '').match(new RegExp(`${name}:\\s*([\\d.]+)%`));
     return m ? parseFloat(m[1]) : 0;

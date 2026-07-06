@@ -1401,6 +1401,40 @@
     .sticky-note.libro-toggle[data-sticky-color-override] .libro-toggle-closed { display: none !important; }
     .sticky-note.libro-toggle[data-sticky-color-override].state-visible .libro-toggle-color-override { display: block; }
 
+    /* LIBRO由来の拡張トグルネットワーク（色分けボタン・ステップボタン等、3要素以上が
+       絡むHide/Show構造）。同一矩形を共有する画像群を1つの.libro-network-slotとして
+       位置・サイズ編集可能にし、子の.libro-network-frameはis-visibleが付与されたものだけ
+       表示する。選択・削除・Undo・編集ダイアログには対応しない（位置・サイズ編集専用）。 */
+    .libro-network-slot {
+      position: absolute;
+      box-sizing: border-box;
+      z-index: 6;
+    }
+    body:not(.is-view-mode) .libro-network-slot {
+      cursor: move;
+      outline: 1px dashed rgba(0,0,0,0.35);
+    }
+    .is-view-mode .libro-network-slot {
+      cursor: pointer;
+    }
+    /* 選択機構を持たないため、既存の「.is-selected > .resize-handle」ルール（body:not(.is-view-mode)
+       .is-selected > .resize-handle { display: block; }）には乗れない。常時表示に上書きする。 */
+    body:not(.is-view-mode) .libro-network-slot > .resize-handle {
+      display: block;
+    }
+    .libro-network-frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      pointer-events: none;
+      display: none;
+    }
+    .libro-network-frame.is-visible {
+      display: block;
+    }
+
     /* 編集モード時: グループ化済み付箋にグループ番号バッジを左下に表示 */
     body:not(.is-view-mode) .sticky-note[data-group-id]::after {
       content: attr(data-group-id);

@@ -92,6 +92,14 @@ export const state = {
    */
   libroDaimonPassthrough: [],
   /**
+   * LIBRO book読込時の拡張トグルネットワーク（色分けボタン・ステップボタン等、
+   * 1:1トグル/大問ボタンの形状に収まらない、3要素以上が絡むHide/Show構造）を
+   * parseLibroBookZipのnetworkGroups形式（{ pageNum, networkId, pageWidth, pageHeight,
+   * slots, members, images }）のままページ問わず配列で保持する。位置・サイズ編集のみ
+   * 対応し、書き出し時は編集後のrectを反映した上で元のactions等を無変更のまま書き戻す。
+   */
+  libroNetworkPassthrough: [],
+  /**
    * LIBRO book zip読込時の元zip・書誌情報を保持する（書き出し時に未変更ファイルを
    * そのまま維持するため）。LIBRO book以外を読み込んだ場合は null のまま。
    * { zip: JSZip, baseDir: string, indexJson: Object }
