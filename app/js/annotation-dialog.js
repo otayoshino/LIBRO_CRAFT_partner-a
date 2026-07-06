@@ -72,7 +72,7 @@ import { pushUndo } from './undo-redo.js';
       buildCommonFields(document.getElementById('qcFormCommon'), type, prevData, null, el);
 
       if (type !== 'sticky') {
-        buildSpecificFields(document.getElementById('qcFormSpecific'), type, prevData);
+        buildSpecificFields(document.getElementById('qcFormSpecific'), type, prevData, el);
         document.getElementById('qcSepWrap').style.display = '';
       }
 
@@ -379,7 +379,8 @@ import { pushUndo } from './undo-redo.js';
       szDd.appendChild(szRow);
       form.appendChild(szDd);
 
-      // --- 塗り色（付箋は STICKY_COLORS、それ以外は ANN_COLOR_OPTIONS） ---
+      // --- 塗り色（付箋のみ。それ以外の種別は buildSpecificFields 側の「表示タイプ」直下に生成する） ---
+      if (type === 'sticky') {
       const colDt = document.createElement('dt');
       colDt.textContent = '塗り';
       colDt.dataset.fieldGroup = 'fill';
@@ -395,30 +396,25 @@ import { pushUndo } from './undo-redo.js';
       // LIBRO由来の既存付箋（.libro-toggle）は色プロパティを持たないため、
       // 「既存付箋カラー」という専用選択肢を先頭に追加しデフォルト選択にする。
       // 実際の色を選び直した場合のみ、confirmAnnotation側で新規画像を生成して色を持たせる。
-      const isLibroToggle = type === 'sticky' && existingEl?.dataset.libroToggle === '1';
-      // LIBRO由来の既存ページリンク（紙面カラー型でインポートされ、annColorを一度も
-      // 保存していないもの）も同様に色プロパティを実データとして持たない。
-      // 表示タイプを手動で「マーカー」に切り替えた際の塗り色選択用に、専用選択肢を用意する。
-      const isPagelinkNoColor = type === 'pagelink' && !!existingEl &&
-        (savedData.annColor === undefined || savedData.annColor === 'existing');
-      if (isLibroToggle || isPagelinkNoColor) {
+      const isLibroToggle = existingEl?.dataset.libroToggle === '1';
+      if (isLibroToggle) {
         const o = document.createElement('option');
         o.value = 'existing';
-        o.textContent = isLibroToggle ? '既存付箋カラー' : '既存ページリンクカラー';
+        o.textContent = '既存付箋カラー';
         colSel.appendChild(o);
       }
-      const colorList = (type === 'sticky') ? STICKY_COLORS : ANN_COLOR_OPTIONS;
-      colorList.forEach((c, i) => {
+      STICKY_COLORS.forEach((c, i) => {
         const o = document.createElement('option');
         o.value = i;
         o.textContent = c.label;
         colSel.appendChild(o);
       });
-      colSel.value = (isLibroToggle || isPagelinkNoColor) ? 'existing' : (savedData.annColor || '0');
+      colSel.value = isLibroToggle ? 'existing' : (savedData.annColor || '0');
       colWrap.appendChild(colSel);
       colDd.appendChild(colWrap);
       form.appendChild(colDt);
       form.appendChild(colDd);
+      }
       }
 
       // アイコン型・画像アイコン型：W/H入力時に縦横比を維持して反対軸を自動更新（applyLiveUpdateより先に登録して先行実行させる）
@@ -598,8 +594,9 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} form      - 追加先の dl 要素
      * @param {string}      type      - アノテーション種別
      * @param {object}      savedData - 保存済みデータ
+     * @param {HTMLElement|null} existingEl - 再設定対象要素（新規作成時は null）
      */
-    export function buildSpecificFields(form, type, savedData) {
+    export function buildSpecificFields(form, type, savedData, existingEl = null) {
       const cfg      = ANNOTATION_TYPE_CONFIG[type];
       const dispType = savedData.annDisplayType || 'marker';
 
@@ -731,9 +728,55 @@ import { pushUndo } from './undo-redo.js';
             iconImageDt.style.display = show ? '' : 'none';
             iconImageDd.style.display = show ? '' : 'none';
           }
+          if (colDt && colDd) {
+            const showColor = radio.value === 'icon' || radio.value === 'marker';
+            colDt.style.display = showColor ? '' : 'none';
+            colDd.style.display = showColor ? '' : 'none';
+          }
         });
       });
       form.appendChild(dtDd);
+
+      // --- 塗り色（表示タイプが「アイコン」「マーカー」の場合のみ表示。ANN_COLOR_OPTIONS使用） ---
+      const showColorInit = dispType === 'icon' || dispType === 'marker';
+      const colDt = document.createElement('dt');
+      colDt.textContent = '塗り';
+      colDt.dataset.fieldGroup = 'fill';
+      colDt.style.display = showColorInit ? '' : 'none';
+      form.appendChild(colDt);
+      const colDd = document.createElement('dd');
+      colDd.dataset.fieldGroup = 'fill';
+      colDd.className = 'color-row';
+      colDd.style.display = showColorInit ? '' : 'none';
+      const colWrap = document.createElement('div');
+      colWrap.className = 'd-select-wrap';
+      const colSel = document.createElement('select');
+      colSel.className = 'd-select';
+      colSel.id = 'annColor';
+      // LIBRO由来の既存ページリンク（紙面カラー型でインポートされ、annColorを一度も
+      // 保存していないもの）は色プロパティを実データとして持たない。
+      // 表示タイプを手動で「マーカー」に切り替えた際の塗り色選択用に、専用選択肢を用意する。
+      const isPagelinkNoColor = type === 'pagelink' && !!existingEl &&
+        (savedData.annColor === undefined || savedData.annColor === 'existing');
+      if (isPagelinkNoColor) {
+        const o = document.createElement('option');
+        o.value = 'existing';
+        o.textContent = '既存ページリンクカラー';
+        colSel.appendChild(o);
+      }
+      ANN_COLOR_OPTIONS.forEach((c, i) => {
+        const o = document.createElement('option');
+        o.value = i;
+        o.textContent = c.label;
+        colSel.appendChild(o);
+      });
+      colSel.value = isPagelinkNoColor ? 'existing' : (savedData.annColor || '0');
+      colWrap.appendChild(colSel);
+      colDd.appendChild(colWrap);
+      form.appendChild(colDt);
+      form.appendChild(colDd);
+      colSel.addEventListener('change', () => applyLiveUpdate(type));
+      colSel.addEventListener('input',  () => applyLiveUpdate(type));
 
       // --- 画像アイコン用アップロードフィールド（表示タイプ「画像」選択時のみ表示） ---
       const iconImageDt = document.createElement('dt');
@@ -1190,7 +1233,7 @@ import { pushUndo } from './undo-redo.js';
       // アイコン型でも塗り色（背景グラデーション）を変更可能にするため無効化しない
 
       // 種別固有フィールドを生成（サイドバーでは非表示だが confirmAnnotation が読み取るため常に生成）
-      buildSpecificFields(specificForm, type, savedData);
+      buildSpecificFields(specificForm, type, savedData, existingEl);
 
       // 種別固有セクションはサイドメニューでは常に非表示（ダブルクリック編集ポップアップで編集する）
       const sepEl      = document.getElementById('detailSectionSep');
