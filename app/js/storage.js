@@ -450,9 +450,11 @@ import { showToast, updateStatus } from './ui-common.js';
 
     /**
      * LIBRO bookとして読み込んだ内容を、LIBRO bookフォルダ形式のZIPとして書き出す。
-     * ページリンク・外部リンク・音声再生・付箋（Hide/Show）に対応する。
+     * ページリンク・外部リンク・音声再生・Plusファイル・付箋（Hide/Show）に対応する。
+     * 動画はLIBRO由来のtoMovie/toMovieBNRリンク（annVideoSrc: '2'）のみ対応し、
+     * 内部ファイル/外部タグ指定はLIBRO側に対応actionが無いため未対応のまま。
      * LIBRO由来の大問ボタンは編集非対応のため、削除されていない限り生データを無変更のまま書き戻す
-     * （位置編集した場合は反映されない）。それ以外の種別（動画・図・答/証明ボタン、新規作成の大問ボタン等）
+     * （位置編集した場合は反映されない）。それ以外の種別（図・答/証明ボタン、新規作成の大問ボタン等）
      * が存在する場合はトーストで警告し、書き出し対象から除外する。
      */
     export async function saveAnnotationsAsLibroBook() {
@@ -466,7 +468,7 @@ import { showToast, updateStatus } from './ui-common.js';
       // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
       const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
       const elements = page.querySelectorAll('.ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
-      const supportedTypes = new Set(['pagelink', 'externallink', 'audio']);
+      const supportedTypes = new Set(['pagelink', 'externallink', 'audio', 'plusfile']);
 
       const domAnnotations = [];
       const unsupportedTypes = new Set();
@@ -479,7 +481,14 @@ import { showToast, updateStatus } from './ui-common.js';
           survivingDaimonIds.add(`${el.dataset.page}:${el.dataset.id}`);
           return;
         }
-        if (!supportedTypes.has(type)) {
+        // 動画はLIBRO由来のtoMovie/toMovieBNRリンク（annVideoSrc: '2'）のみ書き出し可能
+        let isSupported = supportedTypes.has(type);
+        if (type === 'video') {
+          let vsd = {};
+          try { vsd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
+          isSupported = vsd.annVideoSrc === '2';
+        }
+        if (!isSupported) {
           if (type) unsupportedTypes.add(ANNOTATION_TYPE_CONFIG[type]?.label || type);
           return;
         }

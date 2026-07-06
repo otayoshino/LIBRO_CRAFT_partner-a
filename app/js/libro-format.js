@@ -104,6 +104,35 @@ function classifyActions(actions) {
 
 
 /**
+ * URI actionの `uri` 文字列が、LIBROビューア側でeval実行される擬似関数呼び出し
+ * （例: `toAppendix("folder",1)` / `toMovie("code","a==","b==")`）かどうかを判定し、
+ * 関数名と引数部分（丸括弧内の生文字列）に分解する。
+ * 実URL（`https://...`）や解釈不能な文字列は null を返す。
+ * @param {string} uri
+ * @returns {{fn:string, args:string}|null}
+ */
+function parseLibroLinkFunction(uri) {
+  const m = /^([A-Za-z_][A-Za-z0-9_]*)\((.*)\)$/.exec((uri || '').trim());
+  return m ? { fn: m[1], args: m[2] } : null;
+}
+
+
+/**
+ * `toAppendix("folder",1)` 形式の引数文字列を単純にカンマ分割し、前後の引用符を外す。
+ * 実データでは引数内カンマは未確認のため、単純分割のみ対応する。
+ * @param {string} argsStr
+ * @returns {string[]}
+ */
+function splitLibroCallArgs(argsStr) {
+  return (argsStr || '').split(',').map(s => {
+    const t = s.trim();
+    const m = /^["'](.*)["']$/.exec(t);
+    return m ? m[1] : t;
+  });
+}
+
+
+/**
  * actions[] 内の全targetsを1つの配列にまとめる（Hide/Show問わず全て平坦化する）。
  * @param {Array<Object>} actions
  * @returns {Array<number>}
@@ -452,14 +481,42 @@ function convertPageAnnotations(pageJson, pageNum) {
       });
     } else if (kind === 'uri') {
       const uri = a.actions.find(ac => ac.action === 'URI');
-      known.push({
-        className: 'ann-object',
-        type: 'externallink',
-        id: a._id,
-        page: pageNum,
-        style: style + `background:${ANNOTATION_TYPE_CONFIG.externallink.color};`,
-        savedData: JSON.stringify({ annDisplayType: 'marker', annUrl: uri?.uri || '' }),
-      });
+      const uriValue = uri?.uri || '';
+      // LIBROのURI actionは実URLだけでなく、ビューア側でeval実行される擬似関数呼び出し
+      // （toAppendix=Plusファイル、toMovie/toMovieBNR=動画）も同じ枠に格納されている。
+      // 引数の意味を全て解析できているわけではないため、既知の2種のみ判定し、
+      // 残り（toFlashcard/toListening等、LIBRO CRAFTでは作成不可な機能）は外部リンク扱いのまま保持する。
+      const call = parseLibroLinkFunction(uriValue);
+
+      if (call?.fn === 'toAppendix') {
+        const [dirName, showMode] = splitLibroCallArgs(call.args);
+        known.push({
+          className: 'ann-object',
+          type: 'plusfile',
+          id: a._id,
+          page: pageNum,
+          style: style + `background:${ANNOTATION_TYPE_CONFIG.plusfile.color};`,
+          savedData: JSON.stringify({ annDisplayType: 'marker', annFile: dirName || '', annShowMode: showMode ?? '0' }),
+        });
+      } else if (call?.fn === 'toMovie' || call?.fn === 'toMovieBNR') {
+        known.push({
+          className: 'ann-object',
+          type: 'video',
+          id: a._id,
+          page: pageNum,
+          style: style + `background:${ANNOTATION_TYPE_CONFIG.video.color};`,
+          savedData: JSON.stringify({ annDisplayType: 'marker', annVideoSrc: '2', annVideoFn: call.fn, annVideoArg: call.args }),
+        });
+      } else {
+        known.push({
+          className: 'ann-object',
+          type: 'externallink',
+          id: a._id,
+          page: pageNum,
+          style: style + `background:${ANNOTATION_TYPE_CONFIG.externallink.color};`,
+          savedData: JSON.stringify({ annDisplayType: 'marker', annUrl: uriValue }),
+        });
+      }
     } else if (kind === 'launch') {
       const launch = a.actions.find(ac => ac.action === 'Launch');
       const baseName = (launch?.filename || '').split('/').pop().replace(/\.mp3$/i, '');
@@ -485,8 +542,9 @@ function convertPageAnnotations(pageJson, pageNum) {
  * LIBRO bookフォルダ形式のZIPを解析し、ページ画像・アノテーションデータを取り出す。
  * - ページ画像（p####-1.jpg等）・音声（sounds/*.mp3）はPbve2000復号する
  * - annots/*.png は平文のためそのままBlobURL化する
- * - annots[] は既知4パターン（GoTo+FitPage / URI / Launch / Hide+Show）を判定し、
- *   既知のものはContentsBuilderの内部データ形式へ変換、それ以外は未知アノテーションとして保持のみ行う
+ * - annots[] は既知パターン（GoTo+FitPage / URI（うちtoAppendix=Plusファイル・toMovie系=動画・
+ *   それ以外=外部リンク） / Launch / Hide+Show）を判定し、既知のものはContentsBuilderの
+ *   内部データ形式へ変換、それ以外は未知アノテーションとして保持のみ行う
  * @param {JSZip} zip - JSZip.loadAsync 済みのZIPオブジェクト
  * @returns {Promise<{
  *   pages: Array<{pageNum:number, width:number, height:number, imageUrl:string, jsonPath:string}>,
@@ -1032,6 +1090,13 @@ export async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeig
     actions = [{ action: 'URI', uri: sd.annUrl || '' }];
   } else if (domData.type === 'audio') {
     actions = [{ action: 'Launch', filename: `sounds/${(sd.annFile || '').trim()}.mp3` }];
+  } else if (domData.type === 'plusfile') {
+    actions = [{ action: 'URI', uri: `toAppendix("${(sd.annFile || '').trim()}",${sd.annShowMode || '0'})` }];
+  } else if (domData.type === 'video' && sd.annVideoSrc === '2') {
+    // LIBRO由来のtoMovie/toMovieBNRリンクのみ対応（引数の意味は未解析のため生文字列をそのまま書き戻す）。
+    // 内部ファイル/外部タグ指定（annVideoSrc: '0'/'1'）はLIBRO側に対応actionが無いため未対応のまま。
+    const fn = sd.annVideoFn === 'toMovieBNR' ? 'toMovieBNR' : 'toMovie';
+    actions = [{ action: 'URI', uri: `${fn}(${sd.annVideoArg || ''})` }];
   } else {
     return null; // LIBROに対応するactionが無い種別
   }

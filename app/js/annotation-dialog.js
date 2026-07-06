@@ -758,22 +758,50 @@ import { pushUndo } from './undo-redo.js';
       } else if (type === 'video') {
         const videoSrc = savedData.annVideoSrc || '0';
         form.appendChild(_buildRadioDt('動画ファイル'));
-        form.appendChild(_buildRadioDD('annVideoSrc', 'annVideoSrcRadio', videoSrc, [
+        const srcDD = _buildRadioDD('annVideoSrc', 'annVideoSrcRadio', videoSrc, [
           { value: '0', label: '内部ファイル' },
           { value: '1', label: '外部動画をタグで追加' },
-        ]));
-        form.appendChild(_buildTextDt('ファイル名'));
+          { value: '2', label: 'LIBROリンク' },
+        ]);
+        form.appendChild(srcDD);
+
+        // --- 内部ファイル/外部タグ用フィールド（annVideoSrc: '0'/'1'） ---
+        const fileDt = _buildTextDt('ファイル名');
         const fileDd = _buildTextDD('annFile', savedData.annFile || '', 'ファイル名を入力');
         fileDd.querySelector('input').insertAdjacentHTML('afterend',
           '<p class="field-note">※ファイル名の拡張子「.mp4」は除く</p>');
         _appendDropZone(fileDd, 'annFile', 'video');
-        form.appendChild(fileDd);
         const showMode = savedData.annShowMode || '0';
-        form.appendChild(_buildRadioDt('表示方法'));
-        form.appendChild(_buildRadioDD('annShowMode', 'annShowModeRadio', showMode, [
+        const modeDt = _buildRadioDt('表示方法');
+        const modeDd = _buildRadioDD('annShowMode', 'annShowModeRadio', showMode, [
           { value: '0', label: 'ページ内' },
           { value: '1', label: '別タブ' },
-        ]));
+        ]);
+        [fileDt, fileDd, modeDt, modeDd].forEach(el => form.appendChild(el));
+
+        // --- LIBROリンク用フィールド（annVideoSrc: '2'）---
+        // toMovie/toMovieBNRの引数の意味は未解析のため、丸括弧内の生文字列をそのまま編集させる。
+        const fn = savedData.annVideoFn === 'toMovieBNR' ? 'toMovieBNR' : 'toMovie';
+        const fnDt = _buildRadioDt('LIBRO関数');
+        const fnDd = _buildRadioDD('annVideoFn', 'annVideoFnRadio', fn, [
+          { value: 'toMovie', label: 'toMovie' },
+          { value: 'toMovieBNR', label: 'toMovieBNR' },
+        ]);
+        const argDt = _buildTextDt('引数（生データ）');
+        const argDd = _buildTextDD('annVideoArg', savedData.annVideoArg || '', '"xxxx","yyyy"');
+        argDd.querySelector('input').insertAdjacentHTML('afterend',
+          '<p class="field-note">※LIBRO側の関数呼び出しの丸括弧内をそのまま編集します（引数の意味は未解析）。</p>');
+        [fnDt, fnDd, argDt, argDd].forEach(el => form.appendChild(el));
+
+        const toggleVideoSrcFields = (val) => {
+          const showFile = val !== '2';
+          [fileDt, fileDd, modeDt, modeDd].forEach(el => { el.style.display = showFile ? '' : 'none'; });
+          [fnDt, fnDd, argDt, argDd].forEach(el => { el.style.display = showFile ? 'none' : ''; });
+        };
+        toggleVideoSrcFields(videoSrc);
+        srcDD.querySelectorAll('input[name="annVideoSrcRadio"]').forEach(r => {
+          r.addEventListener('change', () => toggleVideoSrcFields(r.value));
+        });
       }
     }
 
