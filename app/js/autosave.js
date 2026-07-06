@@ -38,7 +38,7 @@ import { showToast } from './ui-common.js';
     function collectAnnotationSnapshotData() {
       const page = document.getElementById('pageLeft');
       const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
-      const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+      const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn');
       return Array.from(elements).map(el => {
         const left = parseFloat(el.style.left) || 0;
         const top = parseFloat(el.style.top) || 0;

@@ -1,6 +1,6 @@
 import { applyLiveUpdate, buildAnnDialogFields } from './annotation-dialog.js';
 import { renderButtonVisual } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, styleToRect } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility } from './page-view.js';
@@ -19,7 +19,7 @@ import { showToast, updateStatus } from './ui-common.js';
           // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
           const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
           // LIBRO book由来の付箋（.libro-toggle）はLIBRO書き出し専用のため、通常のローカル保存対象からは除外する
-          const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+          const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn');
           const data = Array.from(elements).map(el => {
             // px値取得
             const left = parseFloat(el.style.left) || 0;
@@ -92,7 +92,7 @@ import { showToast, updateStatus } from './ui-common.js';
           // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
           const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
           // 既存アノテーションを全削除（LIBRO book由来の付箋 .libro-toggle は対象外）
-          page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(el => el.remove());
+          page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(el => el.remove());
           arr.forEach(obj => {
                 const el = document.createElement('div');
                 // ann-hidden-page はページ表示管理で付け直すため、className から除去してセット
@@ -178,6 +178,10 @@ import { showToast, updateStatus } from './ui-common.js';
                 } else if (el.classList.contains('ann-icon-obj')) {
                   const cfg = ANNOTATION_TYPE_CONFIG[obj.type];
                   el.innerHTML = cfg ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>` : '';
+                } else if (el.classList.contains('ann-image-obj')) {
+                  let sd = {};
+                  try { sd = JSON.parse(obj.savedData || '{}'); } catch (_) {}
+                  renderAnnImageContent(el, sd);
                 } else if (el.classList.contains('daimon-btn') || el.classList.contains('kotae-btn') || el.classList.contains('shomei-btn')) {
                   let sd = {};
                   try { sd = JSON.parse(obj.savedData || '{}'); } catch (_) {}
@@ -351,7 +355,7 @@ import { showToast, updateStatus } from './ui-common.js';
       // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
       // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
       const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
-      const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+      const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn');
       const data = Array.from(elements).map(el => {
         const left = parseFloat(el.style.left) || 0;
         const top  = parseFloat(el.style.top)  || 0;
@@ -472,7 +476,7 @@ import { showToast, updateStatus } from './ui-common.js';
       // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
       // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
       const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
-      const elements = page.querySelectorAll('.ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+      const elements = page.querySelectorAll('.ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn');
       const supportedTypes = new Set(['pagelink', 'externallink', 'audio', 'plusfile']);
 
       const domAnnotations = [];

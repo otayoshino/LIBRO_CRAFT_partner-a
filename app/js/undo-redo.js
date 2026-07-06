@@ -2,7 +2,7 @@ import { addAnnClickHandler } from './annotation-actions.js';
 import { applyLiveUpdate, openAnnotationSettingsDialog } from './annotation-dialog.js';
 import { scheduleAutoSave } from './autosave.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, renderButtonVisual } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, UNDO_MAX, renderAnnObjectContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, UNDO_MAX, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { deselectAllObjects, getSelectedObjects, makeDraggable, makeResizable, reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { updateAnnotationVisibility } from './page-view.js';
 import { redoStack, undoStack } from './state.js';
@@ -98,13 +98,15 @@ import { showToast, updateStatus } from './ui-common.js';
                 try { shomeiSd = JSON.parse(snap.savedData || '{}'); } catch (_) {}
                 renderButtonVisual(el, 'shomei', shomeiSd);
               } else {
-                // ann-object / ann-icon-obj
-                // savedData からラベル・種別アイコンを再構築
+                // ann-object / ann-icon-obj / ann-image-obj
+                // savedData からラベル・種別アイコン・画像を再構築
                 try {
                   const sd  = JSON.parse(snap.savedData || '{}');
                   const cfg = ANNOTATION_TYPE_CONFIG?.[snap.type];
                   if (el.classList.contains('ann-icon-obj')) {
                     el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg?.iconSvg || ''}</svg>`;
+                  } else if (el.classList.contains('ann-image-obj')) {
+                    renderAnnImageContent(el, sd);
                   } else if (el.classList.contains('ann-object')) {
                     const displayType = el.classList.contains('dt-page-color') ? 'page-color' : 'marker';
                     renderAnnObjectContent(el, snap.type, displayType, sd.annLabel);
@@ -112,6 +114,7 @@ import { showToast, updateStatus } from './ui-common.js';
                 } catch (_) {}
                 addAnnClickHandler(el);
                 if (el.classList.contains('ann-object')) makeResizable(el);
+                if (el.classList.contains('ann-image-obj')) makeResizable(el, { lockAspectRatio: true, minSize: 14 });
               }
               makeDraggable(el);
               page.appendChild(el);

@@ -358,6 +358,10 @@ function rectToStyle(rect, pageWidth, pageHeight) {
  * `libro-craft-meta` を持つ要素（CRAFT自身が書き出したbook由来）は最優先でグループ復元し、
  * それ以外（他システム由来、または未知の構造）のみ既存の構造ヒューリスティック
  * （findTogglePairs/detectDaimonGroup）にフォールバックする。
+ *
+ * known各要素の `_iconFilename`（元のannots/xxxx.pngファイル名）は本関数内では未解決のまま
+ * 一時的にぶら下げるだけで、実際の画像読込・annDisplayType:'image'への上書きは
+ * parseLibroBookZip側（loadAnnotPngBytesが使えるスコープ）でページループ後にまとめて行う。
  * @param {Object} pageJson - p####.json のパース済みオブジェクト
  * @param {number} pageNum - 1始まりのページ番号
  * @returns {{ known: Array<Object>, unknown: Array<Object>, togglePairs: Array<Object>, daimonPassthrough: Array<Object>, networks: Array<Object>, maxId: number }}
@@ -492,6 +496,7 @@ function convertPageAnnotations(pageJson, pageNum) {
         page: pageNum,
         style,
         savedData: JSON.stringify({ annDisplayType: 'page-color', annTarget: goto?.page ?? '' }),
+        _iconFilename: a.filename,
       });
     } else if (kind === 'uri') {
       const uri = a.actions.find(ac => ac.action === 'URI');
@@ -511,6 +516,7 @@ function convertPageAnnotations(pageJson, pageNum) {
           page: pageNum,
           style: style + `background:${ANNOTATION_TYPE_CONFIG.plusfile.color};`,
           savedData: JSON.stringify({ annDisplayType: 'marker', annFile: dirName || '', annShowMode: showMode ?? '0' }),
+          _iconFilename: a.filename,
         });
       } else if (call?.fn === 'toMovie' || call?.fn === 'toMovieBNR') {
         known.push({
@@ -520,6 +526,7 @@ function convertPageAnnotations(pageJson, pageNum) {
           page: pageNum,
           style: style + `background:${ANNOTATION_TYPE_CONFIG.video.color};`,
           savedData: JSON.stringify({ annDisplayType: 'marker', annVideoSrc: '2', annVideoFn: call.fn, annVideoArg: call.args }),
+          _iconFilename: a.filename,
         });
       } else {
         known.push({
@@ -529,6 +536,7 @@ function convertPageAnnotations(pageJson, pageNum) {
           page: pageNum,
           style: style + `background:${ANNOTATION_TYPE_CONFIG.externallink.color};`,
           savedData: JSON.stringify({ annDisplayType: 'marker', annUrl: uriValue }),
+          _iconFilename: a.filename,
         });
       }
     } else if (kind === 'launch') {
@@ -541,6 +549,7 @@ function convertPageAnnotations(pageJson, pageNum) {
         page: pageNum,
         style: style + `background:${ANNOTATION_TYPE_CONFIG.audio.color};`,
         savedData: JSON.stringify({ annDisplayType: 'marker', annFile: baseName, annPlayMode: '0' }),
+        _iconFilename: a.filename,
       });
     } else {
       // 既知パターンに一致しない：編集不可・削除しない未知アノテーションとして保持のみ行う
@@ -705,6 +714,30 @@ export async function parseLibroBookZip(zip) {
       images.set(m._id, URL.createObjectURL(new Blob([bytes], { type: 'image/png' })));
     }
     networkGroups.push({ ...net, images });
+  }
+
+  // pagelink/plusfile/externallink/audio/video の元画像（annots/xxxx.png）を読み込み、
+  // 別オーサリングツール由来の見た目をそのまま再現できる場合は表示タイプを「画像」に上書きする。
+  // 元画像が見つからない場合は各種別のデフォルト表示タイプ（page-color/marker）のまま維持する。
+  for (const k of knownAnnotations) {
+    const iconFilename = k._iconFilename;
+    delete k._iconFilename;
+    if (!iconFilename) continue;
+    const bytes = await loadAnnotPngBytes(baseDir + iconFilename);
+    if (!bytes) continue;
+    const baseName = iconFilename.split('/').pop();
+    if (!mediaBlobs[baseName]) {
+      mediaBlobs[baseName] = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+    }
+    let sd = {};
+    try { sd = JSON.parse(k.savedData || '{}'); } catch (_) {}
+    sd.annDisplayType = 'image';
+    sd.annIconImage = baseName;
+    k.savedData = JSON.stringify(sd);
+    k.className = 'ann-image-obj';
+    // マーカー型用に埋め込まれた種別色背景（plusfile/video/externallink/audio）は
+    // 画像型では不要（元画像をそのまま透過表示するため）なので取り除く
+    k.style = (k.style || '').replace(/background:[^;]*;?/, '');
   }
 
   return { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths };
@@ -1107,7 +1140,9 @@ export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHe
 /**
  * ContentsBuilderのアノテーションオブジェクトをLIBROの annots[] 要素に変換する
  * （convertPageAnnotationsの逆変換）。対応する既存マーカーPNGがzip内に無い場合は
- * 新規マーカーPNGを生成する。
+ * 新規マーカーPNGを生成する。画像アイコン型（annDisplayType:'image'）は、
+ * id由来の元ファイル名と一致すれば無変更のまま維持し、一致しなければ
+ * mediaBlobs内の画像バイトをPbve2000暗号化して書き込む（ラスタライズ生成は行わない）。
  * @param {{id:number, type:string, style:string, savedData:string}} domData
  * @param {number} pageWidth
  * @param {number} pageHeight
@@ -1141,7 +1176,20 @@ export async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeig
   }
 
   let newPngBytes = null;
-  if (!zip.file(baseDir + filename)) {
+  if (sd.annDisplayType === 'image' && sd.annIconImage) {
+    // 画像アイコン型：id由来の元ファイル名（annots/0000.png形式）と一致する場合は
+    // LIBROインポート時のまま無変更＝zip内の既存ファイルをそのまま維持する。
+    // 一致しない場合はCRAFT上でアップロード・差し替えされた画像のため、
+    // 生バイトを取得してPbve2000暗号化した上で書き込む（既存ファイルがあっても上書きする）。
+    const expectedOrigBaseName = `${String(domData.id).padStart(4, '0')}.png`;
+    if (sd.annIconImage !== expectedOrigBaseName) {
+      const blobUrl = mediaBlobs[sd.annIconImage];
+      if (blobUrl) {
+        const buf = new Uint8Array(await (await fetch(blobUrl)).arrayBuffer());
+        newPngBytes = isPbve2000Encoded(buf) ? buf : encodePbve2000(buf);
+      }
+    }
+  } else if (!zip.file(baseDir + filename)) {
     newPngBytes = await rasterizeMarkerPng(domData.type, rect[2], rect[3]);
   }
 

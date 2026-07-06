@@ -1,3 +1,4 @@
+    import { mediaBlobs } from './state.js';
 
     /** アノテーション永続化ストレージキー */
     export const STORAGE_KEY = 'ContentsBuilder_v2_annotations';
@@ -77,6 +78,16 @@
         span.textContent = (label || '').trim() || cfg?.label || type;
         el.appendChild(span);
       }
+    }
+
+    /**
+     * 画像アイコン型アノテーション要素（.ann-image-obj）の中身（<img>）を構築する。
+     * savedData.annIconImage をキーに mediaBlobs から画像を取得する。
+     * 新規作成・更新・コピー貼付・Undo復元・保存データ復元の各箇所から共通で呼び出す。
+     */
+    export function renderAnnImageContent(el, savedData) {
+      const src = mediaBlobs[savedData?.annIconImage] || '';
+      el.innerHTML = src ? `<img src="${src}" alt="">` : '';
     }
 
 

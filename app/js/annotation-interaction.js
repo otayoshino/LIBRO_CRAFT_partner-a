@@ -1,7 +1,7 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { confirmAnnotation, openAnnotationSettingsDialog, openQuickCreateDialog } from './annotation-dialog.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, renderAnnObjectContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { selectedStickySet, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
 import { closeDialog } from './storage.js';
@@ -22,9 +22,9 @@ import { pushUndo } from './undo-redo.js';
         n.classList.add('is-selected');
       });
       // その他オブジェクト
-      page.querySelectorAll('.ann-object:not(.ann-hidden-page), .ann-icon-obj:not(.ann-hidden-page), .daimon-btn:not(.ann-hidden-page), .kotae-btn:not(.ann-hidden-page), .shomei-btn:not(.ann-hidden-page)')
+      page.querySelectorAll('.ann-object:not(.ann-hidden-page), .ann-icon-obj:not(.ann-hidden-page), .ann-image-obj:not(.ann-hidden-page), .daimon-btn:not(.ann-hidden-page), .kotae-btn:not(.ann-hidden-page), .shomei-btn:not(.ann-hidden-page)')
         .forEach(a => a.classList.add('is-selected'));
-      const total = page.querySelectorAll('.sticky-note:not(.ann-hidden-page), .ann-object:not(.ann-hidden-page), .ann-icon-obj:not(.ann-hidden-page), .daimon-btn:not(.ann-hidden-page), .kotae-btn:not(.ann-hidden-page), .shomei-btn:not(.ann-hidden-page)').length;
+      const total = page.querySelectorAll('.sticky-note:not(.ann-hidden-page), .ann-object:not(.ann-hidden-page), .ann-icon-obj:not(.ann-hidden-page), .ann-image-obj:not(.ann-hidden-page), .daimon-btn:not(.ann-hidden-page), .kotae-btn:not(.ann-hidden-page), .shomei-btn:not(.ann-hidden-page)').length;
       updateStatus(`全オブジェクトを選択しました（${total}件）`);
       updateAlignPanel();
     }
@@ -281,9 +281,10 @@ import { pushUndo } from './undo-redo.js';
           makeResizable(el);
           selectedStickySet.add(el);
         } else {
-          // アイコン型はサイズなし、マーカー型はサイズあり
-          const isIcon = snap.className.includes('ann-icon-obj');
-          el.className = isIcon ? 'ann-icon-obj' : 'ann-object';
+          // アイコン型・画像アイコン型はサイズなし、マーカー型はサイズあり
+          const isIcon  = snap.className.includes('ann-icon-obj');
+          const isImage = snap.className.includes('ann-image-obj');
+          el.className = isIcon ? 'ann-icon-obj' : isImage ? 'ann-image-obj' : 'ann-object';
           if (isIcon) {
             el.style.cssText = [
               `left:${newLeft}px`,
@@ -294,6 +295,17 @@ import { pushUndo } from './undo-redo.js';
             ].filter(Boolean).join('; ') + ';';
             const cfg = ANNOTATION_TYPE_CONFIG[snap.type];
             if (cfg) el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>`;
+            makeResizable(el, { lockAspectRatio: true, minSize: 14 });
+          } else if (isImage) {
+            el.style.cssText = [
+              `left:${newLeft}px`,
+              `top:${newTop}px`,
+              `width:${snap.width}px`,
+              `height:${snap.height}px`,
+            ].join('; ') + ';';
+            try {
+              renderAnnImageContent(el, JSON.parse(snap.savedData || '{}'));
+            } catch (_) {}
             makeResizable(el, { lockAspectRatio: true, minSize: 14 });
           } else {
             el.style.cssText = [
@@ -350,7 +362,7 @@ import { pushUndo } from './undo-redo.js';
     export function deselectAllObjects() {
       selectedStickySet.forEach(n => n.classList.remove('is-selected'));
       selectedStickySet.clear();
-      document.querySelectorAll('.ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(a => a.classList.remove('is-selected'));
+      document.querySelectorAll('.ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(a => a.classList.remove('is-selected'));
       state.selectedAnnotation = null;
       closeDialog();
     }
@@ -439,6 +451,7 @@ import { pushUndo } from './undo-redo.js';
         if (!e.target.closest('.sticky-note') &&
             !e.target.closest('.ann-object') &&
             !e.target.closest('.ann-icon-obj') &&
+            !e.target.closest('.ann-image-obj') &&
             !e.target.closest('.resize-handle') &&
             !e.target.closest('#selectionBoundingBox')) {
           e.preventDefault();
@@ -747,8 +760,8 @@ import { pushUndo } from './undo-redo.js';
         addShomeiClickHandler(el);
       } else if (el.dataset.type) {
         addAnnClickHandler(el);
-        if (el.classList.contains('ann-icon-obj')) {
-          // アイコン型：縦横比を維持してリサイズ（最小サイズ 14px）
+        if (el.classList.contains('ann-icon-obj') || el.classList.contains('ann-image-obj')) {
+          // アイコン型・画像アイコン型：縦横比を維持してリサイズ（最小サイズ 14px）
           makeResizable(el, { lockAspectRatio: true, minSize: 14 });
         } else if (el.classList.contains('ann-object')) {
           makeResizable(el);
@@ -921,7 +934,7 @@ import { pushUndo } from './undo-redo.js';
             // オリジナルの選択を解除し、クローンに選択を移す
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected').forEach(a => a.classList.remove('is-selected'));
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').forEach(a => a.classList.remove('is-selected'));
             clones.forEach(({ clone }) => {
               if (clone.classList.contains('sticky-note')) {
                 selectedStickySet.add(clone);
@@ -1198,9 +1211,9 @@ import { pushUndo } from './undo-redo.js';
           const boxHeight = parseFloat(box.style.height);
           const MIN_SIZE  = 20;
 
-          // 各選択オブジェクトの初期状態を記録（アイコン型はリサイズ対象外・位置移動のみ）
+          // 各選択オブジェクトの初期状態を記録（アイコン型・画像アイコン型はリサイズ対象外・位置移動のみ）
           const snapshots = getSelectedObjects()
-            .filter(el => !el.classList.contains('ann-icon-obj'))
+            .filter(el => !el.classList.contains('ann-icon-obj') && !el.classList.contains('ann-image-obj'))
             .map(el => ({
               el,
               left:   parseFloat(el.style.left)   || 0,
@@ -1208,9 +1221,9 @@ import { pushUndo } from './undo-redo.js';
               width:  el.offsetWidth,
               height: el.offsetHeight,
             }));
-          // アイコン型：位置のみ追従（リサイズなし）
+          // アイコン型・画像アイコン型：位置のみ追従（リサイズなし）
           const iconSnapshots = getSelectedObjects()
-            .filter(el => el.classList.contains('ann-icon-obj'))
+            .filter(el => el.classList.contains('ann-icon-obj') || el.classList.contains('ann-image-obj'))
             .map(el => ({
               el,
               left: parseFloat(el.style.left) || 0,
@@ -1338,7 +1351,7 @@ import { pushUndo } from './undo-redo.js';
     export function getSelectedObjects() {
       const result = [];
       selectedStickySet.forEach(n => result.push(n));
-      document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => result.push(a));
+      document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => result.push(a));
       return result;
     }
 
@@ -1360,13 +1373,13 @@ import { pushUndo } from './undo-redo.js';
       if (!addToSel) {
         selectedStickySet.forEach(n => n.classList.remove('is-selected'));
         selectedStickySet.clear();
-        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
+        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
       }
 
       // 現在ページのオブジェクトのみをチェックして矩形との交差判定
       // （他ページ非表示の .ann-hidden-page 要素は除外）
       const page = document.getElementById('pageLeft');
-      page.querySelectorAll('.sticky-note, .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(obj => {
+      page.querySelectorAll('.sticky-note, .ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(obj => {
         if (obj.classList.contains('ann-hidden-page')) return;
         const l = parseFloat(obj.style.left) || 0;
         const t = parseFloat(obj.style.top)  || 0;

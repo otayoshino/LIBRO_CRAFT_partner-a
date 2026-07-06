@@ -230,23 +230,23 @@ import { showToast, updateStatus } from './ui-common.js';
           // Shift+クリック：複数選択トグル（付箋との混在も維持）
           if (ann.classList.contains('is-selected')) {
             ann.classList.remove('is-selected');
-            const remaining = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected');
+            const remaining = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected');
             if (remaining.length === 0 && selectedStickySet.size === 0) closeDialog();
           } else {
             ann.classList.add('is-selected');
             openAnnotationSettingsDialog(type, ann);
           }
-          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected').length
+          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').length
                       + selectedStickySet.size;
           updateStatus(`${count} 件のオブジェクトを選択中`);
         } else {
           const multiCount = selectedStickySet.size
-            + document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length;
+            + document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length;
           if (multiCount > 1 && ann.classList.contains('is-selected')) {
             // 複数選択中に選択済みオブジェクトをクリック：他の選択を解除してこの要素のみ選択
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
             ann.classList.add('is-selected');
             openAnnotationSettingsDialog(type, ann);
             updateStatus(`${cfg?.label ?? type}を選択中`);
@@ -254,7 +254,7 @@ import { showToast, updateStatus } from './ui-common.js';
             // 未選択オブジェクトクリック：全解除してこの要素のみ選択
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
             ann.classList.add('is-selected');
             openAnnotationSettingsDialog(type, ann);
             updateStatus(`${cfg?.label ?? type}を選択中`);

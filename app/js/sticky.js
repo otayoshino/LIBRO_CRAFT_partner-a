@@ -389,12 +389,12 @@ import { pushUndo, redo } from './undo-redo.js';
             updateStatus(`付箋を ${selectedStickySet.size} 件選択中`);
           } else {
             const multiCount = selectedStickySet.size
-              + document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length;
+              + document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length;
             if (multiCount > 1 && selectedStickySet.has(note)) {
               // 複数選択中に選択済み付箋をクリック：他の選択を解除してこの付箋のみ選択
               selectedStickySet.forEach(n => n.classList.remove('is-selected'));
               selectedStickySet.clear();
-              document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
+              document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
               selectedStickySet.add(note);
               note.classList.add('is-selected');
               openAnnotationSettingsDialog('sticky', note);
@@ -403,7 +403,7 @@ import { pushUndo, redo } from './undo-redo.js';
               // 未選択オブジェクトクリック：全解除してこの付箋のみ選択
               selectedStickySet.forEach(n => n.classList.remove('is-selected'));
               selectedStickySet.clear();
-              document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
+              document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
               selectedStickySet.add(note);
               note.classList.add('is-selected');
               openAnnotationSettingsDialog('sticky', note);

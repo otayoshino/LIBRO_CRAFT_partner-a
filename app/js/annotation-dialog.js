@@ -1,5 +1,5 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { deactivateAnnotationMode, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
 import { generatePressedVariant, renderButtonVisual } from './buttons.js';
 import { mediaBlobs, state } from './state.js';
@@ -39,6 +39,7 @@ import { pushUndo } from './undo-redo.js';
       prevData.annWidth       = el.offsetWidth;
       prevData.annHeight      = el.offsetHeight;
       prevData.annDisplayType = el.classList.contains('ann-icon-obj') ? 'icon'
+                                : el.classList.contains('ann-image-obj') ? 'image'
                                 : (prevData.annDisplayType || 'marker');
 
       const popup = document.createElement('div');
@@ -420,8 +421,8 @@ import { pushUndo } from './undo-redo.js';
       form.appendChild(colDd);
       }
 
-      // アイコン型：W/H入力時に縦横比を維持して反対軸を自動更新（applyLiveUpdateより先に登録して先行実行させる）
-      const _selectedIconObj = document.querySelector('.ann-icon-obj.is-selected');
+      // アイコン型・画像アイコン型：W/H入力時に縦横比を維持して反対軸を自動更新（applyLiveUpdateより先に登録して先行実行させる）
+      const _selectedIconObj = document.querySelector('.ann-icon-obj.is-selected, .ann-image-obj.is-selected');
       if (_selectedIconObj) {
         const _initAspect = _selectedIconObj.offsetWidth / (_selectedIconObj.offsetHeight || 1);
         const _wEl = document.getElementById('annWidth');
@@ -513,6 +514,10 @@ import { pushUndo } from './undo-redo.js';
           if (w > 0) target.style.width  = Math.max(ICON_MIN, w) + 'px';
           if (h > 0) target.style.height = Math.max(ICON_MIN, h) + 'px';
           target.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
+        } else if (target.classList.contains('ann-image-obj')) {
+          // 画像アイコン型：サイズのみ変更（背景色は適用しない、元画像をそのまま表示するため）
+          if (w > 0) target.style.width  = w + 'px';
+          if (h > 0) target.style.height = h + 'px';
         } else {
           const bgColor = ANN_COLOR_OPTIONS[colorIdx]?.value ?? ANN_COLOR_OPTIONS[0].value;
           if (w > 0) target.style.width  = w + 'px';
@@ -562,6 +567,10 @@ import { pushUndo } from './undo-redo.js';
               target.style.width  = Math.max(ICON_MIN, Math.round(newH * aspect)) + 'px';
             }
             target.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
+          } else if (target.classList.contains('ann-image-obj')) {
+            // 画像アイコン型：サイズのみデルタ分変更（背景色は適用しない）
+            if (dw !== 0) target.style.width  = Math.max(10, (parseFloat(target.style.width)  || 0) + dw) + 'px';
+            if (dh !== 0) target.style.height = Math.max(10, (parseFloat(target.style.height) || 0) + dh) + 'px';
           } else {
             // マーカー型：サイズをデルタ分変更（最小10px）、塗り色は絶対値適用
             const bgColor = ANN_COLOR_OPTIONS[colorIdx]?.value ?? ANN_COLOR_OPTIONS[0].value;
@@ -678,6 +687,7 @@ import { pushUndo } from './undo-redo.js';
             </div>
             <span class="disp-type-label">紙面カラー</span>
           </label>` : '';
+      const existingIconImageSrc = savedData.annIconImage ? mediaBlobs[savedData.annIconImage] : '';
       dtDd.innerHTML = `
         <div class="disp-type-row">
           <label class="disp-type-option${dispType === 'icon' ? ' is-active' : ''}" id="dtOpt-icon">
@@ -696,6 +706,13 @@ import { pushUndo } from './undo-redo.js';
             </div>
             <span class="disp-type-label">マーカー</span>
           </label>
+          <label class="disp-type-option${dispType === 'image' ? ' is-active' : ''}" id="dtOpt-image">
+            <div class="disp-type-top">
+              <input type="radio" name="annDisplayTypeRadio" value="image"${dispType === 'image' ? ' checked' : ''}>
+              <div class="disp-type-preview disp-type-preview--image">${existingIconImageSrc ? `<img src="${existingIconImageSrc}" alt="">` : ''}</div>
+            </div>
+            <span class="disp-type-label">画像</span>
+          </label>
           ${pageColorOption}
         </div>
         <input type="hidden" id="annDisplayType" value="${dispType}">
@@ -706,11 +723,32 @@ import { pushUndo } from './undo-redo.js';
           dtDd.querySelector('#annDisplayType').value = radio.value;
           dtDd.querySelector('#dtOpt-icon').classList.toggle('is-active',       radio.value === 'icon');
           dtDd.querySelector('#dtOpt-marker').classList.toggle('is-active',     radio.value === 'marker');
+          dtDd.querySelector('#dtOpt-image').classList.toggle('is-active',      radio.value === 'image');
           const pcOpt = dtDd.querySelector('#dtOpt-page-color');
           if (pcOpt) pcOpt.classList.toggle('is-active', radio.value === 'page-color');
+          if (iconImageDt && iconImageDd) {
+            const show = radio.value === 'image';
+            iconImageDt.style.display = show ? '' : 'none';
+            iconImageDd.style.display = show ? '' : 'none';
+          }
         });
       });
       form.appendChild(dtDd);
+
+      // --- 画像アイコン用アップロードフィールド（表示タイプ「画像」選択時のみ表示） ---
+      const iconImageDt = document.createElement('dt');
+      iconImageDt.textContent = 'アイコン画像';
+      iconImageDt.style.display = dispType === 'image' ? '' : 'none';
+      form.appendChild(iconImageDt);
+      const iconImageDd = document.createElement('dd');
+      iconImageDd.style.display = dispType === 'image' ? '' : 'none';
+      const iconImageHidden = document.createElement('input');
+      iconImageHidden.type = 'hidden';
+      iconImageHidden.id = 'annIconImage';
+      iconImageHidden.value = savedData.annIconImage || '';
+      iconImageDd.appendChild(iconImageHidden);
+      _appendIconImageDropZone(iconImageDd, 'annIconImage');
+      form.appendChild(iconImageDd);
 
       // --- 種別固有フィールド ---
       if (type === 'pagelink') {
@@ -923,6 +961,72 @@ import { pushUndo } from './undo-redo.js';
           URL.revokeObjectURL(mediaBlobs[file.name]);
         }
         mediaBlobs[file.name] = URL.createObjectURL(file);
+        statusEl.textContent = `✔ ${file.name} を読み込みました`;
+        statusEl.className = 'drop-status is-success';
+      });
+
+      ddEl.appendChild(zone);
+    }
+
+
+    /**
+     * 画像アイコン型（.ann-image-obj）のアイコン画像用ドロップゾーンを dd 要素に追加するヘルパー。
+     * ドロップされたPNGをBlobURLに変換してmediaBlobsへ格納し、拡張子込みのファイル名を
+     * hidden input（annIconImage）にセットする。LIBRO書き出し時にannots/xxxx.pngへ
+     * そのまま書き戻せるよう、受け入れ拡張子はPNGのみに限定する。
+     * @param {HTMLElement} ddEl    - 追加先の dd 要素
+     * @param {string}      inputId - ファイル名（拡張子込み）を反映する hidden input の id
+     */
+    export function _appendIconImageDropZone(ddEl, inputId) {
+      const zone = document.createElement('div');
+      zone.className = 'file-drop-zone';
+      zone.innerHTML = `
+        <p>ここに PNG ファイルをドロップ</p>
+        <p class="drop-status"></p>
+      `;
+      const statusEl = zone.querySelector('.drop-status');
+      const preview = document.createElement('div');
+      preview.className = 'disp-type-preview disp-type-preview--image';
+      preview.style.margin = '8px 0';
+      const hiddenInput = ddEl.querySelector(`#${inputId}`);
+      const existingSrc = hiddenInput?.value ? mediaBlobs[hiddenInput.value] : '';
+      if (hiddenInput && hiddenInput.value) {
+        statusEl.textContent = `✔ ${hiddenInput.value} を使用中`;
+        statusEl.className = 'drop-status is-success';
+        if (existingSrc) preview.innerHTML = `<img src="${existingSrc}" alt="">`;
+      }
+      ddEl.appendChild(preview);
+
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add('is-dragover');
+      });
+      zone.addEventListener('dragleave', (e) => {
+        e.stopPropagation();
+        zone.classList.remove('is-dragover');
+      });
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('is-dragover');
+
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        if (!/\.png$/i.test(file.name)) {
+          statusEl.textContent = '✕ PNGファイルを指定してください';
+          statusEl.className = 'drop-status is-error';
+          return;
+        }
+
+        if (mediaBlobs[file.name]) URL.revokeObjectURL(mediaBlobs[file.name]);
+        mediaBlobs[file.name] = URL.createObjectURL(file);
+
+        if (hiddenInput) {
+          hiddenInput.value = file.name;
+          hiddenInput.dispatchEvent(new Event('change'));
+        }
+        preview.innerHTML = `<img src="${mediaBlobs[file.name]}" alt="">`;
         statusEl.textContent = `✔ ${file.name} を読み込みました`;
         statusEl.className = 'drop-status is-success';
       });
@@ -1241,6 +1345,13 @@ import { pushUndo } from './undo-redo.js';
             existingEl.style.height     = h + 'px';
             existingEl.style.background = '';
             renderAnnObjectContent(existingEl, type, 'page-color');
+          } else if (displayType === 'image') {
+            // 画像アイコン型：元画像・アップロード画像をそのまま表示（rectのw/hをそのまま採用）
+            existingEl.className = 'ann-image-obj';
+            existingEl.style.width      = w + 'px';
+            existingEl.style.height     = h + 'px';
+            existingEl.style.background = '';
+            renderAnnImageContent(existingEl, savedData);
           } else {
             // マーカー型に変更または絶対マーカー型のまま更新
             existingEl.className = 'ann-object';
@@ -1250,7 +1361,7 @@ import { pushUndo } from './undo-redo.js';
             renderAnnObjectContent(existingEl, type, 'marker', label);
           }
           // タイプ変更後にリサイズハンドルを再付与（icon ↔ marker 切り替え時にハンドルがなくなる問題を修正）
-          if (displayType === 'icon') {
+          if (displayType === 'icon' || displayType === 'image') {
             makeResizable(existingEl, { lockAspectRatio: true, minSize: 14 });
           } else {
             makeResizable(existingEl);
@@ -1275,6 +1386,11 @@ import { pushUndo } from './undo-redo.js';
             ann.className = 'ann-object dt-page-color';
             ann.style.cssText = `left:${x}px; top:${y}px; width:${w}px; height:${h}px;`;
             renderAnnObjectContent(ann, type, 'page-color');
+          } else if (displayType === 'image') {
+            // 画像アイコン型：元画像・アップロード画像をそのまま表示（rectのw/hをそのまま採用）
+            ann.className = 'ann-image-obj';
+            ann.style.cssText = `left:${x}px; top:${y}px; width:${w}px; height:${h}px;`;
+            renderAnnImageContent(ann, savedData);
           } else {
             // マーカー型：矩形ラベル（編集モードは種別アイコンも横並び表示）
             ann.className = 'ann-object';
@@ -1286,8 +1402,8 @@ import { pushUndo } from './undo-redo.js';
           addAnnClickHandler(ann);
 
           makeDraggable(ann);
-          if (displayType === 'icon') {
-            // アイコン型：縦横比を維持してリサイズ（最小サイズ 14px）
+          if (displayType === 'icon' || displayType === 'image') {
+            // アイコン型・画像アイコン型：縦横比を維持してリサイズ（最小サイズ 14px）
             makeResizable(ann, { lockAspectRatio: true, minSize: 14 });
           } else {
             makeResizable(ann);
@@ -1295,7 +1411,7 @@ import { pushUndo } from './undo-redo.js';
           ann.dataset.page = state.currentPage;
           document.getElementById('pageLeft').appendChild(ann);
           pushUndo({ type: 'create', elements: [ann] });
-          const dispLabel = displayType === 'icon' ? 'アイコン' : displayType === 'page-color' ? '紙面カラー' : 'マーカー';
+          const dispLabel = displayType === 'icon' ? 'アイコン' : displayType === 'page-color' ? '紙面カラー' : displayType === 'image' ? '画像' : 'マーカー';
           updateStatus(`${cfg.label}を配置しました（${dispLabel}型）`);
         }
       }

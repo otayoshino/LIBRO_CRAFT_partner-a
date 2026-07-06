@@ -1288,11 +1288,13 @@
     /* アノテーションのカーソル */
     .is-view-mode .ann-object  { cursor: pointer; }
     .is-view-mode .ann-icon-obj { cursor: pointer; }
+    .is-view-mode .ann-image-obj { cursor: pointer; }
     .is-view-mode .sticky-note { cursor: pointer; }
 
     /* 閲覧モードで選択枠を非表示 */
     .is-view-mode .ann-object.is-selected,
     .is-view-mode .ann-icon-obj.is-selected,
+    .is-view-mode .ann-image-obj.is-selected,
     .is-view-mode .sticky-note.is-selected,
     .is-view-mode .daimon-btn.is-selected,
     .is-view-mode .zu-btn.is-selected,
@@ -1315,6 +1317,7 @@
     body:not(.is-view-mode) .ann-object:not(.dt-page-color) { opacity: 0.8; }
     body:not(.is-view-mode) .ann-object.dt-page-color        { opacity: 1; }
     body:not(.is-view-mode) .ann-icon-obj                    { opacity: 0.8; }
+    body:not(.is-view-mode) .ann-image-obj                   { opacity: 0.8; }
     body:not(.is-view-mode) .sticky-note                     { opacity: 0.55; }
 
     /* 編集モード時：縁を塗り色より濃いめの線で強調表示する。
@@ -1590,6 +1593,33 @@
       pointer-events: none;
     }
 
+    /* 画像アイコン型アノテーションオブジェクト（LIBRO由来元画像・ユーザーアップロード画像をそのまま表示） */
+    .ann-image-obj {
+      position: absolute;
+      cursor: move;
+      z-index: 10;
+      user-select: none;
+      box-sizing: border-box;
+      overflow: hidden;
+      border: solid rgba(255,255,255,0.5);
+      border-width: calc(2px * var(--zoom-inv-scale, 1));
+    }
+    .ann-image-obj.is-selected {
+      --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
+      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
+                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
+      z-index: 20;
+      /* 選択時はリサイズハンドル（負のオフセットで枠外に配置）をクリック可能にするため表示を許可する */
+      overflow: visible;
+    }
+    .ann-image-obj img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+
     /* 表示タイプ選択UI */
     .disp-type-row {
       display: flex;
@@ -1641,6 +1671,22 @@
       border: 2px dashed rgba(68,114,196,0.5);
       background: rgba(68,114,196,0.06);
       border-radius: 3px;
+    }
+    .disp-type-preview--image {
+      width: 36px;
+      height: 36px;
+      border: 1.5px dashed #999;
+      border-radius: 3px;
+      background: #eee;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .disp-type-preview--image img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
     }
     .disp-type-label {
       font-size: 11px;

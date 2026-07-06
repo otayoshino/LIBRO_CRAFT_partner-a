@@ -58,7 +58,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         });
 
         // アノテーションのスナップショット
-        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected').forEach(ann => {
+        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').forEach(ann => {
           deleteSnapshots.push({
             className:   ann.className.replace(/\bis-selected\b/g, '').trim(),
             id:          ann.dataset.id,
@@ -135,7 +135,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         selectedStickySet.clear();
 
         // 選択中のアノテーションを削除
-        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected').forEach(ann => {
+        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').forEach(ann => {
           ann.remove();
           deleted++;
         });
@@ -318,6 +318,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
       if (e.target.closest('.sticky-note') ||
           e.target.closest('.ann-object')  ||
           e.target.closest('.ann-icon-obj') ||
+          e.target.closest('.ann-image-obj') ||
           e.target.closest('.daimon-btn')  ||
           e.target.closest('.zu-btn')      ||
           e.target.closest('.kotae-btn')   ||

@@ -225,11 +225,11 @@ import { pushUndo } from './undo-redo.js';
             // 他の選択をすべて解除してこのボタンのみ選択
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
               .forEach(a => a.classList.remove('is-selected'));
             btn.classList.add('is-selected');
           }
-          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
+          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
                       + selectedStickySet.size;
           updateStatus(count > 1 ? `${count} 件のオブジェクトを選択中` : '大問ボタンを選択中');
           return;
@@ -353,11 +353,11 @@ import { pushUndo } from './undo-redo.js';
           } else {
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
               .forEach(a => a.classList.remove('is-selected'));
             btn.classList.add('is-selected');
           }
-          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
+          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
                       + selectedStickySet.size;
           updateStatus(count > 1 ? `${count} 件のオブジェクトを選択中` : '答ボタンを選択中');
           return;
@@ -464,11 +464,11 @@ import { pushUndo } from './undo-redo.js';
           } else {
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
               .forEach(a => a.classList.remove('is-selected'));
             btn.classList.add('is-selected');
           }
-          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
+          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
                       + selectedStickySet.size;
           updateStatus(count > 1 ? `${count} 件のオブジェクトを選択中` : '証明ボタンを選択中');
           return;
