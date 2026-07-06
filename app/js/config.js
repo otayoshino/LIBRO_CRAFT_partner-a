@@ -1,8 +1,5 @@
     import { mediaBlobs } from './state.js';
 
-    /** アノテーション永続化ストレージキー */
-    export const STORAGE_KEY = 'ContentsBuilder_v2_annotations';
-
     export const UNDO_MAX  = 50;
 
     /** アイコン画像アップロードの許容上限（巨大ファイルによるブラウザ不安定化を防ぐ） */
@@ -10,7 +7,7 @@
     export const MAX_ICON_IMAGE_DIMENSION  = 4096; // px（一辺の上限）
 
 
-    /** 付箋背景色マップ（dialogConfigs.stickyの annColor 選択肢インデックスに対応） */
+    /** 付箋背景色マップ（savedData.annColor 選択肢インデックスに対応） */
     export const STICKY_COLOR_MAP = ['#4488cc', '#5ac46e', '#f7e04b'];
 
 

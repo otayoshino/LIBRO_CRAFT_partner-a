@@ -1161,20 +1161,6 @@ import { pushUndo } from './undo-redo.js';
     }
 
 
-    /**
-     * アノテーションアイコンを選択状態にする。
-     * @param {HTMLElement} el - 選択したアノテーション要素
-     */
-    export function selectAnnotation(el) {
-      // 前の選択解除
-      if (state.selectedAnnotation) {
-        state.selectedAnnotation.classList.remove('selected');
-      }
-      state.selectedAnnotation = el;
-      el.classList.add('selected');
-      updateStatus('アノテーション選択中: ' + (el.title || ''));
-    }
-
     /* ============================
        ページ操作
     ============================ */

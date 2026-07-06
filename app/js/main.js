@@ -6,7 +6,7 @@ import { switchToViewMode } from './mode.js';
 import { applyZoomChange, goFirstPage, goLastPage, nextPage, prevPage, resizePage, setFit, updatePageDisplay, zoomIn, zoomOut } from './page-view.js';
 import { selectedStickySet, state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
-import { closeDialog, handleAnnotationFile, handleZipFile, loadAnnotations, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsLibroBook, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';
+import { closeDialog, handleZipFile, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsLibroBook, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';
 import { toggleAcc, toggleNav, updateStatus } from './ui-common.js';
 import { pushUndo, redo, undo } from './undo-redo.js';
 
@@ -512,9 +512,7 @@ Object.assign(window, {
   saveAnnotations,
   saveAnnotationsAsZip,
   saveAnnotationsAsLibroBook,
-  handleAnnotationFile,
   handleZipFile,
-  loadAnnotations,
   loadAnnotationsFromZip,
   toggleNav,
   switchToViewMode,

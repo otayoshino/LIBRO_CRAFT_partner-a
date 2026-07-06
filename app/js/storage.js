@@ -1,4 +1,4 @@
-import { applyLiveUpdate, buildAnnDialogFields } from './annotation-dialog.js';
+import { applyLiveUpdate } from './annotation-dialog.js';
 import { checkAndPromptRestoreForBook } from './autosave.js';
 import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
@@ -71,20 +71,8 @@ import { showToast, updateStatus } from './ui-common.js';
 
 
         /**
-         * ローカルストレージからアノテーションを復元する。
-         */
-        /**
-         * ファイル選択ダイアログを開く（読込ボタンから呼び出し）
-         */
-        export function loadAnnotations() {
-          document.getElementById('annotationFileInput').value = '';
-          document.getElementById('annotationFileInput').click();
-        }
-
-
-        /**
          * アノテーション配列からDOMを再構築する共通処理。
-         * handleAnnotationFile / handleZipFile の両方から呼び出される。
+         * handleZipFile から呼び出される。
          * @param {Array} arr - annotations.json のパース済み配列
          */
         export function restoreAnnotationsFromArray(arr) {
@@ -196,25 +184,6 @@ import { showToast, updateStatus } from './ui-common.js';
               });
               updateAnnotationVisibility();
               showToast('アノテーションをファイルから復元しました');
-        }
-
-
-        /**
-         * ファイル選択時の処理。JSONを読み込んでアノテーションを復元。
-         */
-        export function handleAnnotationFile(event) {
-          const file = event.target.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = function(e) {
-            try {
-              const arr = JSON.parse(e.target.result);
-              restoreAnnotationsFromArray(arr);
-            } catch (_) {
-              showToast('読込エラー: データが壊れています');
-            }
-          };
-          reader.readAsText(file);
         }
 
 
@@ -646,120 +615,6 @@ import { showToast, updateStatus } from './ui-common.js';
         };
         document.addEventListener('click', close);
       }
-    }
-
-
-    /* ============================
-       ダイアログ設定定義
-    ============================ */
-    const dialogConfigs = {
-      // 非sticky 5種別：フィールドIDのみ定義（フォームは buildAnnDialogFields で生成）
-      pagelink: {
-        title: 'ページリンク設定',
-        fields: [
-          { id: 'annDisplayType' }, { id: 'annPosX' }, { id: 'annPosY' },
-          { id: 'annWidth' }, { id: 'annHeight' }, { id: 'annColor' }, { id: 'annTarget' },
-        ]
-      },
-      plusfile: {
-        title: 'Plusファイル設定',
-        fields: [
-          { id: 'annDisplayType' }, { id: 'annPosX' }, { id: 'annPosY' },
-          { id: 'annWidth' }, { id: 'annHeight' }, { id: 'annColor' },
-          { id: 'annShowMode' }, { id: 'annFile' },
-        ]
-      },
-      externallink: {
-        title: '外部リンク設定',
-        fields: [
-          { id: 'annDisplayType' }, { id: 'annPosX' }, { id: 'annPosY' },
-          { id: 'annWidth' }, { id: 'annHeight' }, { id: 'annColor' },
-          { id: 'annUrl' },
-        ]
-      },
-      audio: {
-        title: '音声再生設定',
-        fields: [
-          { id: 'annDisplayType' }, { id: 'annPosX' }, { id: 'annPosY' },
-          { id: 'annWidth' }, { id: 'annHeight' }, { id: 'annColor' },
-          { id: 'annFile' }, { id: 'annPlayMode' },
-        ]
-      },
-      video: {
-        title: '動画再生設定',
-        fields: [
-          { id: 'annDisplayType' }, { id: 'annPosX' }, { id: 'annPosY' },
-          { id: 'annWidth' }, { id: 'annHeight' }, { id: 'annColor' },
-          { id: 'annVideoSrc' }, { id: 'annFile' }, { id: 'annShowMode' },
-        ]
-      },
-      sticky: {
-        title: '付箋設定',
-        fields: [
-          { label: '背景色',   type: 'select',   id: 'annColor',  options: ['黄（標準）', '橙', '緑', '青', 'ピンク'] },
-          { label: 'フォント', type: 'select',   id: 'annFont',   options: ['標準', '大', '小'] },
-          { label: '位置', type: 'text',     id: 'annPos',    placeholder: 'X: 100, Y: 150' },
-        ]
-      }
-    };
-
-
-    /**
-     * ダイアログを開く。
-     * @param {string} type - アノテーション種別
-     */
-    export function openDialog(type) {
-      const config = dialogConfigs[type];
-      if (!config) return;
-
-      // タイトル設定
-      document.getElementById('dialogTitle').textContent = config.title;
-
-      // フォーム生成
-      const form = document.getElementById('dialogForm');
-      form.innerHTML = '';
-      config.fields.forEach(field => {
-        const dt = document.createElement('dt');
-        dt.textContent = field.label;
-        const dd = document.createElement('dd');
-
-        if (field.type === 'text') {
-          const inp = document.createElement('input');
-          inp.type = 'text';
-          inp.className = 'd-input';
-          inp.id = field.id;
-          inp.placeholder = field.placeholder || '';
-          dd.appendChild(inp);
-        } else if (field.type === 'textarea') {
-          const ta = document.createElement('textarea');
-          ta.className = 'd-input';
-          ta.id = field.id;
-          ta.placeholder = field.placeholder || '';
-          ta.style.height = '72px';
-          ta.style.resize = 'vertical';
-          dd.appendChild(ta);
-        } else if (field.type === 'select') {
-          const wrap = document.createElement('div');
-          wrap.className = 'd-select-wrap';
-          const sel = document.createElement('select');
-          sel.className = 'd-select';
-          sel.id = field.id;
-          (field.options || []).forEach((opt, i) => {
-            const o = document.createElement('option');
-            o.value = i;
-            o.textContent = opt;
-            sel.appendChild(o);
-          });
-          wrap.appendChild(sel);
-          dd.appendChild(wrap);
-        }
-
-        form.appendChild(dt);
-        form.appendChild(dd);
-      });
-
-      document.getElementById('sideDetailEmpty').style.visibility = 'hidden';
-      document.getElementById('sideDetailActive').style.display = '';
     }
 
 

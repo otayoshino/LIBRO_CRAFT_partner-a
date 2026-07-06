@@ -366,13 +366,6 @@ import { updateStatus } from './ui-common.js';
     }
 
 
-    /**
-     * ズームを適用する。
-     */
-    export function applyZoom() {
-      resizePage();
-    }
-
     /* ============================
        フィット設定
     ============================ */

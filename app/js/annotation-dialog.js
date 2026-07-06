@@ -886,16 +886,6 @@ import { pushUndo } from './undo-redo.js';
     }
 
 
-    /**
-     * @deprecated buildCommonFields + buildSpecificFields に分割済み。後方互換のため残存。
-     * アノテーション設定フォームフィールドを dl 要素に生成する（旧実装）。
-     */
-    export function buildAnnDialogFields(form, type, savedData, initRect) {
-      buildCommonFields(form, type, savedData, initRect);
-      buildSpecificFields(form, type, savedData);
-    }
-
-
     /** DL用 dt 要素を生成するヘルパー */
     export function _buildRadioDt(label) {
       const dt = document.createElement('dt');
@@ -1204,8 +1194,7 @@ import { pushUndo } from './undo-redo.js';
 
     /**
      * アノテーション設定ダイアログを開く。
-     * アノテーション設定ダイアログを開く。
-     * 全種別共通：dialogConfigs からフィールドを生成する。
+     * 全種別共通：buildCommonFields / buildSpecificFields からフィールドを生成する。
      * @param {string} type
      * @param {HTMLElement|null} existingEl - 再設定対象要素（新規作成時は null）
      */

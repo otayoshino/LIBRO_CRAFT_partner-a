@@ -21,7 +21,7 @@ python server.py
 ### ファイル構成
 
 - [app/index.html](app/index.html)：HTML本体のみ（約400行）。`<head>` で `js/vendor/jszip.min.js`（JSZip セルフホスト版、CDN不使用）を読み込み、`<body>` 末尾で [app/js/main.js](app/js/main.js) を `type="module"` として読み込む。
-- `app/js/`：ES Modules で分割されたJavaScript本体（`main.js` / `config.js` / `state.js` / `mode.js` / `page-view.js` / `storage.js` / `autosave.js` / `undo-redo.js` / `buttons.js` / `sticky.js` / `annotation-dialog.js` / `annotation-interaction.js` / `annotation-actions.js` / `libro-format.js` / `ui-common.js`、計約7500行）。ビルドツールは使用せずブラウザネイティブのESモジュールとして読み込む。`main.js` 末尾の `Object.assign(window, {...})` で、HTML側の `onclick` などインラインハンドラから呼べる関数をグローバル公開している。
+- `app/js/`：ES Modules で分割されたJavaScript本体（`main.js` / `config.js` / `state.js` / `mode.js` / `page-view.js` / `storage.js` / `autosave.js` / `undo-redo.js` / `buttons.js` / `sticky.js` / `annotation-dialog.js` / `annotation-interaction.js` / `annotation-actions.js` / `libro-format.js` / `ui-common.js`、計約8000行）。ビルドツールは使用せずブラウザネイティブのESモジュールとして読み込む。`main.js` 末尾の `Object.assign(window, {...})` で、HTML側の `onclick` などインラインハンドラから呼べる関数をグローバル公開している。
 - `app/css/style.css`：CSS本体。`app/icons/sprite.svg`：SVGアイコンスプライト。
 
 ### 状態管理
@@ -32,7 +32,6 @@ python server.py
 - `zoomLevel` / `fitMode`：拡大縮小・フィット状態
 - `annIdCounter` / `daimonCounter` / `kotaeCounter` / `shomeiCounter` / `stickyGroupCounter`：アノテーションID採番
 - `mediaBlobs`（`state.js` でモジュールスコープの定数として定義）：ZIP内の音声・動画・PDFファイルを BlobURL に変換してキャッシュ
-- `STORAGE_KEY`（`config.js`、値は `ContentsBuilder_v2_annotations`）：`localStorage` への自動保存キー
 - Undo/Redo は `app/js/undo-redo.js` の `pushUndo(op)` / `undo()` / `redo()` によるコマンド履歴方式
 
 ### アノテーション種別
@@ -43,8 +42,8 @@ python server.py
 
 ### 保存・読み込みの3系統
 
-- **localStorage**：`saveAnnotations()` / `loadAnnotations()`（[app/js/storage.js](app/js/storage.js)）による自動保存（ページ内で完結）
-- **独自ZIP形式**：`saveAnnotationsAsZip()` による `annotations.json` ＋ メディアファイル一式のエクスポート
+- **IndexedDB自動保存**：`app/js/autosave.js` がDOMのアノテーション状態を定期的にIndexedDB（`ContentsBuilderAutoSave`）へスナップショット保存し、次回同一book読み込み完了時に復元確認を行う（ページ内で完結）
+- **独自ZIP形式**：`saveAnnotationsAsZip()` による `annotations.json` ＋ メディアファイル一式のエクスポート（`saveAnnotations()` は単体JSONファイルのダウンロード保存のみで、対応する読込機能は廃止済み）
 - **LIBRO book形式**：`saveAnnotationsAsLibroBook()` によるLIBRO bookフォルダ形式（暗号化ページ画像＋JSON）でのエクスポート。ページリンク・外部リンク・音声再生の3種別のみ対応、他は未対応（詳細は [libro-integration Skill](.claude/skills/libro-integration/SKILL.md)）
 
 読み込みはいずれも `handleZipFile()` が入口で、ZIPルート直下に `index.json` があればLIBRO book形式、なければ独自ZIP形式として自動判別する。
