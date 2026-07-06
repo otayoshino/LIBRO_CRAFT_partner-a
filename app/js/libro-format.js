@@ -61,6 +61,20 @@ export function encodePbve2000(data) {
 
 
 /**
+ * バイナリの先頭が "Pbve2000" ヘッダーで始まっているかどうかを判定する。
+ * 別オーサリングツール由来のbookでは、本来Pbve2000暗号化される音声・アノテーション画像が
+ * 平文のまま格納されている場合があるため、復号前にこの判定を行い平文データの破壊を防ぐ。
+ * @param {ArrayBuffer|Uint8Array} buffer
+ * @returns {boolean}
+ */
+function isPbve2000Encoded(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  if (bytes.length < PBVE_HEADER_LEN) return false;
+  return new TextDecoder().decode(bytes.subarray(0, PBVE_HEADER_LEN)) === 'Pbve2000';
+}
+
+
+/**
  * zip内から相対パス末尾一致でエントリを探す。
  * book root フォルダ（16進数フォルダ名）が zip 内に含まれる場合も含まれない場合も対応する。
  * @param {JSZip} zip
@@ -541,7 +555,11 @@ function convertPageAnnotations(pageJson, pageNum) {
 /**
  * LIBRO bookフォルダ形式のZIPを解析し、ページ画像・アノテーションデータを取り出す。
  * - ページ画像（p####-1.jpg等）・音声（sounds/*.mp3）はPbve2000復号する
- * - annots/*.png は平文のためそのままBlobURL化する
+ * - annots/*.png は通常平文のためそのままBlobURL化する
+ * - 音声・annots画像はいずれも、別オーサリングツール由来で実際には暗号化されていない
+ *   場合があるため、先頭の"Pbve2000"ヘッダー有無を判定してから復号する。ヘッダーが
+ *   無かったファイルのzip内相対パスは unencryptedAssetPaths に記録し、
+ *   buildLibroBookExport で書き出し時に強制的に暗号化し直すために使う
  * - annots[] は既知パターン（GoTo+FitPage / URI（うちtoAppendix=Plusファイル・toMovie系=動画・
  *   それ以外=外部リンク） / Launch / Hide+Show）を判定し、既知のものはContentsBuilderの
  *   内部データ形式へ変換、それ以外は未知アノテーションとして保持のみ行う
@@ -556,6 +574,7 @@ function convertPageAnnotations(pageJson, pageNum) {
  *   maxAnnotId: number,
  *   baseDir: string,
  *   indexJson: Object,
+ *   unencryptedAssetPaths: Set<string>,
  * }>}
  */
 export async function parseLibroBookZip(zip) {
@@ -574,6 +593,10 @@ export async function parseLibroBookZip(zip) {
   const daimonPassthrough = [];
   const networksRaw = [];
   let maxAnnotId = 0;
+  // 別オーサリングツール由来などで本来Pbve2000暗号化されているべきなのに平文だった
+  // ファイル（sounds/*.mp3、annots/*.png）のzip内相対パスを記録する。
+  // 書き出し時、対応するアノテーションの編集有無にかかわらず強制的に暗号化し直すために使う。
+  const unencryptedAssetPaths = new Set();
 
   const pageMetaList = indexJson.pages || [];
   for (let i = 0; i < pageMetaList.length; i++) {
@@ -603,7 +626,8 @@ export async function parseLibroBookZip(zip) {
     pages.push({ pageNum, width: pageWidth, height: pageHeight, imageUrl, jsonPath: pageMeta.json });
 
     // 参照されている音声ファイルをPbve2000復号してmediaBlobsへキャッシュ
-    // （resolveMediaSrc は "ファイル名.mp3" 形式のキーを参照するため、拡張子込みで格納する）
+    // （resolveMediaSrc は "ファイル名.mp3" 形式のキーを参照するため、拡張子込みで格納する）。
+    // 別オーサリングツール由来で実際には暗号化されていない場合があるため、ヘッダーを見て判定する。
     for (const annot of (pageJson.annots || [])) {
       for (const action of (annot.actions || [])) {
         if (action.action === 'Launch' && action.filename) {
@@ -612,8 +636,14 @@ export async function parseLibroBookZip(zip) {
           const entry = zip.file(baseDir + action.filename);
           if (!entry) continue;
           const buf = await entry.async('arraybuffer');
-          const decoded = decodePbve2000(buf);
-          mediaBlobs[baseName] = URL.createObjectURL(new Blob([decoded], { type: 'audio/mpeg' }));
+          let bytes;
+          if (isPbve2000Encoded(buf)) {
+            bytes = decodePbve2000(buf);
+          } else {
+            bytes = new Uint8Array(buf);
+            unencryptedAssetPaths.add(baseDir + action.filename);
+          }
+          mediaBlobs[baseName] = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
         }
       }
     }
@@ -628,14 +658,24 @@ export async function parseLibroBookZip(zip) {
     maxAnnotId = Math.max(maxAnnotId, maxId);
   }
 
-  // Hide/Showペア用のannots画像（平文PNG）をBlobURL化する
+  // annots画像を読み込んでBlobURL化する共通ヘルパー。
+  // 通常は平文PNGだが、別オーサリングツール由来で実際にはPbve2000暗号化されている
+  // 場合もあるため、ヘッダーを見て判定する（暗号化されていた場合のみ復号する）。
+  async function loadAnnotPngBytes(path) {
+    const entry = zip.file(path);
+    if (!entry) return null;
+    const buf = await entry.async('arraybuffer');
+    if (isPbve2000Encoded(buf)) return decodePbve2000(buf);
+    unencryptedAssetPaths.add(path);
+    return new Uint8Array(buf);
+  }
+
+  // Hide/Showペア用のannots画像をBlobURL化する
   const togglePairs = [];
   for (const tp of togglePairsRaw) {
-    const closedEntry = zip.file(tp.baseDir + tp.closedFile);
-    const openEntry   = zip.file(tp.baseDir + tp.openFile);
-    if (!closedEntry || !openEntry) continue;
-    const closedBlob = await closedEntry.async('blob');
-    const openBlob   = await openEntry.async('blob');
+    const closedBytes = await loadAnnotPngBytes(tp.baseDir + tp.closedFile);
+    const openBytes   = await loadAnnotPngBytes(tp.baseDir + tp.openFile);
+    if (!closedBytes || !openBytes) continue;
     togglePairs.push({
       pageNum: tp.pageNum,
       rect: tp.rect,
@@ -648,27 +688,26 @@ export async function parseLibroBookZip(zip) {
       kind:       tp.kind,
       groupIds:   tp.groupIds,
       groupId:    tp.groupId,
-      closedImageUrl: URL.createObjectURL(new Blob([closedBlob], { type: 'image/png' })),
-      openImageUrl:   URL.createObjectURL(new Blob([openBlob],   { type: 'image/png' })),
+      closedImageUrl: URL.createObjectURL(new Blob([closedBytes], { type: 'image/png' })),
+      openImageUrl:   URL.createObjectURL(new Blob([openBytes],   { type: 'image/png' })),
     });
   }
 
-  // 拡張トグルネットワーク（色分けボタン・ステップボタン等）用のannots画像（平文PNG）をBlobURL化する。
+  // 拡張トグルネットワーク（色分けボタン・ステップボタン等）用のannots画像をBlobURL化する。
   // 生データ（member.raw、書き出し時にそのまま書き戻す）にはURLを書き込まず、
   // 表示専用のimagesテーブル（id -> blobUrl）として並置する。
   const networkGroups = [];
   for (const net of networksRaw) {
     const images = new Map();
     for (const m of net.members) {
-      const entry = zip.file(net.baseDir + m.filename);
-      if (!entry) continue;
-      const blob = await entry.async('blob');
-      images.set(m._id, URL.createObjectURL(new Blob([blob], { type: 'image/png' })));
+      const bytes = await loadAnnotPngBytes(net.baseDir + m.filename);
+      if (!bytes) continue;
+      images.set(m._id, URL.createObjectURL(new Blob([bytes], { type: 'image/png' })));
     }
     networkGroups.push({ ...net, images });
   }
 
-  return { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson };
+  return { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths };
 }
 
 
@@ -1114,10 +1153,13 @@ export async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeig
  * ContentsBuilderの現在の状態からLIBRO book zipを書き出す。
  * 保持している元zip（インスタンスをそのまま変更）に対し、annots[]が変わったページの
  * p####.jsonと、新規マーカーPNG・新規音声（Pbve2000暗号化）のみを上書き・追加する。
- * ページ画像・既存のannots PNG・既存の音声は一切書き換えない。
+ * ページ画像・既存のannots PNG・既存の音声は基本的に書き換えないが、
+ * libroBook.unencryptedAssetPaths に記録されたファイル（別オーサリングツール由来で
+ * 元々暗号化されていなかったsounds/*.mp3・annots/*.png）だけは、対応するアノテーションの
+ * 編集有無にかかわらず強制的にPbve2000暗号化して上書きする。
  * index.jsonは configs.libro-craft-meta（book全体マーカー、docs/libro_integration_計画書.md 4-3b参照）
  * の追記のみ行い、既存のoutline等は変更しない。
- * @param {{zip:JSZip, baseDir:string, indexJson:Object}} libroBook - state.libroBook
+ * @param {{zip:JSZip, baseDir:string, indexJson:Object, unencryptedAssetPaths?:Set<string>}} libroBook - state.libroBook
  * @param {Array<{id:number, page:number, type:string, style:string, savedData:string}>} domAnnotations
  *   - LIBROに変換可能な種別（pagelink/externallink/audio）のDOM由来アノテーションデータ
  * @param {Array<{pageNum:number, raw:Object}>} passthroughAnnotations - 無変更のまま書き戻すアノテーション
@@ -1212,6 +1254,18 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     const res = await fetch(blobUrl);
     const buf = new Uint8Array(await res.arrayBuffer());
     zip.file(soundPath, encodePbve2000(buf));
+  }
+
+  // 別オーサリングツール由来などで元々暗号化されていなかったファイル（sounds/*.mp3、
+  // annots/*.png）は、対応するアノテーションの編集有無にかかわらず必ず暗号化して保存する
+  // （インポート時にlibroBook.unencryptedAssetPathsへ記録済み。編集により新規生成された
+  // ファイルが既に暗号化済みの場合はスキップする）。
+  for (const path of (libroBook.unencryptedAssetPaths || [])) {
+    const entry = zip.file(path);
+    if (!entry) continue;
+    const buf = await entry.async('arraybuffer');
+    if (isPbve2000Encoded(buf)) continue;
+    zip.file(path, encodePbve2000(buf));
   }
 
   return zip;

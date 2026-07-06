@@ -307,7 +307,7 @@ import { showToast, updateStatus } from './ui-common.js';
      * @param {JSZip} zip - JSZip.loadAsync 済みのZIPオブジェクト
      */
     async function handleLibroBookZip(zip) {
-      const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson } =
+      const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths } =
         await parseLibroBookZip(zip);
 
       // 再読込時に前回分のHide/Showペア要素が残らないようクリアする
@@ -330,10 +330,15 @@ import { showToast, updateStatus } from './ui-common.js';
       // 拡張トグルネットワーク（色分けボタン・ステップボタン等）は位置・サイズ編集のみ対応。
       // 書き出し時に編集後のrectを反映した生データを書き戻すため保持する
       state.libroNetworkPassthrough = networkGroups;
-      // 書き出し時に未変更ファイルをそのまま維持できるよう、元zip・書誌情報を保持する
-      state.libroBook = { zip, baseDir, indexJson };
+      // 書き出し時に未変更ファイルをそのまま維持できるよう、元zip・書誌情報を保持する。
+      // unencryptedAssetPathsは、別オーサリングツール由来で実際には暗号化されていなかった
+      // 音声・アノテーション画像のパス一覧（書き出し時に強制暗号化する対象）
+      state.libroBook = { zip, baseDir, indexJson, unencryptedAssetPaths };
 
-      showToast(`LIBRO bookを読み込みました（${pages.length}ページ、未知アノテーション${unknownAnnotations.length}件）`);
+      const unencryptedNote = unencryptedAssetPaths.size > 0
+        ? `、未暗号化ファイル${unencryptedAssetPaths.size}件を検出（保存時に暗号化します）`
+        : '';
+      showToast(`LIBRO bookを読み込みました（${pages.length}ページ、未知アノテーション${unknownAnnotations.length}件${unencryptedNote}）`);
     }
 
 
