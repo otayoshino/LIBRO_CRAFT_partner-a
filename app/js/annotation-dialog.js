@@ -1,5 +1,5 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
 import { deactivateAnnotationMode, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
 import { generatePressedVariant, renderButtonVisual } from './buttons.js';
 import { mediaBlobs, state } from './state.js';
@@ -981,9 +981,10 @@ import { pushUndo } from './undo-redo.js';
       const zone = document.createElement('div');
       zone.className = 'file-drop-zone';
       zone.innerHTML = `
-        <p>ここに PNG ファイルをドロップ</p>
+        <p>ここに PNG ファイルをドロップ、またはクリックして選択</p>
         <p class="drop-status"></p>
       `;
+      zone.style.cursor = 'pointer';
       const statusEl = zone.querySelector('.drop-status');
       const preview = document.createElement('div');
       preview.className = 'disp-type-preview disp-type-preview--image';
@@ -996,6 +997,58 @@ import { pushUndo } from './undo-redo.js';
         if (existingSrc) preview.innerHTML = `<img src="${existingSrc}" alt="">`;
       }
       ddEl.appendChild(preview);
+
+      // ファイルセレクトダイアログ用の隠し input（クリックで開く）
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.png,image/png';
+      fileInput.style.display = 'none';
+      zone.appendChild(fileInput);
+
+      const showError = (msg) => {
+        statusEl.textContent = `✕ ${msg}`;
+        statusEl.className = 'drop-status is-error';
+      };
+
+      const handleFile = (file) => {
+        if (!file) return;
+        if (!/\.png$/i.test(file.name) || (file.type && file.type !== 'image/png')) {
+          showError('PNGファイルを指定してください');
+          return;
+        }
+        if (file.size > MAX_ICON_IMAGE_SIZE_BYTES) {
+          showError(`ファイルサイズが大きすぎます（上限${MAX_ICON_IMAGE_SIZE_BYTES / (1024 * 1024)}MB）`);
+          return;
+        }
+
+        // 拡張子・MIME・サイズだけでは偽装/破損ファイルを防げないため、
+        // 実際にデコードできるか・縦横サイズが上限内かを確認してから確定する。
+        const tempUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          if (img.naturalWidth > MAX_ICON_IMAGE_DIMENSION || img.naturalHeight > MAX_ICON_IMAGE_DIMENSION) {
+            URL.revokeObjectURL(tempUrl);
+            showError(`画像サイズが大きすぎます（上限${MAX_ICON_IMAGE_DIMENSION}px四方）`);
+            return;
+          }
+
+          if (mediaBlobs[file.name]) URL.revokeObjectURL(mediaBlobs[file.name]);
+          mediaBlobs[file.name] = tempUrl;
+
+          if (hiddenInput) {
+            hiddenInput.value = file.name;
+            hiddenInput.dispatchEvent(new Event('change'));
+          }
+          preview.innerHTML = `<img src="${tempUrl}" alt="">`;
+          statusEl.textContent = `✔ ${file.name} を読み込みました`;
+          statusEl.className = 'drop-status is-success';
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(tempUrl);
+          showError('画像として読み込めませんでした');
+        };
+        img.src = tempUrl;
+      };
 
       zone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -1010,25 +1063,12 @@ import { pushUndo } from './undo-redo.js';
         e.preventDefault();
         e.stopPropagation();
         zone.classList.remove('is-dragover');
-
-        const file = e.dataTransfer.files[0];
-        if (!file) return;
-        if (!/\.png$/i.test(file.name)) {
-          statusEl.textContent = '✕ PNGファイルを指定してください';
-          statusEl.className = 'drop-status is-error';
-          return;
-        }
-
-        if (mediaBlobs[file.name]) URL.revokeObjectURL(mediaBlobs[file.name]);
-        mediaBlobs[file.name] = URL.createObjectURL(file);
-
-        if (hiddenInput) {
-          hiddenInput.value = file.name;
-          hiddenInput.dispatchEvent(new Event('change'));
-        }
-        preview.innerHTML = `<img src="${mediaBlobs[file.name]}" alt="">`;
-        statusEl.textContent = `✔ ${file.name} を読み込みました`;
-        statusEl.className = 'drop-status is-success';
+        handleFile(e.dataTransfer.files[0]);
+      });
+      zone.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', () => {
+        handleFile(fileInput.files[0]);
+        fileInput.value = '';
       });
 
       ddEl.appendChild(zone);
