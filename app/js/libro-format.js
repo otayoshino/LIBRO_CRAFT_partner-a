@@ -679,6 +679,23 @@ export async function parseLibroBookZip(zip) {
     return new Uint8Array(buf);
   }
 
+  // PNGバイト列が完全透過（全ピクセルのアルファ0）かどうかを判定する。
+  // 別オーサリングツールは「紙面カラー（見た目なし・クリック領域のみ）」を表現するために
+  // 実体を持たない透明PNGをannots画像として置くことがあり、これを「画像」表示タイプの
+  // 元画像と誤認しないようにするための判定。
+  async function isFullyTransparentPng(bytes) {
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] !== 0) return false;
+    }
+    return true;
+  }
+
   // Hide/Showペア用のannots画像をBlobURL化する
   const togglePairs = [];
   for (const tp of togglePairsRaw) {
@@ -718,13 +735,19 @@ export async function parseLibroBookZip(zip) {
 
   // pagelink/plusfile/externallink/audio/video の元画像（annots/xxxx.png）を読み込み、
   // 別オーサリングツール由来の見た目をそのまま再現できる場合は表示タイプを「画像」に上書きする。
-  // 元画像が見つからない場合は各種別のデフォルト表示タイプ（page-color/marker）のまま維持する。
-  for (const k of knownAnnotations) {
+  // 元画像が見つからない、または完全透過（別ツールが紙面カラー表示のつもりで見た目を
+  // 持たない透明PNGを置いているだけのケース）の場合は各種別のデフォルト表示タイプ
+  // （page-color/marker）のまま維持する。
+  // ページ数が多いbookではannots画像も数千枚規模になり得るため、1件ずつawaitする
+  // 逐次処理では10秒を超えるブロッキングになりうる（実測: 747枚で逐次2.4秒→6-8倍で14-19秒）。
+  // Promise.allで並列化することで同規模でも5-6秒程度に収まる。
+  await Promise.all(knownAnnotations.map(async (k) => {
     const iconFilename = k._iconFilename;
     delete k._iconFilename;
-    if (!iconFilename) continue;
+    if (!iconFilename) return;
     const bytes = await loadAnnotPngBytes(baseDir + iconFilename);
-    if (!bytes) continue;
+    if (!bytes) return;
+    if (await isFullyTransparentPng(bytes)) return;
     const baseName = iconFilename.split('/').pop();
     if (!mediaBlobs[baseName]) {
       mediaBlobs[baseName] = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
@@ -738,7 +761,7 @@ export async function parseLibroBookZip(zip) {
     // マーカー型用に埋め込まれた種別色背景（plusfile/video/externallink/audio）は
     // 画像型では不要（元画像をそのまま透過表示するため）なので取り除く
     k.style = (k.style || '').replace(/background:[^;]*;?/, '');
-  }
+  }));
 
   return { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths };
 }
