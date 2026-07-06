@@ -1081,6 +1081,25 @@ import { pushUndo } from './undo-redo.js';
             hiddenInput.value = file.name;
             hiddenInput.dispatchEvent(new Event('change'));
           }
+
+          // 矩形サイズに合わせて縮小配置するのではなく、画像本来の縦横サイズをそのまま採用する。
+          // ・新規作成中（ドラッグ矩形が保留中）：確定時に優先されるpendingRect自体を書き換える
+          // ・既存要素の編集中：W/H欄を直接更新し、選択中オブジェクトへ即時反映する
+          //   （W/H欄へのinputイベント発火はアイコン型の縦横比維持リスナーと競合するため使わない）
+          const container = ddEl.closest('#sideDetailActive, #quickCreatePopup') || document;
+          const wEl = container.querySelector('#annWidth');
+          const hEl = container.querySelector('#annHeight');
+          if (wEl && hEl) {
+            wEl.value = img.naturalWidth;
+            hEl.value = img.naturalHeight;
+          }
+          if (state.pendingRect) {
+            state.pendingRect.w = img.naturalWidth;
+            state.pendingRect.h = img.naturalHeight;
+          }
+          const selectedImageEl = document.querySelector('.ann-image-obj.is-selected');
+          if (selectedImageEl) applyLiveUpdate(selectedImageEl.dataset.type);
+
           preview.innerHTML = `<img src="${tempUrl}" alt="">`;
           statusEl.textContent = `✔ ${file.name} を読み込みました`;
           statusEl.className = 'drop-status is-success';
