@@ -1440,9 +1440,13 @@
       cursor: pointer;
     }
     /* 選択機構を持たないため、既存の「.is-selected > .resize-handle」ルール（body:not(.is-view-mode)
-       .is-selected > .resize-handle { display: block; }）には乗れない。常時表示に上書きする。 */
+       .is-selected > .resize-handle { display: block; }）には乗れない。常時表示に上書きする。
+       ただし .resize-handle 本来の枠色（var(--ann-selected-color)＝選択中を示す青）のままだと
+       常に「選択中」に見えてしまう（実際には選択・削除・編集ダイアログ非対応）ため、
+       枠色だけ中立のグレーに差し替えて「位置・サイズ編集専用（再編集不可）」と視覚的に区別する。 */
     body:not(.is-view-mode) .libro-network-slot > .resize-handle {
       display: block;
+      border-color: rgba(0,0,0,0.45);
     }
     .libro-network-frame {
       position: absolute;
