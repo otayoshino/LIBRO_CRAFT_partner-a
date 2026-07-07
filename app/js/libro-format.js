@@ -622,14 +622,21 @@ export async function parseLibroBookZip(zip) {
     const pageHeight = pageJson.height || pageMeta.height;
 
     // ページ画像（最高解像度=1/1）をPbve2000復号してBlobURL化
+    // 別オーサリングツール由来で実際には暗号化されていない場合があるため、ヘッダーを見て判定する。
     const imageRel = pageMeta.images?.['1/1'] || Object.values(pageMeta.images || {})[0];
     let imageUrl = '';
     if (imageRel) {
       const imgEntry = zip.file(baseDir + imageRel);
       if (imgEntry) {
         const buf = await imgEntry.async('arraybuffer');
-        const decoded = decodePbve2000(buf);
-        imageUrl = URL.createObjectURL(new Blob([decoded], { type: 'image/jpeg' }));
+        let imageBytes;
+        if (isPbve2000Encoded(buf)) {
+          imageBytes = decodePbve2000(buf);
+        } else {
+          imageBytes = new Uint8Array(buf);
+          unencryptedAssetPaths.add(baseDir + imageRel);
+        }
+        imageUrl = URL.createObjectURL(new Blob([imageBytes], { type: 'image/jpeg' }));
       }
     }
     pages.push({ pageNum, width: pageWidth, height: pageHeight, imageUrl, jsonPath: pageMeta.json });
@@ -1327,7 +1334,7 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     zip.file(soundPath, encodePbve2000(buf));
   }
 
-  // 別オーサリングツール由来などで元々暗号化されていなかったファイル（sounds/*.mp3、
+  // 別オーサリングツール由来などで元々暗号化されていなかったファイル（ページ画像、sounds/*.mp3、
   // annots/*.png）は、対応するアノテーションの編集有無にかかわらず必ず暗号化して保存する
   // （インポート時にlibroBook.unencryptedAssetPathsへ記録済み。編集により新規生成された
   // ファイルが既に暗号化済みの場合はスキップする）。

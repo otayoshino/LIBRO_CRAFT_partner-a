@@ -72,7 +72,8 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # ディレクトリトラバーサル防止のためベース名のみ使用
         filename = os.path.basename(filename_list[0].strip())
-        if not filename:
+        # basename(".")/basename("..")はそのまま返るため、親ディレクトリ等を指さないよう拒否する
+        if not filename or filename in (".", ".."):
             self._send_json(400, {"error": "無効なファイル名です"})
             return
 

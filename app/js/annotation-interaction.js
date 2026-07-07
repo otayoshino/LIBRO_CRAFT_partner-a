@@ -730,7 +730,7 @@ import { pushUndo } from './undo-redo.js';
             const curWidth  = el.offsetWidth;
             const curHeight = el.offsetHeight;
             if (curLeft !== startLeft || curTop !== startTop || curWidth !== startWidth || curHeight !== startHeight) {
-              pushUndo({ type: 'resize', el, prevLeft: startLeft, prevTop: startTop, prevWidth: startWidth, prevHeight: startHeight });
+              pushUndo({ type: 'resize', el, prevLeft: startLeft, prevTop: startTop, prevWidth: startWidth, prevHeight: startHeight, afterLeft: curLeft, afterTop: curTop, afterWidth: curWidth, afterHeight: curHeight });
             }
           };
           document.addEventListener('mousemove', onMove);

@@ -286,6 +286,11 @@ import { showToast, updateStatus } from './ui-common.js';
      * @param {string} fallbackName - book folder名が空の場合に使うbook識別子（元zipファイル名）
      */
     async function handleLibroBookZip(zip, fallbackName) {
+      // 別bookの同名ファイル（"0001.mp3"等）のBlobURLが誤って再利用されないよう、
+      // 既存BlobURLを解放してmediaBlobsを初期化する
+      Object.values(mediaBlobs).forEach(url => URL.revokeObjectURL(url));
+      Object.keys(mediaBlobs).forEach(k => delete mediaBlobs[k]);
+
       const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths } =
         await parseLibroBookZip(zip);
 

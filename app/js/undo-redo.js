@@ -169,6 +169,14 @@ import { showToast, updateStatus } from './ui-common.js';
             // 含まれる場合のみ復元する（他の呼び出し元のUndoで誤って消してしまわないようhasOwnPropertyで判定）
             const restoreOne = (snap) => {
               const { el, prevSavedData, prevStyleCssText, prevClassName, prevInnerHTML } = snap;
+              // Redo用に変更後（現在）の状態をこのスナップショットへ記録しておく
+              snap.afterSavedData    = el.dataset.savedData;
+              snap.afterStyleCssText = el.style.cssText;
+              snap.afterClassName    = el.className;
+              snap.afterInnerHTML    = el.innerHTML;
+              if (Object.prototype.hasOwnProperty.call(snap, 'prevStickyColorOverride')) {
+                snap.afterStickyColorOverride = el.dataset.stickyColorOverride;
+              }
               if (prevSavedData    !== undefined) el.dataset.savedData = prevSavedData;
               if (prevStyleCssText !== undefined) el.style.cssText = prevStyleCssText;
               if (prevClassName    !== undefined) el.className = prevClassName;
@@ -290,6 +298,37 @@ import { showToast, updateStatus } from './ui-common.js';
             if (afterTop  !== undefined) el.style.top  = afterTop  + 'px';
           });
           updateAlignPanel();
+          break;
+        }
+        // --- リサイズの再適用 ---
+        case 'resize': {
+          const { el, afterLeft, afterTop, afterWidth, afterHeight } = op;
+          el.style.left   = afterLeft   + 'px';
+          el.style.top    = afterTop    + 'px';
+          el.style.width  = afterWidth  + 'px';
+          el.style.height = afterHeight + 'px';
+          updateAlignPanel();
+          break;
+        }
+        // --- プロパティ変更の再適用（複数対応） ---
+        case 'prop': {
+          const applyOne = (snap) => {
+            const { el, afterSavedData, afterStyleCssText, afterClassName, afterInnerHTML } = snap;
+            if (afterSavedData    !== undefined) el.dataset.savedData = afterSavedData;
+            if (afterStyleCssText !== undefined) el.style.cssText = afterStyleCssText;
+            if (afterClassName    !== undefined) el.className = afterClassName;
+            if (afterInnerHTML    !== undefined) el.innerHTML = afterInnerHTML;
+            if (Object.prototype.hasOwnProperty.call(snap, 'afterStickyColorOverride')) {
+              if (snap.afterStickyColorOverride !== undefined) el.dataset.stickyColorOverride = snap.afterStickyColorOverride;
+              else delete el.dataset.stickyColorOverride;
+            }
+            reinitElement(el);
+          };
+          if (Array.isArray(op.targets)) {
+            op.targets.forEach(applyOne);
+          } else {
+            applyOne(op);
+          }
           break;
         }
         // --- グループ化/解除の再適用 ---
