@@ -659,6 +659,25 @@
       display: none;
     }
 
+    /* 見開きページ表示中のグレーアウトオーバーレイ（編集モードのみ表示、アノテーション設定不可を明示） */
+    #spreadLockOverlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.45);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      z-index: 950;
+    }
+    body:not(.is-view-mode) #spreadLockOverlay.show {
+      display: flex;
+    }
+
     /* LIBRO book読込ボタン（親のpointer-events:noneを個別に打ち消してクリック可能にする） */
     #bookLoadBtn {
       pointer-events: auto;

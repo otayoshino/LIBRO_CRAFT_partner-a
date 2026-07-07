@@ -109,11 +109,14 @@ import { updateStatus } from './ui-common.js';
      * 見開きページ（real-page-count超過ページ）を表示中であることを示すバッジの表示を更新する。
      */
     function updateSpreadBadge() {
-      const badge = document.getElementById('spreadBadge');
-      if (!badge) return;
       const isSpread = state.realPageCount != null && state.currentPage > state.realPageCount;
-      badge.classList.toggle('show', isSpread);
-      if (isSpread) badge.dataset.tip = `${state.realPageCount + 1}ページ目から見開き表示`;
+      const badge = document.getElementById('spreadBadge');
+      if (badge) {
+        badge.classList.toggle('show', isSpread);
+        if (isSpread) badge.dataset.tip = `${state.realPageCount + 1}ページ目から見開き表示`;
+      }
+      // 見開きページ表示中はグレーアウトオーバーレイを表示し、編集不可を明示する（編集モードのみ）
+      document.getElementById('spreadLockOverlay')?.classList.toggle('show', isSpread);
     }
 
 

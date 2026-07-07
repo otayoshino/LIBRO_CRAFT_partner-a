@@ -445,6 +445,8 @@ import { pushUndo } from './undo-redo.js';
       if (state.isSpaceHeld) return;
       // 閲覧モード中はドラッグ選択を禁止
       if (document.body.classList.contains('is-view-mode')) return;
+      // 見開きページ表示中はアノテーション設定不可
+      if (state.realPageCount != null && state.currentPage > state.realPageCount) return;
       // 描画モードでない場合
       if (!state.currentDrawType) {
         // 付箋・アノテーション・リサイズハンドル以外の場所をクリックしたらドラッグ選択を開始
