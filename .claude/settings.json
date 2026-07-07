@@ -79,7 +79,9 @@
       "Bash(node --check app/js/storage.js)",
       "Bash(node --check app/js/state.js)",
       "Bash(chromium-cli --help)",
-      "Bash(pkill -f \"find / -iname\")"
+      "Bash(pkill -f \"find / -iname\")",
+      "Bash(node verify_spread.mjs)",
+      "Bash(grep -n \"window.state\\\\|state,$\\\\|Object.assign\\(window\" /Users/meitec-yagisawa/github/LIBRO_CRAFT/app/js/main.js)"
     ],
     "additionalDirectories": [
       "/tmp/orig_check",
