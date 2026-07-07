@@ -728,6 +728,11 @@ import { pushUndo } from './undo-redo.js';
             iconImageDt.style.display = show ? '' : 'none';
             iconImageDd.style.display = show ? '' : 'none';
           }
+          if (scaleDt && scaleDd) {
+            const showScale = radio.value === 'image';
+            scaleDt.style.display = showScale ? '' : 'none';
+            scaleDd.style.display = showScale ? '' : 'none';
+          }
           if (colDt && colDd) {
             const showColor = radio.value === 'icon' || radio.value === 'marker';
             colDt.style.display = showColor ? '' : 'none';
@@ -736,6 +741,64 @@ import { pushUndo } from './undo-redo.js';
         });
       });
       form.appendChild(dtDd);
+
+      // --- 表示比率（表示タイプが「画像」の場合のみ表示。画像本来のサイズを100%とした拡縮率） ---
+      const showScaleInit = dispType === 'image';
+      const scaleDt = document.createElement('dt');
+      scaleDt.textContent = '表示比率';
+      scaleDt.style.display = showScaleInit ? '' : 'none';
+      form.appendChild(scaleDt);
+      const scaleDd = document.createElement('dd');
+      scaleDd.style.display = showScaleInit ? '' : 'none';
+      // 画像本来のサイズ（100%の基準値）。表示タイプに関わらずbuildSpecificFieldsは
+      // 全種別で常に呼ばれる（confirmAnnotation時にhidden inputが無条件でsavedDataへ
+      // 収集されるため）ため、ここで基準値を確定・書き込みしてしまうと「画像」型を
+      // 一度も選んでいないアノテーションにも無関係な値が永続化されてしまう。
+      // そのため hidden input には savedData に既存の値がある場合のみ書き込み、
+      // 未確定の間は空のままにする（annIconImage欄と同じ扱い）。
+      // 基準値が未確定の場合、比率入力欄の初期表示のみ「現在サイズ＝100%」として
+      // 一時的に計算する（applyImageScale側で実際に操作されるまでは保存しない）。
+      const curImgW = existingEl ? existingEl.offsetWidth  : (state.pendingRect?.w ?? parseFloat(savedData.annWidth)  ?? 100);
+      const curImgH = existingEl ? existingEl.offsetHeight : (state.pendingRect?.h ?? parseFloat(savedData.annHeight) ?? 100);
+      const naturalWForDisplay = parseFloat(savedData.annImageNaturalW) || curImgW || 100;
+      const initialRatio = Math.round(curImgW / naturalWForDisplay * 100) || 100;
+      scaleDd.innerHTML = `
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="number" class="d-input d-input-sm" id="annImageScale" min="10" max="500" step="5" value="${initialRatio}">
+          <span style="font-size:12px; color:#555;">%</span>
+          <button type="button" class="field-link-btn" id="annImageScaleReset">100%にリセット</button>
+        </div>
+        <input type="hidden" id="annImageNaturalW" value="${savedData.annImageNaturalW || ''}">
+        <input type="hidden" id="annImageNaturalH" value="${savedData.annImageNaturalH || ''}">
+      `;
+      form.appendChild(scaleDd);
+      const scaleInputEl = scaleDd.querySelector('#annImageScale');
+      const applyImageScale = (ratioValue) => {
+        const naturalWEl = scaleDd.querySelector('#annImageNaturalW');
+        const naturalHEl = scaleDd.querySelector('#annImageNaturalH');
+        // 初回操作時：基準値が未確定なら、ダイアログを開いた時点の現在サイズを
+        // 100%の基準値として確定・保存する
+        if (!naturalWEl.value) naturalWEl.value = curImgW;
+        if (!naturalHEl.value) naturalHEl.value = curImgH;
+        const nw = parseFloat(naturalWEl.value) || 100;
+        const nh = parseFloat(naturalHEl.value) || 100;
+        const ratio = Math.max(10, Math.min(500, parseFloat(ratioValue) || 100));
+        const container = scaleDd.closest('#sideDetailActive, #quickCreatePopup') || document;
+        const wEl = container.querySelector('#annWidth');
+        const hEl = container.querySelector('#annHeight');
+        const newW = Math.max(14, Math.round(nw * ratio / 100));
+        const newH = Math.max(14, Math.round(nh * ratio / 100));
+        if (wEl) wEl.value = newW;
+        if (hEl) hEl.value = newH;
+        if (state.pendingRect) { state.pendingRect.w = newW; state.pendingRect.h = newH; }
+        applyLiveUpdate(type);
+      };
+      scaleInputEl.addEventListener('input',  () => applyImageScale(scaleInputEl.value));
+      scaleInputEl.addEventListener('change', () => applyImageScale(scaleInputEl.value));
+      scaleDd.querySelector('#annImageScaleReset').addEventListener('click', () => {
+        scaleInputEl.value = 100;
+        applyImageScale(100);
+      });
 
       // --- 塗り色（表示タイプが「アイコン」「マーカー」の場合のみ表示。ANN_COLOR_OPTIONS使用） ---
       const showColorInit = dispType === 'icon' || dispType === 'marker';
@@ -1087,6 +1150,13 @@ import { pushUndo } from './undo-redo.js';
             state.pendingRect.w = img.naturalWidth;
             state.pendingRect.h = img.naturalHeight;
           }
+          // 新しい画像に差し替えたため、表示比率の基準値（100%＝画像本来のサイズ）も更新する
+          const naturalWEl = container.querySelector('#annImageNaturalW');
+          const naturalHEl = container.querySelector('#annImageNaturalH');
+          const scaleEl    = container.querySelector('#annImageScale');
+          if (naturalWEl) naturalWEl.value = img.naturalWidth;
+          if (naturalHEl) naturalHEl.value = img.naturalHeight;
+          if (scaleEl) scaleEl.value = 100;
           const selectedImageEl = document.querySelector('.ann-image-obj.is-selected');
           if (selectedImageEl) applyLiveUpdate(selectedImageEl.dataset.type);
 
