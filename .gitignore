@@ -12,3 +12,6 @@ secrets/
 
 ## Python
 __pycache__/
+
+## 許可コマンド
+.claude/settings.json
