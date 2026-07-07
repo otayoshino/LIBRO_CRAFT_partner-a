@@ -81,7 +81,8 @@
       "Bash(chromium-cli --help)",
       "Bash(pkill -f \"find / -iname\")",
       "Bash(node verify_spread.mjs)",
-      "Bash(grep -n \"window.state\\\\|state,$\\\\|Object.assign\\(window\" /Users/meitec-yagisawa/github/LIBRO_CRAFT/app/js/main.js)"
+      "Bash(grep -n \"window.state\\\\|state,$\\\\|Object.assign\\(window\" /Users/meitec-yagisawa/github/LIBRO_CRAFT/app/js/main.js)",
+      "Bash(node verify_network_slot.mjs)"
     ],
     "additionalDirectories": [
       "/tmp/orig_check",
