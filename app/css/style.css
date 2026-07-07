@@ -115,7 +115,7 @@
     }
 
     /* ページブロック背景をナビバーと同色に */
-    .nav .blk.page {
+    .nav .blk.page-nav {
       background: #647cc0;
     }
 
@@ -1288,11 +1288,13 @@
     /* アノテーションのカーソル */
     .is-view-mode .ann-object  { cursor: pointer; }
     .is-view-mode .ann-icon-obj { cursor: pointer; }
+    .is-view-mode .ann-image-obj { cursor: pointer; }
     .is-view-mode .sticky-note { cursor: pointer; }
 
     /* 閲覧モードで選択枠を非表示 */
     .is-view-mode .ann-object.is-selected,
     .is-view-mode .ann-icon-obj.is-selected,
+    .is-view-mode .ann-image-obj.is-selected,
     .is-view-mode .sticky-note.is-selected,
     .is-view-mode .daimon-btn.is-selected,
     .is-view-mode .zu-btn.is-selected,
@@ -1315,6 +1317,7 @@
     body:not(.is-view-mode) .ann-object:not(.dt-page-color) { opacity: 0.8; }
     body:not(.is-view-mode) .ann-object.dt-page-color        { opacity: 1; }
     body:not(.is-view-mode) .ann-icon-obj                    { opacity: 0.8; }
+    body:not(.is-view-mode) .ann-image-obj                   { opacity: 0.8; }
     body:not(.is-view-mode) .sticky-note                     { opacity: 0.55; }
 
     /* 編集モード時：縁を塗り色より濃いめの線で強調表示する。
@@ -1400,6 +1403,40 @@
     }
     .sticky-note.libro-toggle[data-sticky-color-override] .libro-toggle-closed { display: none !important; }
     .sticky-note.libro-toggle[data-sticky-color-override].state-visible .libro-toggle-color-override { display: block; }
+
+    /* LIBRO由来の拡張トグルネットワーク（色分けボタン・ステップボタン等、3要素以上が
+       絡むHide/Show構造）。同一矩形を共有する画像群を1つの.libro-network-slotとして
+       位置・サイズ編集可能にし、子の.libro-network-frameはis-visibleが付与されたものだけ
+       表示する。選択・削除・Undo・編集ダイアログには対応しない（位置・サイズ編集専用）。 */
+    .libro-network-slot {
+      position: absolute;
+      box-sizing: border-box;
+      z-index: 6;
+    }
+    body:not(.is-view-mode) .libro-network-slot {
+      cursor: move;
+      outline: 1px dashed rgba(0,0,0,0.35);
+    }
+    .is-view-mode .libro-network-slot {
+      cursor: pointer;
+    }
+    /* 選択機構を持たないため、既存の「.is-selected > .resize-handle」ルール（body:not(.is-view-mode)
+       .is-selected > .resize-handle { display: block; }）には乗れない。常時表示に上書きする。 */
+    body:not(.is-view-mode) .libro-network-slot > .resize-handle {
+      display: block;
+    }
+    .libro-network-frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      pointer-events: none;
+      display: none;
+    }
+    .libro-network-frame.is-visible {
+      display: block;
+    }
 
     /* 編集モード時: グループ化済み付箋にグループ番号バッジを左下に表示 */
     body:not(.is-view-mode) .sticky-note[data-group-id]::after {
@@ -1556,6 +1593,33 @@
       pointer-events: none;
     }
 
+    /* 画像アイコン型アノテーションオブジェクト（LIBRO由来元画像・ユーザーアップロード画像をそのまま表示） */
+    .ann-image-obj {
+      position: absolute;
+      cursor: move;
+      z-index: 10;
+      user-select: none;
+      box-sizing: border-box;
+      overflow: hidden;
+      border: solid rgba(255,255,255,0.5);
+      border-width: calc(2px * var(--zoom-inv-scale, 1));
+    }
+    .ann-image-obj.is-selected {
+      --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
+      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
+                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
+      z-index: 20;
+      /* 選択時はリサイズハンドル（負のオフセットで枠外に配置）をクリック可能にするため表示を許可する */
+      overflow: visible;
+    }
+    .ann-image-obj img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+
     /* 表示タイプ選択UI */
     .disp-type-row {
       display: flex;
@@ -1604,9 +1668,25 @@
     .disp-type-preview--page-color {
       width: 36px;
       height: 22px;
-      border: 2px dashed rgba(68,114,196,0.5);
+      border: 2px solid rgba(68,114,196,0.5);
       background: rgba(68,114,196,0.06);
       border-radius: 3px;
+    }
+    .disp-type-preview--image {
+      width: 36px;
+      height: 36px;
+      border: 1.5px dashed #999;
+      border-radius: 3px;
+      background: #eee;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .disp-type-preview--image img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
     }
     .disp-type-label {
       font-size: 11px;

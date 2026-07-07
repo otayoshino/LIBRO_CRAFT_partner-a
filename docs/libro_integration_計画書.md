@@ -196,7 +196,7 @@ ContentsBuilder 内部データ構造 ──エクスポート──▶ Libro an
 ```
 
 - `type`：`ANNOTATION_TYPE_CONFIG` の種別（`sticky`/`kotae`/`daimon`/`shomei`/`zu`）と対応させる。現状エクスポート実装があるのは `sticky` のみ（`kotae`/`daimon`/`shomei`/`zu` は書き出し自体が未実装のため、`type` にこれらの値が入ることは今のところ無い）
-- `role`：この要素1件の状態を表す `closed`（閉/初期表示）または `open`（開/解答表示）。CRAFT付箋グループの「マスター一括トグル＋個別メンバー」という二層構造は現行の編集UI（`groupStickyNotes`/`toggleStickyGroup`）に存在しない（全メンバーが対等に連動するN対N対称モデルのみ）ため、`leader`/`member` のような追加区分は導入していない。二層構造の編集UI自体が実装されるタイミングで本フィールドの拡張を検討する
+- `role`：この要素1件の状態を表す `closed`（閉/初期表示）または `open`（開/解答表示）。CRAFT付箋グループの「マスター一括トグル＋個別メンバー」という二層構造は現行の編集UI（`toggleStickyGroup`）に存在しない（全メンバーが対等に連動するN対N対称モデルのみ）ため、`leader`/`member` のような追加区分は導入していない。二層構造の編集UI自体が実装されるタイミングで本フィールドの拡張を検討する
 - `group-id`：同一の論理トグル単位（付箋グループの全メンバー）に属する `annots[]` 要素同士を紐付けるID。CRAFT側の `data-group-id`（`grp-N`）をそのまま使う。グループ化されていない単独付箋にも一意な合成id（`__solo-<id>`）を割り当て、常に付与する。1グループにつき `role:"closed"` の要素と `role:"open"` の要素が同数（メンバー数分）存在し、同一メンバーのclosed/open対応は同一 `rect` を持つことで復元する（`convertStickyGroupToLibroAnnots` がメンバーごとに同一rectでclosed/open両方を生成するため、新規フィールド無しで一意に対応付けできる）
 - 複数画像重ねクラスタ（`p0016.json` id4503系列相当の、1状態が複数枚のPNGで構成されるケース）はCRAFTの編集UI・エクスポート実装のいずれにも存在しないため対象外。他システム由来bookで発生した場合は引き続き構造ヒューリスティックのフォールバックに委ねる
 

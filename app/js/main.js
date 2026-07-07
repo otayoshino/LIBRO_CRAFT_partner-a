@@ -1,12 +1,12 @@
 import { closeQuickCreateDialog, confirmAnnotation, openQuickCreateDialog } from './annotation-dialog.js';
-import { checkAndPromptRestore, startAutoSaveInterval } from './autosave.js';
+import { startAutoSaveInterval } from './autosave.js';
 import { createDaimonButton, createKotaeButton, createShomeiButton } from './buttons.js';
 import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObjects, deactivateAnnotationMode, finalizeDragSelect, getPageRelativePos, onDragSelectMove, onDrawPreviewMove, onPageMouseDown, onPageMouseMove, onPageMouseUp, pasteClipboard, selectAllObjects } from './annotation-interaction.js';
 import { switchToViewMode } from './mode.js';
 import { applyZoomChange, goFirstPage, goLastPage, nextPage, prevPage, resizePage, setFit, updatePageDisplay, zoomIn, zoomOut } from './page-view.js';
 import { selectedStickySet, state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
-import { closeDialog, handleAnnotationFile, handleZipFile, loadAnnotations, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsLibroBook, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';
+import { closeDialog, handleZipFile, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsLibroBook, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';
 import { toggleAcc, toggleNav, updateStatus } from './ui-common.js';
 import { pushUndo, redo, undo } from './undo-redo.js';
 
@@ -19,11 +19,11 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         if (state.currentDrawType) deactivateAnnotationMode();
         closeDialog();
         document.querySelector('.dialog-btn.ok').onclick = saveDialog;
-        updateStatus('描画をキャンセルしました');
+        updateStatus();
       }
 
-      // Deleteキー：選択中のオブジェクトを削除（入力フィールドにフォーカス中は無効）
-      if (e.key === 'Delete') {
+      // Delete/Backspaceキー：選択中のオブジェクトを削除（入力フィールドにフォーカス中は無効）
+      if (e.key === 'Delete' || e.key === 'Backspace') {
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         if (document.body.classList.contains('is-view-mode')) return;
@@ -58,7 +58,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         });
 
         // アノテーションのスナップショット
-        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected').forEach(ann => {
+        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').forEach(ann => {
           deleteSnapshots.push({
             className:   ann.className.replace(/\bis-selected\b/g, '').trim(),
             id:          ann.dataset.id,
@@ -70,7 +70,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         });
 
         // 各種ボタンのスナップショット
-        document.querySelectorAll('.daimon-btn.is-selected.is-selected.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(btn => {
+        document.querySelectorAll('.daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(btn => {
           deleteSnapshots.push({
             className:   btn.className.replace(/\bis-selected\b/g, '').trim(),
             id:          btn.dataset.id,
@@ -135,7 +135,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         selectedStickySet.clear();
 
         // 選択中のアノテーションを削除
-        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected').forEach(ann => {
+        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').forEach(ann => {
           ann.remove();
           deleted++;
         });
@@ -209,7 +209,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
 
         if (deleted > 0) {
           closeDialog();
-          updateStatus(`${deleted} 件のオブジェクトを削除しました`);
+          updateStatus();
         }
       }
 
@@ -318,6 +318,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
       if (e.target.closest('.sticky-note') ||
           e.target.closest('.ann-object')  ||
           e.target.closest('.ann-icon-obj') ||
+          e.target.closest('.ann-image-obj') ||
           e.target.closest('.daimon-btn')  ||
           e.target.closest('.zu-btn')      ||
           e.target.closest('.kotae-btn')   ||
@@ -492,8 +493,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
     /* ============================
        編集状態のオートセーブ（IndexedDB）
     ============================ */
-    // 前回セッションのオートセーブデータがあれば復元確認を行う
-    checkAndPromptRestore();
+    // オートセーブ復元確認は、対応するbookのzipを読み込んだタイミングで行う（storage.js側）
     // デバウンス保存が先延ばしになり続けるケースの保険として、一定間隔でも保存する
     startAutoSaveInterval();
 
@@ -512,9 +512,7 @@ Object.assign(window, {
   saveAnnotations,
   saveAnnotationsAsZip,
   saveAnnotationsAsLibroBook,
-  handleAnnotationFile,
   handleZipFile,
-  loadAnnotations,
   loadAnnotationsFromZip,
   toggleNav,
   switchToViewMode,

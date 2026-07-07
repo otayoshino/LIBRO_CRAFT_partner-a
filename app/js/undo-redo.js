@@ -2,7 +2,7 @@ import { addAnnClickHandler } from './annotation-actions.js';
 import { applyLiveUpdate, openAnnotationSettingsDialog } from './annotation-dialog.js';
 import { scheduleAutoSave } from './autosave.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, renderButtonVisual } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, UNDO_MAX, renderAnnObjectContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, UNDO_MAX, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { deselectAllObjects, getSelectedObjects, makeDraggable, makeResizable, reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { updateAnnotationVisibility } from './page-view.js';
 import { redoStack, undoStack } from './state.js';
@@ -98,13 +98,15 @@ import { showToast, updateStatus } from './ui-common.js';
                 try { shomeiSd = JSON.parse(snap.savedData || '{}'); } catch (_) {}
                 renderButtonVisual(el, 'shomei', shomeiSd);
               } else {
-                // ann-object / ann-icon-obj
-                // savedData からラベル・種別アイコンを再構築
+                // ann-object / ann-icon-obj / ann-image-obj
+                // savedData からラベル・種別アイコン・画像を再構築
                 try {
                   const sd  = JSON.parse(snap.savedData || '{}');
                   const cfg = ANNOTATION_TYPE_CONFIG?.[snap.type];
                   if (el.classList.contains('ann-icon-obj')) {
                     el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg?.iconSvg || ''}</svg>`;
+                  } else if (el.classList.contains('ann-image-obj')) {
+                    renderAnnImageContent(el, sd);
                   } else if (el.classList.contains('ann-object')) {
                     const displayType = el.classList.contains('dt-page-color') ? 'page-color' : 'marker';
                     renderAnnObjectContent(el, snap.type, displayType, sd.annLabel);
@@ -112,6 +114,7 @@ import { showToast, updateStatus } from './ui-common.js';
                 } catch (_) {}
                 addAnnClickHandler(el);
                 if (el.classList.contains('ann-object')) makeResizable(el);
+                if (el.classList.contains('ann-image-obj')) makeResizable(el, { lockAspectRatio: true, minSize: 14 });
               }
               makeDraggable(el);
               page.appendChild(el);
@@ -166,6 +169,14 @@ import { showToast, updateStatus } from './ui-common.js';
             // 含まれる場合のみ復元する（他の呼び出し元のUndoで誤って消してしまわないようhasOwnPropertyで判定）
             const restoreOne = (snap) => {
               const { el, prevSavedData, prevStyleCssText, prevClassName, prevInnerHTML } = snap;
+              // Redo用に変更後（現在）の状態をこのスナップショットへ記録しておく
+              snap.afterSavedData    = el.dataset.savedData;
+              snap.afterStyleCssText = el.style.cssText;
+              snap.afterClassName    = el.className;
+              snap.afterInnerHTML    = el.innerHTML;
+              if (Object.prototype.hasOwnProperty.call(snap, 'prevStickyColorOverride')) {
+                snap.afterStickyColorOverride = el.dataset.stickyColorOverride;
+              }
               if (prevSavedData    !== undefined) el.dataset.savedData = prevSavedData;
               if (prevStyleCssText !== undefined) el.style.cssText = prevStyleCssText;
               if (prevClassName    !== undefined) el.className = prevClassName;
@@ -232,7 +243,7 @@ import { showToast, updateStatus } from './ui-common.js';
           }
         }
         updateAnnotationVisibility();
-        updateStatus('操作を取り消しました');
+        updateStatus();
         // Undo の逆操作を Redo スタックに積む
         redoStack.push(op);
         if (redoStack.length > UNDO_MAX) redoStack.shift();
@@ -289,6 +300,37 @@ import { showToast, updateStatus } from './ui-common.js';
           updateAlignPanel();
           break;
         }
+        // --- リサイズの再適用 ---
+        case 'resize': {
+          const { el, afterLeft, afterTop, afterWidth, afterHeight } = op;
+          el.style.left   = afterLeft   + 'px';
+          el.style.top    = afterTop    + 'px';
+          el.style.width  = afterWidth  + 'px';
+          el.style.height = afterHeight + 'px';
+          updateAlignPanel();
+          break;
+        }
+        // --- プロパティ変更の再適用（複数対応） ---
+        case 'prop': {
+          const applyOne = (snap) => {
+            const { el, afterSavedData, afterStyleCssText, afterClassName, afterInnerHTML } = snap;
+            if (afterSavedData    !== undefined) el.dataset.savedData = afterSavedData;
+            if (afterStyleCssText !== undefined) el.style.cssText = afterStyleCssText;
+            if (afterClassName    !== undefined) el.className = afterClassName;
+            if (afterInnerHTML    !== undefined) el.innerHTML = afterInnerHTML;
+            if (Object.prototype.hasOwnProperty.call(snap, 'afterStickyColorOverride')) {
+              if (snap.afterStickyColorOverride !== undefined) el.dataset.stickyColorOverride = snap.afterStickyColorOverride;
+              else delete el.dataset.stickyColorOverride;
+            }
+            reinitElement(el);
+          };
+          if (Array.isArray(op.targets)) {
+            op.targets.forEach(applyOne);
+          } else {
+            applyOne(op);
+          }
+          break;
+        }
         // --- グループ化/解除の再適用 ---
         case 'group': {
           // group op は before のみ保持のためスキップ
@@ -330,7 +372,7 @@ import { showToast, updateStatus } from './ui-common.js';
       // 状態が変化したのでオートセーブを予約する
       scheduleAutoSave();
       updateAnnotationVisibility();
-      updateStatus('操作をやり直しました');
+      updateStatus();
       updateAlignPanel();
       // Redo直後のapplyLiveUpdateキャッシュをサイドメニュー入力欄の値で初期化
       applyLiveUpdate._prevX = parseFloat(document.getElementById('annPosX')?.value)  ?? undefined;

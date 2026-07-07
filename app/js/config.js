@@ -1,11 +1,13 @@
-
-    /** アノテーション永続化ストレージキー */
-    export const STORAGE_KEY = 'ContentsBuilder_v2_annotations';
+    import { mediaBlobs } from './state.js';
 
     export const UNDO_MAX  = 50;
 
+    /** アイコン画像アップロードの許容上限（巨大ファイルによるブラウザ不安定化を防ぐ） */
+    export const MAX_ICON_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+    export const MAX_ICON_IMAGE_DIMENSION  = 4096; // px（一辺の上限）
 
-    /** 付箋背景色マップ（dialogConfigs.stickyの annColor 選択肢インデックスに対応） */
+
+    /** 付箋背景色マップ（savedData.annColor 選択肢インデックスに対応） */
     export const STICKY_COLOR_MAP = ['#4488cc', '#5ac46e', '#f7e04b'];
 
 
@@ -44,7 +46,7 @@
      * 紙面カラー型（.dt-page-color）の枠線・背景色を種別ごとに変えるため、
      * CSSカスタムプロパティ --ann-type-rgb 経由でCSS側に渡す用途で使う。
      */
-    export function annTypeRgbTriplet(rgbaColor) {
+    function annTypeRgbTriplet(rgbaColor) {
       const m = /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/.exec(rgbaColor || '');
       return m ? `${m[1]},${m[2]},${m[3]}` : '68,114,196';
     }
@@ -77,6 +79,16 @@
         span.textContent = (label || '').trim() || cfg?.label || type;
         el.appendChild(span);
       }
+    }
+
+    /**
+     * 画像アイコン型アノテーション要素（.ann-image-obj）の中身（<img>）を構築する。
+     * savedData.annIconImage をキーに mediaBlobs から画像を取得する。
+     * 新規作成・更新・コピー貼付・Undo復元・保存データ復元の各箇所から共通で呼び出す。
+     */
+    export function renderAnnImageContent(el, savedData) {
+      const src = mediaBlobs[savedData?.annIconImage] || '';
+      el.innerHTML = src ? `<img src="${src}" alt="" draggable="false">` : '';
     }
 
 

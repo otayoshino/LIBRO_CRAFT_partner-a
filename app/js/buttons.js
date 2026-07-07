@@ -143,7 +143,7 @@ import { pushUndo } from './undo-redo.js';
 
     /**
      * 選択中の付箋を一括表示/非表示できる大問ボタンをページ上に作成する。
-     * 2件以上の付箋が選択されている必要がある。
+     * 1件以上の付箋・証明ボタンが選択されている必要がある。
      */
     export function createDaimonButton() {
       if (document.body.classList.contains('is-view-mode')) return;
@@ -199,7 +199,7 @@ import { pushUndo } from './undo-redo.js';
       });
 
       const total = stickies.length + shomeis.length;
-      updateStatus(`大問ボタンを作成しました（${total}件のオブジェクトに紐付け）`);
+      updateStatus();
     }
 
 
@@ -225,13 +225,13 @@ import { pushUndo } from './undo-redo.js';
             // 他の選択をすべて解除してこのボタンのみ選択
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
               .forEach(a => a.classList.remove('is-selected'));
             btn.classList.add('is-selected');
           }
-          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
+          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
                       + selectedStickySet.size;
-          updateStatus(count > 1 ? `${count} 件のオブジェクトを選択中` : '大問ボタンを選択中');
+          updateStatus();
           return;
         }
 
@@ -273,7 +273,7 @@ import { pushUndo } from './undo-redo.js';
           }
         });
         swapButtonPressedImage(btn, !allVisible);
-        updateStatus(allVisible ? '非表示にしました' : '表示しました');
+        updateStatus();
       });
     }
 
@@ -328,7 +328,7 @@ import { pushUndo } from './undo-redo.js';
         linkedStickies: stickies.map(n => ({ el: n, prevKotaeId: n.dataset.kotaeId === kid ? undefined : n.dataset.kotaeId, prevBackground: n.dataset.kotaeOrigBg || '' }))
       });
 
-      updateStatus(`答ボタンを作成しました（${stickies.length}件の付箋に紐付け）`);
+      updateStatus();
     }
 
 
@@ -353,13 +353,13 @@ import { pushUndo } from './undo-redo.js';
           } else {
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
               .forEach(a => a.classList.remove('is-selected'));
             btn.classList.add('is-selected');
           }
-          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
+          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
                       + selectedStickySet.size;
-          updateStatus(count > 1 ? `${count} 件のオブジェクトを選択中` : '答ボタンを選択中');
+          updateStatus();
           return;
         }
 
@@ -373,7 +373,7 @@ import { pushUndo } from './undo-redo.js';
           t.classList.toggle('state-hidden',   allVisible);
         });
         swapButtonPressedImage(btn, !allVisible);
-        updateStatus(allVisible ? '答を非表示にしました' : '答を表示しました');
+        updateStatus();
       });
     }
 
@@ -438,7 +438,7 @@ import { pushUndo } from './undo-redo.js';
         }))
       });
 
-      updateStatus(`証明ボタンを作成しました（${stickies.length}件の付箋に紐付け）`);
+      updateStatus();
     }
 
 
@@ -464,13 +464,13 @@ import { pushUndo } from './undo-redo.js';
           } else {
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected')
               .forEach(a => a.classList.remove('is-selected'));
             btn.classList.add('is-selected');
           }
-          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
+          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
                       + selectedStickySet.size;
-          updateStatus(count > 1 ? `${count} 件のオブジェクトを選択中` : '証明ボタンを選択中');
+          updateStatus();
           return;
         }
 
@@ -493,6 +493,6 @@ import { pushUndo } from './undo-redo.js';
           }
         });
         swapButtonPressedImage(btn, !allShowing);
-        updateStatus(allShowing ? '証明を非表示にしました' : '証明を表示しました');
+        updateStatus();
       });
     }

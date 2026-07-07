@@ -47,7 +47,7 @@ import { updateAlignPanel } from './annotation-interaction.js';
     ============================ */
 
 
-    export function updateStatus(msg) {
+    export function updateStatus() {
       // 選択数に応じて整列パネルの活性状態を更新
       updateAlignPanel();
     }

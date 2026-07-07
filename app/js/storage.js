@@ -1,8 +1,9 @@
-import { applyLiveUpdate, buildAnnDialogFields } from './annotation-dialog.js';
+import { applyLiveUpdate } from './annotation-dialog.js';
+import { checkAndPromptRestoreForBook } from './autosave.js';
 import { renderButtonVisual } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
-import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs } from './libro-format.js';
+import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, styleToRect } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility } from './page-view.js';
 import { mediaBlobs, state } from './state.js';
 import { showToast, updateStatus } from './ui-common.js';
@@ -19,7 +20,7 @@ import { showToast, updateStatus } from './ui-common.js';
           // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
           const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
           // LIBRO book由来の付箋（.libro-toggle）はLIBRO書き出し専用のため、通常のローカル保存対象からは除外する
-          const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+          const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn');
           const data = Array.from(elements).map(el => {
             // px値取得
             const left = parseFloat(el.style.left) || 0;
@@ -70,20 +71,8 @@ import { showToast, updateStatus } from './ui-common.js';
 
 
         /**
-         * ローカルストレージからアノテーションを復元する。
-         */
-        /**
-         * ファイル選択ダイアログを開く（読込ボタンから呼び出し）
-         */
-        export function loadAnnotations() {
-          document.getElementById('annotationFileInput').value = '';
-          document.getElementById('annotationFileInput').click();
-        }
-
-
-        /**
          * アノテーション配列からDOMを再構築する共通処理。
-         * handleAnnotationFile / handleZipFile の両方から呼び出される。
+         * handleZipFile から呼び出される。
          * @param {Array} arr - annotations.json のパース済み配列
          */
         export function restoreAnnotationsFromArray(arr) {
@@ -92,7 +81,7 @@ import { showToast, updateStatus } from './ui-common.js';
           // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
           const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
           // 既存アノテーションを全削除（LIBRO book由来の付箋 .libro-toggle は対象外）
-          page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(el => el.remove());
+          page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(el => el.remove());
           arr.forEach(obj => {
                 const el = document.createElement('div');
                 // ann-hidden-page はページ表示管理で付け直すため、className から除去してセット
@@ -178,6 +167,10 @@ import { showToast, updateStatus } from './ui-common.js';
                 } else if (el.classList.contains('ann-icon-obj')) {
                   const cfg = ANNOTATION_TYPE_CONFIG[obj.type];
                   el.innerHTML = cfg ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>` : '';
+                } else if (el.classList.contains('ann-image-obj')) {
+                  let sd = {};
+                  try { sd = JSON.parse(obj.savedData || '{}'); } catch (_) {}
+                  renderAnnImageContent(el, sd);
                 } else if (el.classList.contains('daimon-btn') || el.classList.contains('kotae-btn') || el.classList.contains('shomei-btn')) {
                   let sd = {};
                   try { sd = JSON.parse(obj.savedData || '{}'); } catch (_) {}
@@ -191,25 +184,6 @@ import { showToast, updateStatus } from './ui-common.js';
               });
               updateAnnotationVisibility();
               showToast('アノテーションをファイルから復元しました');
-        }
-
-
-        /**
-         * ファイル選択時の処理。JSONを読み込んでアノテーションを復元。
-         */
-        export function handleAnnotationFile(event) {
-          const file = event.target.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = function(e) {
-            try {
-              const arr = JSON.parse(e.target.result);
-              restoreAnnotationsFromArray(arr);
-            } catch (_) {
-              showToast('読込エラー: データが壊れています');
-            }
-          };
-          reader.readAsText(file);
         }
 
 
@@ -251,7 +225,7 @@ import { showToast, updateStatus } from './ui-common.js';
 
         // ルート直下にindex.jsonがあればLIBRO bookフォルダ形式として扱う
         if (isLibroBookZip(zip)) {
-          await handleLibroBookZip(zip);
+          await handleLibroBookZip(zip, file.name);
           return;
         }
 
@@ -289,9 +263,13 @@ import { showToast, updateStatus } from './ui-common.js';
         }
         const jsonText = await jsonFile.async('string');
         const arr = JSON.parse(jsonText);
+        // 独自ZIP形式にはbook folder名が無いため、ファイル名をbook識別子として使う
+        const bookId = file.name;
+        state.currentBookId = bookId;
         restoreAnnotationsFromArray(arr);
         const mediaCount = Object.keys(mediaBlobs).length;
         showToast(`ZIPから復元しました（メディア: ${mediaCount}件）`);
+        await checkAndPromptRestoreForBook(bookId);
       } catch (e) {
         showToast('ZIP読込エラー: ファイルが壊れているか形式が正しくありません');
         console.error(e);
@@ -305,19 +283,26 @@ import { showToast, updateStatus } from './ui-common.js';
      * オブジェクトとして復元し、未知のアノテーションは編集UIに出さず内部に保持するのみとする
      * （書き出しは現段階では未対応）。
      * @param {JSZip} zip - JSZip.loadAsync 済みのZIPオブジェクト
+     * @param {string} fallbackName - book folder名が空の場合に使うbook識別子（元zipファイル名）
      */
-    async function handleLibroBookZip(zip) {
-      const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, maxAnnotId, baseDir, indexJson } =
+    async function handleLibroBookZip(zip, fallbackName) {
+      // 別bookの同名ファイル（"0001.mp3"等）のBlobURLが誤って再利用されないよう、
+      // 既存BlobURLを解放してmediaBlobsを初期化する
+      Object.values(mediaBlobs).forEach(url => URL.revokeObjectURL(url));
+      Object.keys(mediaBlobs).forEach(k => delete mediaBlobs[k]);
+
+      const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths } =
         await parseLibroBookZip(zip);
 
       // 再読込時に前回分のHide/Showペア要素が残らないようクリアする
       // （restoreAnnotationsFromArray は標準アノテーション種別のみクリアするため別途対応）
-      document.querySelectorAll('#pageLeft .libro-toggle').forEach(el => el.remove());
+      document.querySelectorAll('#pageLeft .libro-toggle, #pageLeft .libro-network-slot').forEach(el => el.remove());
 
       const realPageCount = indexJson.configs?.['real-page-count'] ?? null;
       loadLibroBookPages(pages, realPageCount);
       restoreAnnotationsFromArray(knownAnnotations);
       renderTogglePairs(togglePairs);
+      renderNetworkGroups(networkGroups);
       updateAnnotationVisibility();
 
       // 新規アノテーションのID採番が既存IDと衝突しないよう、カウンターを引き上げる
@@ -326,10 +311,23 @@ import { showToast, updateStatus } from './ui-common.js';
       state.libroUnknownAnnotations = unknownAnnotations;
       // 大問ボタンは書き出し未対応のため、位置未編集・未削除の場合の書き戻し用に生データを保持する
       state.libroDaimonPassthrough = daimonPassthrough;
-      // 書き出し時に未変更ファイルをそのまま維持できるよう、元zip・書誌情報を保持する
-      state.libroBook = { zip, baseDir, indexJson };
+      // 拡張トグルネットワーク（色分けボタン・ステップボタン等）は位置・サイズ編集のみ対応。
+      // 書き出し時に編集後のrectを反映した生データを書き戻すため保持する
+      state.libroNetworkPassthrough = networkGroups;
+      // 書き出し時に未変更ファイルをそのまま維持できるよう、元zip・書誌情報を保持する。
+      // unencryptedAssetPathsは、別オーサリングツール由来で実際には暗号化されていなかった
+      // 音声・アノテーション画像のパス一覧（書き出し時に強制暗号化する対象）
+      state.libroBook = { zip, baseDir, indexJson, unencryptedAssetPaths };
+      // book識別子：LIBRO book folder名（baseDir）。folder無し（index.jsonがzipルート直下）の場合は
+      // 元zipファイル名にフォールバックする
+      const bookId = baseDir || fallbackName;
+      state.currentBookId = bookId;
 
-      showToast(`LIBRO bookを読み込みました（${pages.length}ページ、未知アノテーション${unknownAnnotations.length}件）`);
+      const unencryptedNote = unencryptedAssetPaths.size > 0
+        ? `、未暗号化ファイル${unencryptedAssetPaths.size}件を検出（保存時に暗号化します）`
+        : '';
+      showToast(`LIBRO bookを読み込みました（${pages.length}ページ、未知アノテーション${unknownAnnotations.length}件${unencryptedNote}）`);
+      await checkAndPromptRestoreForBook(bookId);
     }
 
 
@@ -342,7 +340,7 @@ import { showToast, updateStatus } from './ui-common.js';
       // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
       // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
       const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
-      const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+      const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn');
       const data = Array.from(elements).map(el => {
         const left = parseFloat(el.style.left) || 0;
         const top  = parseFloat(el.style.top)  || 0;
@@ -446,9 +444,11 @@ import { showToast, updateStatus } from './ui-common.js';
 
     /**
      * LIBRO bookとして読み込んだ内容を、LIBRO bookフォルダ形式のZIPとして書き出す。
-     * ページリンク・外部リンク・音声再生・付箋（Hide/Show）に対応する。
+     * ページリンク・外部リンク・音声再生・Plusファイル・付箋（Hide/Show）に対応する。
+     * 動画はLIBRO由来のtoMovie/toMovieBNRリンク（annVideoSrc: '2'）のみ対応し、
+     * 内部ファイル/外部タグ指定はLIBRO側に対応actionが無いため未対応のまま。
      * LIBRO由来の大問ボタンは編集非対応のため、削除されていない限り生データを無変更のまま書き戻す
-     * （位置編集した場合は反映されない）。それ以外の種別（動画・図・答/証明ボタン、新規作成の大問ボタン等）
+     * （位置編集した場合は反映されない）。それ以外の種別（図・答/証明ボタン、新規作成の大問ボタン等）
      * が存在する場合はトーストで警告し、書き出し対象から除外する。
      */
     export async function saveAnnotationsAsLibroBook() {
@@ -461,8 +461,8 @@ import { showToast, updateStatus } from './ui-common.js';
       // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
       // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
       const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
-      const elements = page.querySelectorAll('.ann-object, .ann-icon-obj, .daimon-btn, .kotae-btn, .shomei-btn');
-      const supportedTypes = new Set(['pagelink', 'externallink', 'audio']);
+      const elements = page.querySelectorAll('.ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn');
+      const supportedTypes = new Set(['pagelink', 'externallink', 'audio', 'plusfile']);
 
       const domAnnotations = [];
       const unsupportedTypes = new Set();
@@ -475,7 +475,14 @@ import { showToast, updateStatus } from './ui-common.js';
           survivingDaimonIds.add(`${el.dataset.page}:${el.dataset.id}`);
           return;
         }
-        if (!supportedTypes.has(type)) {
+        // 動画はLIBRO由来のtoMovie/toMovieBNRリンク（annVideoSrc: '2'）のみ書き出し可能
+        let isSupported = supportedTypes.has(type);
+        if (type === 'video') {
+          let vsd = {};
+          try { vsd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
+          isSupported = vsd.annVideoSrc === '2';
+        }
+        if (!isSupported) {
           if (type) unsupportedTypes.add(ANNOTATION_TYPE_CONFIG[type]?.label || type);
           return;
         }
@@ -551,7 +558,33 @@ import { showToast, updateStatus } from './ui-common.js';
       const daimonRawAnnots = state.libroDaimonPassthrough
         .filter(({ pageNum, closedId }) => survivingDaimonIds.has(`${pageNum}:${closedId}`))
         .flatMap(({ pageNum, closed, open }) => [{ pageNum, raw: closed }, { pageNum, raw: open }]);
-      const passthroughAnnotations = [...state.libroUnknownAnnotations, ...daimonRawAnnots];
+
+      // 拡張トグルネットワーク（色分けボタン・ステップボタン等）：スロットの現在DOM位置から
+      // rectだけ上書きし、actions/filename/hidden等の元データはそのまま書き戻す。
+      // 対応するDOM要素が見つからない場合（未描画・削除済み）は元rectを維持する安全側フォールバック。
+      const networkRawAnnots = [];
+      state.libroNetworkPassthrough.forEach(net => {
+        const slotRects = net.slots.map((slot, slotIndex) => {
+          const el = document.querySelector(
+            `.libro-network-slot[data-network-id="${net.networkId}"][data-slot-index="${slotIndex}"]`
+          );
+          if (!el) return slot.rect;
+          const left   = parseFloat(el.style.left)   || 0;
+          const top    = parseFloat(el.style.top)    || 0;
+          const width  = parseFloat(el.style.width)  || el.offsetWidth;
+          const height = parseFloat(el.style.height) || el.offsetHeight;
+          const style = `left:${(left / pageRect.width) * 100}%;top:${(top / pageRect.height) * 100}%;` +
+                        `width:${(width / pageRect.width) * 100}%;height:${(height / pageRect.height) * 100}%;`;
+          return styleToRect(style, net.pageWidth, net.pageHeight);
+        });
+        net.members.forEach(raw => {
+          const slotIndex = net.slots.findIndex(s => s.memberIds.includes(raw._id));
+          const rect = slotIndex >= 0 ? slotRects[slotIndex] : raw.rect;
+          networkRawAnnots.push({ pageNum: net.pageNum, raw: { ...raw, rect } });
+        });
+      });
+
+      const passthroughAnnotations = [...state.libroUnknownAnnotations, ...daimonRawAnnots, ...networkRawAnnots];
 
       try {
         const zip = await buildLibroBookExport(state.libroBook, domAnnotations, passthroughAnnotations, domStickyGroups);
@@ -590,120 +623,6 @@ import { showToast, updateStatus } from './ui-common.js';
     }
 
 
-    /* ============================
-       ダイアログ設定定義
-    ============================ */
-    const dialogConfigs = {
-      // 非sticky 5種別：フィールドIDのみ定義（フォームは buildAnnDialogFields で生成）
-      pagelink: {
-        title: 'ページリンク設定',
-        fields: [
-          { id: 'annDisplayType' }, { id: 'annPosX' }, { id: 'annPosY' },
-          { id: 'annWidth' }, { id: 'annHeight' }, { id: 'annColor' }, { id: 'annTarget' },
-        ]
-      },
-      plusfile: {
-        title: 'Plusファイル設定',
-        fields: [
-          { id: 'annDisplayType' }, { id: 'annPosX' }, { id: 'annPosY' },
-          { id: 'annWidth' }, { id: 'annHeight' }, { id: 'annColor' },
-          { id: 'annShowMode' }, { id: 'annFile' },
-        ]
-      },
-      externallink: {
-        title: '外部リンク設定',
-        fields: [
-          { id: 'annDisplayType' }, { id: 'annPosX' }, { id: 'annPosY' },
-          { id: 'annWidth' }, { id: 'annHeight' }, { id: 'annColor' },
-          { id: 'annUrl' },
-        ]
-      },
-      audio: {
-        title: '音声再生設定',
-        fields: [
-          { id: 'annDisplayType' }, { id: 'annPosX' }, { id: 'annPosY' },
-          { id: 'annWidth' }, { id: 'annHeight' }, { id: 'annColor' },
-          { id: 'annFile' }, { id: 'annPlayMode' },
-        ]
-      },
-      video: {
-        title: '動画再生設定',
-        fields: [
-          { id: 'annDisplayType' }, { id: 'annPosX' }, { id: 'annPosY' },
-          { id: 'annWidth' }, { id: 'annHeight' }, { id: 'annColor' },
-          { id: 'annVideoSrc' }, { id: 'annFile' }, { id: 'annShowMode' },
-        ]
-      },
-      sticky: {
-        title: '付箋設定',
-        fields: [
-          { label: '背景色',   type: 'select',   id: 'annColor',  options: ['黄（標準）', '橙', '緑', '青', 'ピンク'] },
-          { label: 'フォント', type: 'select',   id: 'annFont',   options: ['標準', '大', '小'] },
-          { label: '位置', type: 'text',     id: 'annPos',    placeholder: 'X: 100, Y: 150' },
-        ]
-      }
-    };
-
-
-    /**
-     * ダイアログを開く。
-     * @param {string} type - アノテーション種別
-     */
-    export function openDialog(type) {
-      const config = dialogConfigs[type];
-      if (!config) return;
-
-      // タイトル設定
-      document.getElementById('dialogTitle').textContent = config.title;
-
-      // フォーム生成
-      const form = document.getElementById('dialogForm');
-      form.innerHTML = '';
-      config.fields.forEach(field => {
-        const dt = document.createElement('dt');
-        dt.textContent = field.label;
-        const dd = document.createElement('dd');
-
-        if (field.type === 'text') {
-          const inp = document.createElement('input');
-          inp.type = 'text';
-          inp.className = 'd-input';
-          inp.id = field.id;
-          inp.placeholder = field.placeholder || '';
-          dd.appendChild(inp);
-        } else if (field.type === 'textarea') {
-          const ta = document.createElement('textarea');
-          ta.className = 'd-input';
-          ta.id = field.id;
-          ta.placeholder = field.placeholder || '';
-          ta.style.height = '72px';
-          ta.style.resize = 'vertical';
-          dd.appendChild(ta);
-        } else if (field.type === 'select') {
-          const wrap = document.createElement('div');
-          wrap.className = 'd-select-wrap';
-          const sel = document.createElement('select');
-          sel.className = 'd-select';
-          sel.id = field.id;
-          (field.options || []).forEach((opt, i) => {
-            const o = document.createElement('option');
-            o.value = i;
-            o.textContent = opt;
-            sel.appendChild(o);
-          });
-          wrap.appendChild(sel);
-          dd.appendChild(wrap);
-        }
-
-        form.appendChild(dt);
-        form.appendChild(dd);
-      });
-
-      document.getElementById('sideDetailEmpty').style.visibility = 'hidden';
-      document.getElementById('sideDetailActive').style.display = '';
-    }
-
-
     /**
      * 詳細設定パネルを閉じてプレースホルダーに戻す。
      */
@@ -733,7 +652,7 @@ import { showToast, updateStatus } from './ui-common.js';
      * 種別固有フィールドはヒントテキストで代替表示する。
      * @param {string} type - アノテーション種別
      */
-    export function _renderGrayedPanel(type) {
+    function _renderGrayedPanel(type) {
       const emptyDiv = document.getElementById('sideDetailEmpty');
       const cfg = ANNOTATION_TYPE_CONFIG?.[type];
 
@@ -774,5 +693,5 @@ import { showToast, updateStatus } from './ui-common.js';
      */
     export function saveDialog() {
       closeDialog();
-      updateStatus('アノテーションを保存しました');
+      updateStatus();
     }

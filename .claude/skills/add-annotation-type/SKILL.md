@@ -11,8 +11,8 @@ description: app/index.html に新規アノテーション種別（付箋・音�
 
 1. **定義**：`ANNOTATION_TYPE_CONFIG`（`config.js`）に種別を追加（ラベル・色・アイコンSVG）
 2. **生成**：`openAnnotationSettingsDialog` / `confirmAnnotation`（[app/js/annotation-dialog.js](../../../app/js/annotation-dialog.js)）等に生成処理を追加
-3. **保存**：`saveAnnotations`（localStorage用）・`saveAnnotationsAsZip`（独自ZIP出力用）の両方に対応（いずれも [app/js/storage.js](../../../app/js/storage.js)）
-4. **読込**：`loadAnnotations`・`restoreAnnotationsFromArray`・`handleZipFile` の3箇所すべてに対応（`storage.js`）
+3. **保存**：`saveAnnotations`（単体JSONファイル出力用）・`saveAnnotationsAsZip`（独自ZIP出力用）の両方に対応（いずれも [app/js/storage.js](../../../app/js/storage.js)）
+4. **読込**：`restoreAnnotationsFromArray`・`handleZipFile` の2箇所に対応（`storage.js`）
 5. **表示更新**：`updateAnnotationVisibility`（[app/js/page-view.js](../../../app/js/page-view.js)）に表示切替ロジックを追加
 6. **拡縮対応**：`scaleAnnotations`（`page-view.js`）にズーム時のサイズ・位置変換処理を追加
 7. **LIBRO書き出し対応**（対応する場合のみ）：[app/js/libro-format.js](../../../app/js/libro-format.js) に変換ロジックを追加。現状LIBRO書き出しに対応済みなのは `pagelink` / `externallink` / `audio` の3種別のみ（詳細は [libro-integration Skill](../libro-integration/SKILL.md)）

@@ -10,7 +10,7 @@ import { showToast, updateStatus } from './ui-common.js';
      * 閲覧モード時のアノテーションボタンの実際の挙動。
      * @param {HTMLElement} ann
      */
-    export function fireAnnotationAction(ann) {
+    function fireAnnotationAction(ann) {
       const type = ann.dataset.type;
       let saved = {};
       try { saved = JSON.parse(ann.dataset.savedData || '{}'); } catch (_) {}
@@ -28,14 +28,14 @@ import { showToast, updateStatus } from './ui-common.js';
         }
         case 'plusfile': {
           const file = (saved.annFile || '').trim();
-          if (!file) { updateStatus('Plusファイル: ファイルパスが設定されていません'); break; }
+          if (!file) { updateStatus(); break; }
           const showMode = saved.annShowMode || '0';
           // ZIPから復元されたBlobURLを優先、なければ相対パスで解決
           const url = mediaBlobs[file] || `./${file}`;
           if (showMode === '1') {
             // 別タブで開く
             window.open(url, '_blank', 'noopener');
-            updateStatus(`Plusファイルを別タブで開きます: ${file}`);
+            updateStatus();
           } else {
             // ページ内ポップアップ（iframe）で表示
             const existing = document.getElementById('plusfilePopup');
@@ -73,7 +73,7 @@ import { showToast, updateStatus } from './ui-common.js';
               document.addEventListener('mousemove', onMove);
               document.addEventListener('mouseup',   onUp);
             });
-            updateStatus(`Plusファイルを表示: ${file}`);
+            updateStatus();
           }
           break;
         }
@@ -82,20 +82,20 @@ import { showToast, updateStatus } from './ui-common.js';
           if (url) {
             window.open(url, '_blank', 'noopener');
           } else {
-            updateStatus('外部リンク: URL未設定');
+            updateStatus();
           }
           break;
         }
         case 'audio': {
           const fileName = (saved.annFile || '').trim();
-          if (!fileName) { updateStatus('音声ファイルが設定されていません'); break; }
+          if (!fileName) { updateStatus(); break; }
           const src = resolveMediaSrc(fileName, 'mp3');
           const playMode = saved.annPlayMode || '0';
           if (playMode === '1') {
             // コントローラーなし：そのまま再生
             const audio = new Audio(src);
-            audio.play().catch(() => updateStatus('音声の再生に失敗しました'));
-            updateStatus(`音声再生中: ${fileName}`);
+            audio.play().catch(() => updateStatus());
+            updateStatus();
           } else {
             // コントローラーあり：フローティングプレーヤーを表示
             const existing = document.getElementById('audioPlayerPopup');
@@ -138,7 +138,7 @@ import { showToast, updateStatus } from './ui-common.js';
               document.addEventListener('mousemove', onMove);
               document.addEventListener('mouseup',   onUp);
             });
-            updateStatus(`音声再生中: ${fileName}`);
+            updateStatus();
           }
           break;
         }
@@ -190,24 +190,24 @@ import { showToast, updateStatus } from './ui-common.js';
           if (videoSrc === '1') {
             // 外部タグをモーダルで表示
             openVideoModal('動画', fileName);
-            updateStatus('動画を表示中（外部タグ）');
+            updateStatus();
           } else {
-            if (!fileName) { updateStatus('動画ファイルが設定されていません'); break; }
+            if (!fileName) { updateStatus(); break; }
             const src = resolveMediaSrc(fileName, 'mp4');
             if (showMode === '1') {
               // 別タブで開く
               window.open(src, '_blank', 'noopener');
-              updateStatus(`動画を別タブで開きます: ${fileName}`);
+              updateStatus();
             } else {
               // モーダルで再生
               openVideoModal(fileName, `<video controls autoplay src="${src}"></video>`);
-              updateStatus(`動画再生中: ${fileName}`);
+              updateStatus();
             }
           }
           break;
         }
         default:
-          updateStatus(`${ann.dataset.type} を実行しました`);
+          updateStatus();
       }
     }
 
@@ -230,34 +230,34 @@ import { showToast, updateStatus } from './ui-common.js';
           // Shift+クリック：複数選択トグル（付箋との混在も維持）
           if (ann.classList.contains('is-selected')) {
             ann.classList.remove('is-selected');
-            const remaining = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected');
+            const remaining = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected');
             if (remaining.length === 0 && selectedStickySet.size === 0) closeDialog();
           } else {
             ann.classList.add('is-selected');
             openAnnotationSettingsDialog(type, ann);
           }
-          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected').length
+          const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').length
                       + selectedStickySet.size;
-          updateStatus(`${count} 件のオブジェクトを選択中`);
+          updateStatus();
         } else {
           const multiCount = selectedStickySet.size
-            + document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length;
+            + document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length;
           if (multiCount > 1 && ann.classList.contains('is-selected')) {
             // 複数選択中に選択済みオブジェクトをクリック：他の選択を解除してこの要素のみ選択
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
             ann.classList.add('is-selected');
             openAnnotationSettingsDialog(type, ann);
-            updateStatus(`${cfg?.label ?? type}を選択中`);
+            updateStatus();
           } else {
             // 未選択オブジェクトクリック：全解除してこの要素のみ選択
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
-            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
+            document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(a => a.classList.remove('is-selected'));
             ann.classList.add('is-selected');
             openAnnotationSettingsDialog(type, ann);
-            updateStatus(`${cfg?.label ?? type}を選択中`);
+            updateStatus();
           }
         }
       });

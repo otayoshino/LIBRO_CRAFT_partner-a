@@ -35,7 +35,7 @@ const CRAFT_META_TOGGLE_TYPES = new Set(['sticky', 'kotae', 'daimon', 'shomei', 
  * @param {ArrayBuffer} buffer - 暗号化されたバイナリデータ
  * @returns {Uint8Array} 復号済みデータ
  */
-export function decodePbve2000(buffer) {
+function decodePbve2000(buffer) {
   const src  = new Uint8Array(buffer);
   const body = src.subarray(PBVE_HEADER_LEN);
   const out  = new Uint8Array(body.length);
@@ -50,13 +50,27 @@ export function decodePbve2000(buffer) {
  * @param {ArrayBuffer|Uint8Array} data - 平文バイナリデータ
  * @returns {Uint8Array} 暗号化済みデータ（ヘッダー8バイト＋XOR済み本体）
  */
-export function encodePbve2000(data) {
+function encodePbve2000(data) {
   const body = data instanceof Uint8Array ? data : new Uint8Array(data);
   const header = new TextEncoder().encode('Pbve2000');
   const out = new Uint8Array(header.length + body.length);
   out.set(header, 0);
   for (let i = 0; i < body.length; i++) out[header.length + i] = body[i] ^ 0xCC;
   return out;
+}
+
+
+/**
+ * バイナリの先頭が "Pbve2000" ヘッダーで始まっているかどうかを判定する。
+ * 別オーサリングツール由来のbookでは、本来Pbve2000暗号化される音声・アノテーション画像が
+ * 平文のまま格納されている場合があるため、復号前にこの判定を行い平文データの破壊を防ぐ。
+ * @param {ArrayBuffer|Uint8Array} buffer
+ * @returns {boolean}
+ */
+function isPbve2000Encoded(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  if (bytes.length < PBVE_HEADER_LEN) return false;
+  return new TextDecoder().decode(bytes.subarray(0, PBVE_HEADER_LEN)) === 'Pbve2000';
 }
 
 
@@ -104,6 +118,47 @@ function classifyActions(actions) {
 
 
 /**
+ * URI actionの `uri` 文字列が、LIBROビューア側でeval実行される擬似関数呼び出し
+ * （例: `toAppendix("folder",1)` / `toMovie("code","a==","b==")`）かどうかを判定し、
+ * 関数名と引数部分（丸括弧内の生文字列）に分解する。
+ * 実URL（`https://...`）や解釈不能な文字列は null を返す。
+ * @param {string} uri
+ * @returns {{fn:string, args:string}|null}
+ */
+function parseLibroLinkFunction(uri) {
+  const m = /^([A-Za-z_][A-Za-z0-9_]*)\((.*)\)$/.exec((uri || '').trim());
+  return m ? { fn: m[1], args: m[2] } : null;
+}
+
+
+/**
+ * `toAppendix("folder",1)` 形式の引数文字列を単純にカンマ分割し、前後の引用符を外す。
+ * 実データでは引数内カンマは未確認のため、単純分割のみ対応する。
+ * @param {string} argsStr
+ * @returns {string[]}
+ */
+function splitLibroCallArgs(argsStr) {
+  return (argsStr || '').split(',').map(s => {
+    const t = s.trim();
+    const m = /^["'](.*)["']$/.exec(t);
+    return m ? m[1] : t;
+  });
+}
+
+
+/**
+ * actions[] 内の全targetsを1つの配列にまとめる（Hide/Show問わず全て平坦化する）。
+ * @param {Array<Object>} actions
+ * @returns {Array<number>}
+ */
+function flattenTargets(actions) {
+  const out = [];
+  (actions || []).forEach(act => { if (Array.isArray(act.targets)) out.push(...act.targets); });
+  return out;
+}
+
+
+/**
  * annots[] 内のHide/Show（付箋・答え表示等の開閉）ペアを、targetsの相互参照から自動判定する。
  * 双方が互いをtargetsに含む場合のみペアとして確定する（片方向のみの参照はペア扱いしない）。
  * @param {Array<Object>} annots - _id 付与済みのページ内annots配列
@@ -120,16 +175,14 @@ function findTogglePairs(annots) {
     if (a._id == null || pairedIds.has(a._id)) return;
     if (classifyActions(a.actions) !== 'toggle') return;
 
-    const targets = [];
-    a.actions.forEach(act => { if (Array.isArray(act.targets)) targets.push(...act.targets); });
+    const targets = flattenTargets(a.actions);
 
     for (const t of targets) {
       const other = byId.get(t);
       if (!other || other === a || pairedIds.has(other._id)) continue;
       if (classifyActions(other.actions) !== 'toggle') continue;
 
-      const otherTargets = [];
-      other.actions.forEach(act => { if (Array.isArray(act.targets)) otherTargets.push(...act.targets); });
+      const otherTargets = flattenTargets(other.actions);
       if (otherTargets.includes(a._id)) {
         pairs.push([a, other]);
         pairedIds.add(a._id);
@@ -227,6 +280,59 @@ function detectDaimonGroup(closed, open) {
 
 
 /**
+ * 「拡張トグルネットワーク」（色分けボタン・ステップボタン等、1:1ペアやdetectDaimonGroupの
+ * 形状に収まらない、3要素以上が絡むHide/Show構造）の閉包（connected component）を求める。
+ * seedIdsから開始し、各要素のactions[].targetsに現れるidを再帰的に辿る。excludeIdsに含まれる
+ * id（他の確立済みペア・他の大問ボタン・他のネットワークに既に取り込まれたid）は取り込まない
+ * ことで、それらの領域への侵食を防ぐ。
+ * @param {Array<number>} seedIds
+ * @param {Map<number,Object>} byId
+ * @param {Set<number>} excludeIds
+ * @returns {Set<number>}
+ */
+function expandNetworkClosure(seedIds, byId, excludeIds) {
+  const visited = new Set(seedIds);
+  const queue = [...seedIds];
+  while (queue.length) {
+    const id = queue.shift();
+    const annot = byId.get(id);
+    if (!annot) continue;
+    flattenTargets(annot.actions).forEach(t => {
+      if (excludeIds.has(t) || visited.has(t)) return;
+      visited.add(t);
+      queue.push(t);
+    });
+  }
+  return visited;
+}
+
+
+/**
+ * 拡張トグルネットワークのメンバーidを、同一rectを共有する「スロット」単位にグルーピングする。
+ * 色分けボタン・ステップボタンはいずれも「同一矩形に重なる1〜N枚の画像を切り替える」構造の
+ * 繰り返しであるため、rectの一致でスロットを復元できる。
+ * @param {Array<number>} memberIds
+ * @param {Map<number,Object>} byId
+ * @param {number} pageNum
+ * @param {number} pageWidth
+ * @param {number} pageHeight
+ * @param {string} networkId
+ * @returns {{ pageNum:number, networkId:string, pageWidth:number, pageHeight:number,
+ *   slots: Array<{rect:Array<number>, memberIds:Array<number>}>, members: Array<Object> }}
+ */
+function buildNetworkGroup(memberIds, byId, pageNum, pageWidth, pageHeight, networkId) {
+  const members = memberIds.map(id => byId.get(id)).filter(Boolean);
+  const slotMap = new Map(); // JSON化したrect -> スロット
+  members.forEach(m => {
+    const key = JSON.stringify(m.rect);
+    if (!slotMap.has(key)) slotMap.set(key, { rect: m.rect, memberIds: [] });
+    slotMap.get(key).memberIds.push(m._id);
+  });
+  return { pageNum, networkId, pageWidth, pageHeight, slots: [...slotMap.values()], members };
+}
+
+
+/**
  * rect（ページ画像ピクセル座標系の絶対値） を、ページ幅・高さに対する%指定のstyle文字列に変換する。
  * @param {[number,number,number,number]} rect - [x, y, width, height]
  * @param {number} pageWidth
@@ -252,9 +358,13 @@ function rectToStyle(rect, pageWidth, pageHeight) {
  * `libro-craft-meta` を持つ要素（CRAFT自身が書き出したbook由来）は最優先でグループ復元し、
  * それ以外（他システム由来、または未知の構造）のみ既存の構造ヒューリスティック
  * （findTogglePairs/detectDaimonGroup）にフォールバックする。
+ *
+ * known各要素の `_iconFilename`（元のannots/xxxx.pngファイル名）は本関数内では未解決のまま
+ * 一時的にぶら下げるだけで、実際の画像読込・annDisplayType:'image'への上書きは
+ * parseLibroBookZip側（loadAnnotPngBytesが使えるスコープ）でページループ後にまとめて行う。
  * @param {Object} pageJson - p####.json のパース済みオブジェクト
  * @param {number} pageNum - 1始まりのページ番号
- * @returns {{ known: Array<Object>, unknown: Array<Object>, togglePairs: Array<Object>, daimonPassthrough: Array<Object>, maxId: number }}
+ * @returns {{ known: Array<Object>, unknown: Array<Object>, togglePairs: Array<Object>, daimonPassthrough: Array<Object>, networks: Array<Object>, maxId: number }}
  */
 function convertPageAnnotations(pageJson, pageNum) {
   const annots = (pageJson.annots || []).map(a => {
@@ -268,6 +378,8 @@ function convertPageAnnotations(pageJson, pageNum) {
   const metaResult = extractCraftMetaTogglePairs(annots);
   const remainingAnnots = annots.filter(a => a._id == null || !metaResult.consumedIds.has(a._id));
   const { pairs, pairedIds } = findTogglePairs(remainingAnnots);
+  const byId = new Map();
+  remainingAnnots.forEach(a => { if (a._id != null) byId.set(a._id, a); });
 
   const known  = [];
   const unknown = [];
@@ -275,6 +387,11 @@ function convertPageAnnotations(pageJson, pageNum) {
   // 大問ボタン（kind:'daimon'）は書き出し未対応のため、位置編集されていない限り
   // 元のannots[]を無変更のまま書き戻せるよう生データを保持する（closed/open2件1組）
   const daimonPassthrough = [];
+  // 拡張トグルネットワーク（色分けボタン・ステップボタン等、1:1ペア/大問ボタンの形状に
+  // 収まらない、3要素以上が絡むHide/Show構造）。位置・サイズ編集のみ対応し、書き出しは
+  // 元のactionsを保持したまま生データをpassthroughする（buildNetworkGroup参照）。
+  const networks = [];
+  const networkConsumedIds = new Set();
   let maxId = 0;
 
   metaResult.pairs.forEach(({ closed, open, groupId, type }) => {
@@ -301,26 +418,68 @@ function convertPageAnnotations(pageJson, pageNum) {
     const open   = a.hidden ? a : b;
     maxId = Math.max(maxId, closed._id || 0, open._id || 0);
     const { isDaimon, groupIds } = detectDaimonGroup(closed, open);
-    togglePairs.push({
-      pageNum,
-      closedId:   closed._id,
-      openId:     open._id,
-      closedFile: closed.filename,
-      openFile:   open.filename,
-      rect:       closed.rect,
-      pageWidth,
-      pageHeight,
-      kind:       isDaimon ? 'daimon' : 'sticky',
-      groupIds:   isDaimon ? groupIds : undefined,
-    });
-    if (isDaimon) daimonPassthrough.push({ pageNum, closedId: closed._id, closed, open });
-    // 位置・グループ編集後に書き出し可能な既知アノテーションとして扱うため、
-    // 未知アノテーションへは登録しない（convertStickyGroupToLibroAnnotsで再生成する）
+    if (isDaimon) {
+      togglePairs.push({
+        pageNum,
+        closedId:   closed._id,
+        openId:     open._id,
+        closedFile: closed.filename,
+        openFile:   open.filename,
+        rect:       closed.rect,
+        pageWidth,
+        pageHeight,
+        kind:       'daimon',
+        groupIds,
+      });
+      daimonPassthrough.push({ pageNum, closedId: closed._id, closed, open });
+      return;
+    }
+
+    // 大問ボタンの形状に一致しないペア：自分自身以外に参照している「余剰target」が
+    // あるかどうかで、通常の1:1トグル（sticky）か拡張トグルネットワークかを判定する。
+    // 判定は「他ペアへの侵食を防ぐフィルタ前」のrawExtraで行う。もし余剰が他の
+    // 確立済みペアに全て属していて絡み取り込むid（leftover）が0件になった場合でも、
+    // 大問ボタンに似た「他の独立ペアを一括Hide/Showする remote control」構造である可能性が
+    // あり、convertStickyGroupToLibroAnnotsの単純2アクション再生成に通すと元のactionsが
+    // 破壊されるため、rawExtraが1件以上ある時点でsticky扱いにはせず必ずネットワーク
+    // （最小の場合は自分自身2件のみ）として安全側にpassthroughする。
+    const selfIds = new Set([closed._id, open._id]);
+    const rawExtra = [...new Set(flattenTargets(closed.actions).concat(flattenTargets(open.actions)))]
+      .filter(id => !selfIds.has(id));
+
+    if (rawExtra.length === 0) {
+      // 余剰なし＝綺麗な1:1トグル（通常の付箋・答・証明ボタン等）
+      togglePairs.push({
+        pageNum,
+        closedId:   closed._id,
+        openId:     open._id,
+        closedFile: closed.filename,
+        openFile:   open.filename,
+        rect:       closed.rect,
+        pageWidth,
+        pageHeight,
+        kind:       'sticky',
+      });
+      // 位置・グループ編集後に書き出し可能な既知アノテーションとして扱うため、
+      // 未知アノテーションへは登録しない（convertStickyGroupToLibroAnnotsで再生成する）
+      return;
+    }
+
+    // 余剰targetが残る＝色分けボタン・ステップボタン等の拡張トグルネットワーク。
+    // 他の確立済みペア・大問・他ネットワークの領域には侵食しない（BFSのシードから除外）。
+    const leftover = rawExtra
+      .filter(id => !pairedIds.has(id))
+      .filter(id => !networkConsumedIds.has(id));
+    const excludeIds = new Set([...pairedIds, ...networkConsumedIds]);
+    selfIds.forEach(id => excludeIds.delete(id));
+    const memberIds = expandNetworkClosure([...selfIds, ...leftover], byId, excludeIds);
+    memberIds.forEach(id => networkConsumedIds.add(id));
+    networks.push(buildNetworkGroup([...memberIds], byId, pageNum, pageWidth, pageHeight, `net-${pageNum}-${closed._id}`));
   });
 
   annots.forEach(a => {
     if (a._id != null) maxId = Math.max(maxId, a._id);
-    if (a._id != null && (pairedIds.has(a._id) || metaResult.consumedIds.has(a._id))) return; // ペア済みは処理済み
+    if (a._id != null && (pairedIds.has(a._id) || metaResult.consumedIds.has(a._id) || networkConsumedIds.has(a._id))) return; // 処理済み
 
     const kind = classifyActions(a.actions);
     const style = rectToStyle(a.rect, pageWidth, pageHeight);
@@ -337,17 +496,49 @@ function convertPageAnnotations(pageJson, pageNum) {
         page: pageNum,
         style,
         savedData: JSON.stringify({ annDisplayType: 'page-color', annTarget: goto?.page ?? '' }),
+        _iconFilename: a.filename,
       });
     } else if (kind === 'uri') {
       const uri = a.actions.find(ac => ac.action === 'URI');
-      known.push({
-        className: 'ann-object',
-        type: 'externallink',
-        id: a._id,
-        page: pageNum,
-        style: style + `background:${ANNOTATION_TYPE_CONFIG.externallink.color};`,
-        savedData: JSON.stringify({ annDisplayType: 'marker', annUrl: uri?.uri || '' }),
-      });
+      const uriValue = uri?.uri || '';
+      // LIBROのURI actionは実URLだけでなく、ビューア側でeval実行される擬似関数呼び出し
+      // （toAppendix=Plusファイル、toMovie/toMovieBNR=動画）も同じ枠に格納されている。
+      // 引数の意味を全て解析できているわけではないため、既知の2種のみ判定し、
+      // 残り（toFlashcard/toListening等、LIBRO CRAFTでは作成不可な機能）は外部リンク扱いのまま保持する。
+      const call = parseLibroLinkFunction(uriValue);
+
+      if (call?.fn === 'toAppendix') {
+        const [dirName, showMode] = splitLibroCallArgs(call.args);
+        known.push({
+          className: 'ann-object',
+          type: 'plusfile',
+          id: a._id,
+          page: pageNum,
+          style: style + `background:${ANNOTATION_TYPE_CONFIG.plusfile.color};`,
+          savedData: JSON.stringify({ annDisplayType: 'marker', annFile: dirName || '', annShowMode: showMode ?? '0' }),
+          _iconFilename: a.filename,
+        });
+      } else if (call?.fn === 'toMovie' || call?.fn === 'toMovieBNR') {
+        known.push({
+          className: 'ann-object',
+          type: 'video',
+          id: a._id,
+          page: pageNum,
+          style: style + `background:${ANNOTATION_TYPE_CONFIG.video.color};`,
+          savedData: JSON.stringify({ annDisplayType: 'marker', annVideoSrc: '2', annVideoFn: call.fn, annVideoArg: call.args }),
+          _iconFilename: a.filename,
+        });
+      } else {
+        known.push({
+          className: 'ann-object',
+          type: 'externallink',
+          id: a._id,
+          page: pageNum,
+          style: style + `background:${ANNOTATION_TYPE_CONFIG.externallink.color};`,
+          savedData: JSON.stringify({ annDisplayType: 'marker', annUrl: uriValue }),
+          _iconFilename: a.filename,
+        });
+      }
     } else if (kind === 'launch') {
       const launch = a.actions.find(ac => ac.action === 'Launch');
       const baseName = (launch?.filename || '').split('/').pop().replace(/\.mp3$/i, '');
@@ -358,6 +549,7 @@ function convertPageAnnotations(pageJson, pageNum) {
         page: pageNum,
         style: style + `background:${ANNOTATION_TYPE_CONFIG.audio.color};`,
         savedData: JSON.stringify({ annDisplayType: 'marker', annFile: baseName, annPlayMode: '0' }),
+        _iconFilename: a.filename,
       });
     } else {
       // 既知パターンに一致しない：編集不可・削除しない未知アノテーションとして保持のみ行う
@@ -365,16 +557,21 @@ function convertPageAnnotations(pageJson, pageNum) {
     }
   });
 
-  return { known, unknown, togglePairs, daimonPassthrough, maxId };
+  return { known, unknown, togglePairs, daimonPassthrough, networks, maxId };
 }
 
 
 /**
  * LIBRO bookフォルダ形式のZIPを解析し、ページ画像・アノテーションデータを取り出す。
  * - ページ画像（p####-1.jpg等）・音声（sounds/*.mp3）はPbve2000復号する
- * - annots/*.png は平文のためそのままBlobURL化する
- * - annots[] は既知4パターン（GoTo+FitPage / URI / Launch / Hide+Show）を判定し、
- *   既知のものはContentsBuilderの内部データ形式へ変換、それ以外は未知アノテーションとして保持のみ行う
+ * - annots/*.png は通常平文のためそのままBlobURL化する
+ * - 音声・annots画像はいずれも、別オーサリングツール由来で実際には暗号化されていない
+ *   場合があるため、先頭の"Pbve2000"ヘッダー有無を判定してから復号する。ヘッダーが
+ *   無かったファイルのzip内相対パスは unencryptedAssetPaths に記録し、
+ *   buildLibroBookExport で書き出し時に強制的に暗号化し直すために使う
+ * - annots[] は既知パターン（GoTo+FitPage / URI（うちtoAppendix=Plusファイル・toMovie系=動画・
+ *   それ以外=外部リンク） / Launch / Hide+Show）を判定し、既知のものはContentsBuilderの
+ *   内部データ形式へ変換、それ以外は未知アノテーションとして保持のみ行う
  * @param {JSZip} zip - JSZip.loadAsync 済みのZIPオブジェクト
  * @returns {Promise<{
  *   pages: Array<{pageNum:number, width:number, height:number, imageUrl:string, jsonPath:string}>,
@@ -382,9 +579,11 @@ function convertPageAnnotations(pageJson, pageNum) {
  *   togglePairs: Array<Object>,
  *   unknownAnnotations: Array<Object>,
  *   daimonPassthrough: Array<Object>,
+ *   networkGroups: Array<Object>,
  *   maxAnnotId: number,
  *   baseDir: string,
  *   indexJson: Object,
+ *   unencryptedAssetPaths: Set<string>,
  * }>}
  */
 export async function parseLibroBookZip(zip) {
@@ -401,7 +600,12 @@ export async function parseLibroBookZip(zip) {
   const togglePairsRaw = [];
   const unknownAnnotations = [];
   const daimonPassthrough = [];
+  const networksRaw = [];
   let maxAnnotId = 0;
+  // 別オーサリングツール由来などで本来Pbve2000暗号化されているべきなのに平文だった
+  // ファイル（sounds/*.mp3、annots/*.png）のzip内相対パスを記録する。
+  // 書き出し時、対応するアノテーションの編集有無にかかわらず強制的に暗号化し直すために使う。
+  const unencryptedAssetPaths = new Set();
 
   const pageMetaList = indexJson.pages || [];
   for (let i = 0; i < pageMetaList.length; i++) {
@@ -418,20 +622,28 @@ export async function parseLibroBookZip(zip) {
     const pageHeight = pageJson.height || pageMeta.height;
 
     // ページ画像（最高解像度=1/1）をPbve2000復号してBlobURL化
+    // 別オーサリングツール由来で実際には暗号化されていない場合があるため、ヘッダーを見て判定する。
     const imageRel = pageMeta.images?.['1/1'] || Object.values(pageMeta.images || {})[0];
     let imageUrl = '';
     if (imageRel) {
       const imgEntry = zip.file(baseDir + imageRel);
       if (imgEntry) {
         const buf = await imgEntry.async('arraybuffer');
-        const decoded = decodePbve2000(buf);
-        imageUrl = URL.createObjectURL(new Blob([decoded], { type: 'image/jpeg' }));
+        let imageBytes;
+        if (isPbve2000Encoded(buf)) {
+          imageBytes = decodePbve2000(buf);
+        } else {
+          imageBytes = new Uint8Array(buf);
+          unencryptedAssetPaths.add(baseDir + imageRel);
+        }
+        imageUrl = URL.createObjectURL(new Blob([imageBytes], { type: 'image/jpeg' }));
       }
     }
     pages.push({ pageNum, width: pageWidth, height: pageHeight, imageUrl, jsonPath: pageMeta.json });
 
     // 参照されている音声ファイルをPbve2000復号してmediaBlobsへキャッシュ
-    // （resolveMediaSrc は "ファイル名.mp3" 形式のキーを参照するため、拡張子込みで格納する）
+    // （resolveMediaSrc は "ファイル名.mp3" 形式のキーを参照するため、拡張子込みで格納する）。
+    // 別オーサリングツール由来で実際には暗号化されていない場合があるため、ヘッダーを見て判定する。
     for (const annot of (pageJson.annots || [])) {
       for (const action of (annot.actions || [])) {
         if (action.action === 'Launch' && action.filename) {
@@ -440,30 +652,63 @@ export async function parseLibroBookZip(zip) {
           const entry = zip.file(baseDir + action.filename);
           if (!entry) continue;
           const buf = await entry.async('arraybuffer');
-          const decoded = decodePbve2000(buf);
-          mediaBlobs[baseName] = URL.createObjectURL(new Blob([decoded], { type: 'audio/mpeg' }));
+          let bytes;
+          if (isPbve2000Encoded(buf)) {
+            bytes = decodePbve2000(buf);
+          } else {
+            bytes = new Uint8Array(buf);
+            unencryptedAssetPaths.add(baseDir + action.filename);
+          }
+          mediaBlobs[baseName] = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
         }
       }
     }
 
     // annots[] を既知/未知に分類・変換
-    const { known, unknown, togglePairs, daimonPassthrough: pageDaimonPassthrough, maxId } = convertPageAnnotations(pageJson, pageNum);
+    const { known, unknown, togglePairs, daimonPassthrough: pageDaimonPassthrough, networks, maxId } = convertPageAnnotations(pageJson, pageNum);
     knownAnnotations.push(...known);
     unknownAnnotations.push(...unknown);
     daimonPassthrough.push(...pageDaimonPassthrough);
     togglePairsRaw.push(...togglePairs.map(tp => ({ ...tp, baseDir })));
+    networksRaw.push(...networks.map(net => ({ ...net, baseDir })));
     maxAnnotId = Math.max(maxAnnotId, maxId);
   }
 
-  // Hide/Showペア用のannots画像（平文PNG）をBlobURL化する
-  const togglePairs = [];
-  for (const tp of togglePairsRaw) {
-    const closedEntry = zip.file(tp.baseDir + tp.closedFile);
-    const openEntry   = zip.file(tp.baseDir + tp.openFile);
-    if (!closedEntry || !openEntry) continue;
-    const closedBlob = await closedEntry.async('blob');
-    const openBlob   = await openEntry.async('blob');
-    togglePairs.push({
+  // annots画像を読み込んでBlobURL化する共通ヘルパー。
+  // 通常は平文PNGだが、別オーサリングツール由来で実際にはPbve2000暗号化されている
+  // 場合もあるため、ヘッダーを見て判定する（暗号化されていた場合のみ復号する）。
+  async function loadAnnotPngBytes(path) {
+    const entry = zip.file(path);
+    if (!entry) return null;
+    const buf = await entry.async('arraybuffer');
+    if (isPbve2000Encoded(buf)) return decodePbve2000(buf);
+    unencryptedAssetPaths.add(path);
+    return new Uint8Array(buf);
+  }
+
+  // PNGバイト列が完全透過（全ピクセルのアルファ0）かどうかを判定する。
+  // 別オーサリングツールは「紙面カラー（見た目なし・クリック領域のみ）」を表現するために
+  // 実体を持たない透明PNGをannots画像として置くことがあり、これを「画像」表示タイプの
+  // 元画像と誤認しないようにするための判定。
+  async function isFullyTransparentPng(bytes) {
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] !== 0) return false;
+    }
+    return true;
+  }
+
+  // Hide/Showペア用のannots画像をBlobURL化する（各ペアは独立しているため並列実行する）
+  const togglePairsResults = await Promise.all(togglePairsRaw.map(async (tp) => {
+    const closedBytes = await loadAnnotPngBytes(tp.baseDir + tp.closedFile);
+    const openBytes   = await loadAnnotPngBytes(tp.baseDir + tp.openFile);
+    if (!closedBytes || !openBytes) return null;
+    return {
       pageNum: tp.pageNum,
       rect: tp.rect,
       pageWidth: tp.pageWidth,
@@ -475,12 +720,59 @@ export async function parseLibroBookZip(zip) {
       kind:       tp.kind,
       groupIds:   tp.groupIds,
       groupId:    tp.groupId,
-      closedImageUrl: URL.createObjectURL(new Blob([closedBlob], { type: 'image/png' })),
-      openImageUrl:   URL.createObjectURL(new Blob([openBlob],   { type: 'image/png' })),
-    });
-  }
+      closedImageUrl: URL.createObjectURL(new Blob([closedBytes], { type: 'image/png' })),
+      openImageUrl:   URL.createObjectURL(new Blob([openBytes],   { type: 'image/png' })),
+    };
+  }));
+  const togglePairs = togglePairsResults.filter(Boolean);
 
-  return { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, maxAnnotId, baseDir, indexJson };
+  // 拡張トグルネットワーク（色分けボタン・ステップボタン等）用のannots画像をBlobURL化する。
+  // 生データ（member.raw、書き出し時にそのまま書き戻す）にはURLを書き込まず、
+  // 表示専用のimagesテーブル（id -> blobUrl）として並置する。
+  // ネットワーク単位・メンバー単位いずれも独立しているため並列実行する。
+  const networkGroups = await Promise.all(networksRaw.map(async (net) => {
+    const images = new Map();
+    const memberResults = await Promise.all(net.members.map(async (m) => {
+      const bytes = await loadAnnotPngBytes(net.baseDir + m.filename);
+      return bytes ? { id: m._id, bytes } : null;
+    }));
+    memberResults.filter(Boolean).forEach(({ id, bytes }) => {
+      images.set(id, URL.createObjectURL(new Blob([bytes], { type: 'image/png' })));
+    });
+    return { ...net, images };
+  }));
+
+  // pagelink/plusfile/externallink/audio/video の元画像（annots/xxxx.png）を読み込み、
+  // 別オーサリングツール由来の見た目をそのまま再現できる場合は表示タイプを「画像」に上書きする。
+  // 元画像が見つからない、または完全透過（別ツールが紙面カラー表示のつもりで見た目を
+  // 持たない透明PNGを置いているだけのケース）の場合は各種別のデフォルト表示タイプ
+  // （page-color/marker）のまま維持する。
+  // ページ数が多いbookではannots画像も数千枚規模になり得るため、1件ずつawaitする
+  // 逐次処理では10秒を超えるブロッキングになりうる（実測: 747枚で逐次2.4秒→6-8倍で14-19秒）。
+  // Promise.allで並列化することで同規模でも5-6秒程度に収まる。
+  await Promise.all(knownAnnotations.map(async (k) => {
+    const iconFilename = k._iconFilename;
+    delete k._iconFilename;
+    if (!iconFilename) return;
+    const bytes = await loadAnnotPngBytes(baseDir + iconFilename);
+    if (!bytes) return;
+    if (await isFullyTransparentPng(bytes)) return;
+    const baseName = iconFilename.split('/').pop();
+    if (!mediaBlobs[baseName]) {
+      mediaBlobs[baseName] = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+    }
+    let sd = {};
+    try { sd = JSON.parse(k.savedData || '{}'); } catch (_) {}
+    sd.annDisplayType = 'image';
+    sd.annIconImage = baseName;
+    k.savedData = JSON.stringify(sd);
+    k.className = 'ann-image-obj';
+    // マーカー型用に埋め込まれた種別色背景（plusfile/video/externallink/audio）は
+    // 画像型では不要（元画像をそのまま透過表示するため）なので取り除く
+    k.style = (k.style || '').replace(/background:[^;]*;?/, '');
+  }));
+
+  return { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths };
 }
 
 
@@ -601,6 +893,91 @@ export function renderTogglePairs(togglePairs) {
 }
 
 
+/**
+ * 拡張トグルネットワーク（色分けボタン・ステップボタン等）のスロットに閲覧モード用の
+ * クリック連動を設定する。クリック時、そのスロット内で現在表示中のフレームのうち
+ * 最前面（DOM末尾＝最後にShowされたもの）が持つ元のactions[]（data-actions）をそのまま
+ * 再生し、同一ページ内の対応する member-id を持つフレームのis-visibleを付け外しする
+ * 汎用インタプリタ方式。actionsを持たない受動的なフレームはクリックしても何も起きない。
+ *
+ * 実データ（ステップボタン）ではShow時に以前のフレームを明示的にHideしない構造
+ * （最新のフレームが手前に重なることを前提にしている）が存在するため、Showしたフレームは
+ * 常に親スロットの末尾（最前面）へ移動する。これにより複数フレームが同時にis-visibleでも
+ * 見た目・次クリック時の判定の両方で「最後に表示したもの」が正しく優先される。
+ * 編集モードでは選択・ダイアログ等には対応せず、ドラッグ・リサイズのみ可能（何もしない）。
+ * @param {HTMLElement} slotEl
+ */
+function addNetworkClickHandler(slotEl) {
+  slotEl.addEventListener('click', () => {
+    if (!document.body.classList.contains('is-view-mode')) return;
+    const visibleFrames = slotEl.querySelectorAll('.libro-network-frame.is-visible');
+    if (visibleFrames.length === 0) return;
+    const visibleFrame = visibleFrames[visibleFrames.length - 1];
+    let actions = [];
+    try { actions = JSON.parse(visibleFrame.dataset.actions || '[]'); } catch (_) {}
+    actions.forEach(act => {
+      if (act.action !== 'Hide' && act.action !== 'Show') return;
+      (Array.isArray(act.targets) ? act.targets : []).forEach(id => {
+        document.querySelectorAll(`.libro-network-frame[data-member-id="${id}"]`).forEach(frame => {
+          const show = act.action === 'Show';
+          frame.classList.toggle('is-visible', show);
+          if (show) frame.parentElement?.appendChild(frame);
+        });
+      });
+    });
+  });
+}
+
+
+/**
+ * 拡張トグルネットワーク（色分けボタン・ステップボタン等）を、位置・サイズ編集に対応した
+ * `.libro-network-slot` 要素として#pageLeftに描画する。1スロット＝同一矩形を共有する
+ * 画像群（1〜N枚）で、内部の`.libro-network-frame`のうちis-visibleが付いた1枚のみ表示する。
+ * 選択・削除・Undo・編集ダイアログには対応しない（位置・サイズ編集専用、既知の制限）。
+ * @param {Array<Object>} networkGroups - parseLibroBookZip が返す networkGroups
+ */
+export function renderNetworkGroups(networkGroups) {
+  const page = document.getElementById('pageLeft');
+  const pageRect = page.getBoundingClientRect();
+
+  networkGroups.forEach(net => {
+    const memberById = new Map(net.members.map(m => [m._id, m]));
+    net.slots.forEach((slot, slotIndex) => {
+      const [x, y, w, h] = slot.rect;
+      const leftPx   = (x / net.pageWidth)  * pageRect.width;
+      const topPx    = (y / net.pageHeight) * pageRect.height;
+      const widthPx  = (w / net.pageWidth)  * pageRect.width;
+      const heightPx = (h / net.pageHeight) * pageRect.height;
+
+      const slotEl = document.createElement('div');
+      slotEl.className = 'libro-network-slot';
+      slotEl.dataset.type      = 'libro-network-node';
+      slotEl.dataset.networkId = net.networkId;
+      slotEl.dataset.slotIndex = String(slotIndex);
+      slotEl.dataset.page      = net.pageNum;
+      slotEl.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
+
+      slot.memberIds.forEach(id => {
+        const member = memberById.get(id);
+        if (!member) return;
+        const frame = document.createElement('img');
+        frame.className = 'libro-network-frame';
+        frame.src = net.images.get(id) || '';
+        frame.dataset.memberId = String(id);
+        frame.dataset.actions  = JSON.stringify(member.actions || []);
+        if (!member.hidden) frame.classList.add('is-visible');
+        slotEl.appendChild(frame);
+      });
+
+      addNetworkClickHandler(slotEl);
+      makeDraggable(slotEl);
+      makeResizable(slotEl);
+      page.appendChild(slotEl);
+    });
+  });
+}
+
+
 /* ============================================================
    LIBRO bookフォルダ形式への書き出し（エクスポート）。
    ページリンク／外部リンク／音声再生（GoTo+FitPage / URI / Launch）に加え、
@@ -628,7 +1005,7 @@ function libroMarkerFilename(id) {
  * @param {number} pageHeight
  * @returns {[number,number,number,number]} [x, y, width, height]
  */
-function styleToRect(style, pageWidth, pageHeight) {
+export function styleToRect(style, pageWidth, pageHeight) {
   const pct = (name) => {
     const m = (style || '').match(new RegExp(`${name}:\\s*([\\d.]+)%`));
     return m ? parseFloat(m[1]) : 0;
@@ -651,7 +1028,7 @@ function styleToRect(style, pageWidth, pageHeight) {
  * @param {number} pxHeight
  * @returns {Promise<Uint8Array>}
  */
-export async function rasterizeMarkerPng(type, pxWidth, pxHeight) {
+async function rasterizeMarkerPng(type, pxWidth, pxHeight) {
   const cfg = ANNOTATION_TYPE_CONFIG[type] || {};
   const w = Math.max(1, Math.min(1200, pxWidth));
   const h = Math.max(1, Math.min(1200, pxHeight));
@@ -687,7 +1064,7 @@ export async function rasterizeMarkerPng(type, pxWidth, pxHeight) {
  * @param {number} pxHeight
  * @returns {Promise<Uint8Array>}
  */
-export async function rasterizeStickyClosedPng(color, pxWidth, pxHeight) {
+async function rasterizeStickyClosedPng(color, pxWidth, pxHeight) {
   const w = Math.max(1, Math.min(1200, pxWidth));
   const h = Math.max(1, Math.min(1200, pxHeight));
 
@@ -710,7 +1087,7 @@ export async function rasterizeStickyClosedPng(color, pxWidth, pxHeight) {
  * @param {number} pxHeight
  * @returns {Promise<Uint8Array>}
  */
-export async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
+async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
   const w = Math.max(1, Math.min(1200, pxWidth));
   const h = Math.max(1, Math.min(1200, pxHeight));
 
@@ -747,7 +1124,7 @@ export async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
  *   埋め込み、再インポート時に構造ヒューリスティックに頼らずグループを確実に復元できるようにする。
  * @returns {Promise<{annotJsons:Array<Object>, newPngWrites:Array<{path:string, bytes:Uint8Array}>}>}
  */
-export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, zip, baseDir, groupId) {
+async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, zip, baseDir, groupId) {
   const closedIds = members.map(m => m.closedId);
   const openIds   = members.map(m => m.openId);
 
@@ -796,7 +1173,9 @@ export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHe
 /**
  * ContentsBuilderのアノテーションオブジェクトをLIBROの annots[] 要素に変換する
  * （convertPageAnnotationsの逆変換）。対応する既存マーカーPNGがzip内に無い場合は
- * 新規マーカーPNGを生成する。
+ * 新規マーカーPNGを生成する。画像アイコン型（annDisplayType:'image'）は、
+ * id由来の元ファイル名と一致すれば無変更のまま維持し、一致しなければ
+ * mediaBlobs内の画像バイトをPbve2000暗号化して書き込む（ラスタライズ生成は行わない）。
  * @param {{id:number, type:string, style:string, savedData:string}} domData
  * @param {number} pageWidth
  * @param {number} pageHeight
@@ -804,7 +1183,7 @@ export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHe
  * @param {string} baseDir
  * @returns {Promise<{annotJson:Object, newPngBytes:Uint8Array|null}|null>} 対応外の種別は null
  */
-export async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip, baseDir) {
+async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip, baseDir) {
   const rect = styleToRect(domData.style, pageWidth, pageHeight);
   const filename = libroMarkerFilename(domData.id);
 
@@ -818,12 +1197,32 @@ export async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeig
     actions = [{ action: 'URI', uri: sd.annUrl || '' }];
   } else if (domData.type === 'audio') {
     actions = [{ action: 'Launch', filename: `sounds/${(sd.annFile || '').trim()}.mp3` }];
+  } else if (domData.type === 'plusfile') {
+    actions = [{ action: 'URI', uri: `toAppendix("${(sd.annFile || '').trim()}",${sd.annShowMode || '0'})` }];
+  } else if (domData.type === 'video' && sd.annVideoSrc === '2') {
+    // LIBRO由来のtoMovie/toMovieBNRリンクのみ対応（引数の意味は未解析のため生文字列をそのまま書き戻す）。
+    // 内部ファイル/外部タグ指定（annVideoSrc: '0'/'1'）はLIBRO側に対応actionが無いため未対応のまま。
+    const fn = sd.annVideoFn === 'toMovieBNR' ? 'toMovieBNR' : 'toMovie';
+    actions = [{ action: 'URI', uri: `${fn}(${sd.annVideoArg || ''})` }];
   } else {
     return null; // LIBROに対応するactionが無い種別
   }
 
   let newPngBytes = null;
-  if (!zip.file(baseDir + filename)) {
+  if (sd.annDisplayType === 'image' && sd.annIconImage) {
+    // 画像アイコン型：id由来の元ファイル名（annots/0000.png形式）と一致する場合は
+    // LIBROインポート時のまま無変更＝zip内の既存ファイルをそのまま維持する。
+    // 一致しない場合はCRAFT上でアップロード・差し替えされた画像のため、
+    // 生バイトを取得してPbve2000暗号化した上で書き込む（既存ファイルがあっても上書きする）。
+    const expectedOrigBaseName = `${String(domData.id).padStart(4, '0')}.png`;
+    if (sd.annIconImage !== expectedOrigBaseName) {
+      const blobUrl = mediaBlobs[sd.annIconImage];
+      if (blobUrl) {
+        const buf = new Uint8Array(await (await fetch(blobUrl)).arrayBuffer());
+        newPngBytes = isPbve2000Encoded(buf) ? buf : encodePbve2000(buf);
+      }
+    }
+  } else if (!zip.file(baseDir + filename)) {
     newPngBytes = await rasterizeMarkerPng(domData.type, rect[2], rect[3]);
   }
 
@@ -835,10 +1234,13 @@ export async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeig
  * ContentsBuilderの現在の状態からLIBRO book zipを書き出す。
  * 保持している元zip（インスタンスをそのまま変更）に対し、annots[]が変わったページの
  * p####.jsonと、新規マーカーPNG・新規音声（Pbve2000暗号化）のみを上書き・追加する。
- * ページ画像・既存のannots PNG・既存の音声は一切書き換えない。
+ * ページ画像・既存のannots PNG・既存の音声は基本的に書き換えないが、
+ * libroBook.unencryptedAssetPaths に記録されたファイル（別オーサリングツール由来で
+ * 元々暗号化されていなかったsounds/*.mp3・annots/*.png）だけは、対応するアノテーションの
+ * 編集有無にかかわらず強制的にPbve2000暗号化して上書きする。
  * index.jsonは configs.libro-craft-meta（book全体マーカー、docs/libro_integration_計画書.md 4-3b参照）
  * の追記のみ行い、既存のoutline等は変更しない。
- * @param {{zip:JSZip, baseDir:string, indexJson:Object}} libroBook - state.libroBook
+ * @param {{zip:JSZip, baseDir:string, indexJson:Object, unencryptedAssetPaths?:Set<string>}} libroBook - state.libroBook
  * @param {Array<{id:number, page:number, type:string, style:string, savedData:string}>} domAnnotations
  *   - LIBROに変換可能な種別（pagelink/externallink/audio）のDOM由来アノテーションデータ
  * @param {Array<{pageNum:number, raw:Object}>} passthroughAnnotations - 無変更のまま書き戻すアノテーション
@@ -885,20 +1287,26 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     // 未知アノテーションの生データは無変更のまま書き戻す（内部管理用の_idは除去）
     const passthrough = (passthroughByPage.get(pageNum) || []).map(({ _id, ...clean }) => clean);
 
+    // 各アノテーションのfilenameは既存のdata-idベースで一意に決まっており、
+    // 変換処理も互いに独立しているため並列実行する。
+    const convertedResults = await Promise.all(
+      (byPage.get(pageNum) || []).map(domData => convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip, baseDir))
+    );
     const converted = [];
-    for (const domData of (byPage.get(pageNum) || [])) {
-      const result = await convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip, baseDir);
-      if (!result) continue;
+    convertedResults.forEach(result => {
+      if (!result) return;
       if (result.newPngBytes) zip.file(baseDir + result.annotJson.filename, result.newPngBytes);
       converted.push(result.annotJson);
-    }
+    });
 
+    const stickyGroupResults = await Promise.all(
+      (stickyGroupsByPage.get(pageNum) || []).map(group => convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, zip, baseDir, group.groupId))
+    );
     const stickyAnnots = [];
-    for (const group of (stickyGroupsByPage.get(pageNum) || [])) {
-      const { annotJsons, newPngWrites } = await convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, zip, baseDir, group.groupId);
+    stickyGroupResults.forEach(({ annotJsons, newPngWrites }) => {
       newPngWrites.forEach(({ path, bytes }) => zip.file(path, bytes));
       stickyAnnots.push(...annotJsons);
-    }
+    });
 
     pageJson.annots = [...passthrough, ...converted, ...stickyAnnots];
 
@@ -925,15 +1333,28 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
       if (fileName) referencedAudio.add(`${fileName}.mp3`);
     } catch (_) {}
   });
-  for (const key of referencedAudio) {
+  // 各音声ファイルは互いに独立して読込・暗号化できるため並列実行する
+  await Promise.all([...referencedAudio].map(async (key) => {
     const soundPath = baseDir + 'sounds/' + key;
-    if (zip.file(soundPath)) continue; // 既存音声は無変更
+    if (zip.file(soundPath)) return; // 既存音声は無変更
     const blobUrl = mediaBlobs[key];
-    if (!blobUrl) continue;
+    if (!blobUrl) return;
     const res = await fetch(blobUrl);
     const buf = new Uint8Array(await res.arrayBuffer());
     zip.file(soundPath, encodePbve2000(buf));
-  }
+  }));
+
+  // 別オーサリングツール由来などで元々暗号化されていなかったファイル（ページ画像、sounds/*.mp3、
+  // annots/*.png）は、対応するアノテーションの編集有無にかかわらず必ず暗号化して保存する
+  // （インポート時にlibroBook.unencryptedAssetPathsへ記録済み。編集により新規生成された
+  // ファイルが既に暗号化済みの場合はスキップする）。各ファイルは互いに独立しているため並列実行する。
+  await Promise.all([...(libroBook.unencryptedAssetPaths || [])].map(async (path) => {
+    const entry = zip.file(path);
+    if (!entry) return;
+    const buf = await entry.async('arraybuffer');
+    if (isPbve2000Encoded(buf)) return;
+    zip.file(path, encodePbve2000(buf));
+  }));
 
   return zip;
 }
