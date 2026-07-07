@@ -19,7 +19,7 @@ import { updateStatus } from './ui-common.js';
       document.getElementById('modeSwitchBtnLabel').textContent = '編集モードに切替';
       btn.onclick = switchToEditMode;
 
-      updateStatus('閲覧モードに切り替えました');
+      updateStatus();
     }
 
 
@@ -27,7 +27,7 @@ import { updateStatus } from './ui-common.js';
      * 編集モードに戻る。
      * - オーサリングパネル・付箋パーツ操作を再表示
      */
-    export function switchToEditMode() {
+    function switchToEditMode() {
       document.body.classList.remove('is-view-mode');
 
       // 閲覧モード中に各ボタンによって変更された付箋の状態をすべて元に戻す
@@ -55,5 +55,5 @@ import { updateStatus } from './ui-common.js';
       document.getElementById('modeSwitchBtnLabel').textContent = '閲覧モードに切替';
       btn.onclick = switchToViewMode;
 
-      updateStatus('編集モードに戻りました');
+      updateStatus();
     }

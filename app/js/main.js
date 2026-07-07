@@ -19,7 +19,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         if (state.currentDrawType) deactivateAnnotationMode();
         closeDialog();
         document.querySelector('.dialog-btn.ok').onclick = saveDialog;
-        updateStatus('描画をキャンセルしました');
+        updateStatus();
       }
 
       // Delete/Backspaceキー：選択中のオブジェクトを削除（入力フィールドにフォーカス中は無効）
@@ -70,7 +70,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         });
 
         // 各種ボタンのスナップショット
-        document.querySelectorAll('.daimon-btn.is-selected.is-selected.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(btn => {
+        document.querySelectorAll('.daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(btn => {
           deleteSnapshots.push({
             className:   btn.className.replace(/\bis-selected\b/g, '').trim(),
             id:          btn.dataset.id,
@@ -209,7 +209,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
 
         if (deleted > 0) {
           closeDialog();
-          updateStatus(`${deleted} 件のオブジェクトを削除しました`);
+          updateStatus();
         }
       }
 

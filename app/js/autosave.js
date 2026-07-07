@@ -73,7 +73,7 @@ import { showToast } from './ui-common.js';
     /**
      * 現在のアノテーション状態をIndexedDBへ保存する。
      */
-    export async function saveAutoSaveSnapshot() {
+    async function saveAutoSaveSnapshot() {
       try {
         const data = collectAnnotationSnapshotData();
         const db = await openAutoSaveDB();

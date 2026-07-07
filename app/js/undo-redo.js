@@ -243,7 +243,7 @@ import { showToast, updateStatus } from './ui-common.js';
           }
         }
         updateAnnotationVisibility();
-        updateStatus('操作を取り消しました');
+        updateStatus();
         // Undo の逆操作を Redo スタックに積む
         redoStack.push(op);
         if (redoStack.length > UNDO_MAX) redoStack.shift();
@@ -372,7 +372,7 @@ import { showToast, updateStatus } from './ui-common.js';
       // 状態が変化したのでオートセーブを予約する
       scheduleAutoSave();
       updateAnnotationVisibility();
-      updateStatus('操作をやり直しました');
+      updateStatus();
       updateAlignPanel();
       // Redo直後のapplyLiveUpdateキャッシュをサイドメニュー入力欄の値で初期化
       applyLiveUpdate._prevX = parseFloat(document.getElementById('annPosX')?.value)  ?? undefined;

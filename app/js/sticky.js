@@ -24,7 +24,7 @@ import { pushUndo, redo } from './undo-redo.js';
      */
     export function openBulkStickyDialog() {
       if (selectedStickySet.size === 0) {
-        updateStatus('付箋を選択してください（Shift+クリックで複数選択）');
+        updateStatus();
         return;
       }
 
@@ -75,14 +75,14 @@ import { pushUndo, redo } from './undo-redo.js';
         selectedStickySet.clear();
         closeDialog();
         document.querySelector('.dialog-btn.ok').onclick = saveDialog;
-        updateStatus(`付箋 ${count} 件を削除しました`);
+        updateStatus();
       };
 
       // キャンセルボタン
       document.querySelector('.dialog-btn.cancel').onclick = () => {
         closeDialog();
         document.querySelector('.dialog-btn.ok').onclick = saveDialog;
-        updateStatus('キャンセルしました');
+        updateStatus();
       };
 
       // 保存：選択中の全付箋に設定を一括適用
@@ -107,7 +107,7 @@ import { pushUndo, redo } from './undo-redo.js';
         const count = selectedStickySet.size;
         closeDialog();
         document.querySelector('.dialog-btn.ok').onclick = saveDialog;
-        updateStatus(`付箋 ${count} 件を一括更新しました`);
+        updateStatus();
       };
 
       document.getElementById('sideDetailEmpty').style.visibility = 'hidden';
@@ -147,7 +147,7 @@ import { pushUndo, redo } from './undo-redo.js';
       });
       // Undoスタックに積む
       pushUndo({ type: 'sticky-hide', targets: prevStates });
-      updateStatus(`${selectedStickySet.size} 件の付箋を白色に変更しました`);
+      updateStatus();
     }
 
 
@@ -192,7 +192,7 @@ import { pushUndo, redo } from './undo-redo.js';
       if (allGrouped) {
         // 全員グループ済み → 解除
         selectedStickySet.forEach(note => { delete note.dataset.groupId; });
-        updateStatus(`${selectedStickySet.size} 件の付箋のグループを解除しました`);
+        updateStatus();
       } else {
         // 未グループのものがある → グループ化
         if (selectedStickySet.size < 2) {
@@ -202,7 +202,7 @@ import { pushUndo, redo } from './undo-redo.js';
         }
         const gid = `grp-${++state.stickyGroupCounter}`;
         selectedStickySet.forEach(note => { note.dataset.groupId = gid; });
-        updateStatus(`${selectedStickySet.size} 件の付箋をグループ化しました（${gid}）`);
+        updateStatus();
       }
     }
 
@@ -238,7 +238,7 @@ import { pushUndo, redo } from './undo-redo.js';
               note.classList.add('is-selected');
               openAnnotationSettingsDialog('sticky', note);
             }
-            updateStatus(`付箋を ${selectedStickySet.size} 件選択中`);
+            updateStatus();
           } else {
             const multiCount = selectedStickySet.size
               + document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length;
@@ -250,7 +250,7 @@ import { pushUndo, redo } from './undo-redo.js';
               selectedStickySet.add(note);
               note.classList.add('is-selected');
               openAnnotationSettingsDialog('sticky', note);
-              updateStatus('付箋を選択中');
+              updateStatus();
             } else {
               // 未選択オブジェクトクリック：全解除してこの付箋のみ選択
               selectedStickySet.forEach(n => n.classList.remove('is-selected'));
@@ -259,7 +259,7 @@ import { pushUndo, redo } from './undo-redo.js';
               selectedStickySet.add(note);
               note.classList.add('is-selected');
               openAnnotationSettingsDialog('sticky', note);
-              updateStatus('付箋を選択中');
+              updateStatus();
             }
           }
           return;
@@ -272,13 +272,13 @@ import { pushUndo, redo } from './undo-redo.js';
             note.style.background = '#ffffff';
             note.style.outline = '';
             delete note.dataset.shomeiOutline;
-            updateStatus('証明を表示しました');
+            updateStatus();
           } else {
             // 白表示中 → 赤枠線のみ表示
             note.style.background = 'transparent';
             note.style.outline = '2px solid rgb(255,0,0)';
             note.dataset.shomeiOutline = '1';
-            updateStatus('証明を非表示にしました');
+            updateStatus();
           }
           return;
         }
@@ -296,7 +296,7 @@ import { pushUndo, redo } from './undo-redo.js';
             t.classList.remove('state-hidden');
             t.classList.add('state-visible');
           });
-          updateStatus('解答を表示しました');
+          updateStatus();
         } else {
           // 通常付箋：トグル（即時）
           const isVisible = note.classList.contains('state-visible');
@@ -308,7 +308,7 @@ import { pushUndo, redo } from './undo-redo.js';
             t.classList.toggle('state-visible', !isVisible);
             t.classList.toggle('state-hidden',   isVisible);
           });
-          updateStatus(isVisible ? '解答を隠しました' : '解答を表示しました');
+          updateStatus();
         }
       });
     }

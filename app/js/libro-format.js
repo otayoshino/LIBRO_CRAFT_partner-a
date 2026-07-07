@@ -35,7 +35,7 @@ const CRAFT_META_TOGGLE_TYPES = new Set(['sticky', 'kotae', 'daimon', 'shomei', 
  * @param {ArrayBuffer} buffer - 暗号化されたバイナリデータ
  * @returns {Uint8Array} 復号済みデータ
  */
-export function decodePbve2000(buffer) {
+function decodePbve2000(buffer) {
   const src  = new Uint8Array(buffer);
   const body = src.subarray(PBVE_HEADER_LEN);
   const out  = new Uint8Array(body.length);
@@ -50,7 +50,7 @@ export function decodePbve2000(buffer) {
  * @param {ArrayBuffer|Uint8Array} data - 平文バイナリデータ
  * @returns {Uint8Array} 暗号化済みデータ（ヘッダー8バイト＋XOR済み本体）
  */
-export function encodePbve2000(data) {
+function encodePbve2000(data) {
   const body = data instanceof Uint8Array ? data : new Uint8Array(data);
   const header = new TextEncoder().encode('Pbve2000');
   const out = new Uint8Array(header.length + body.length);
@@ -1028,7 +1028,7 @@ export function styleToRect(style, pageWidth, pageHeight) {
  * @param {number} pxHeight
  * @returns {Promise<Uint8Array>}
  */
-export async function rasterizeMarkerPng(type, pxWidth, pxHeight) {
+async function rasterizeMarkerPng(type, pxWidth, pxHeight) {
   const cfg = ANNOTATION_TYPE_CONFIG[type] || {};
   const w = Math.max(1, Math.min(1200, pxWidth));
   const h = Math.max(1, Math.min(1200, pxHeight));
@@ -1064,7 +1064,7 @@ export async function rasterizeMarkerPng(type, pxWidth, pxHeight) {
  * @param {number} pxHeight
  * @returns {Promise<Uint8Array>}
  */
-export async function rasterizeStickyClosedPng(color, pxWidth, pxHeight) {
+async function rasterizeStickyClosedPng(color, pxWidth, pxHeight) {
   const w = Math.max(1, Math.min(1200, pxWidth));
   const h = Math.max(1, Math.min(1200, pxHeight));
 
@@ -1087,7 +1087,7 @@ export async function rasterizeStickyClosedPng(color, pxWidth, pxHeight) {
  * @param {number} pxHeight
  * @returns {Promise<Uint8Array>}
  */
-export async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
+async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
   const w = Math.max(1, Math.min(1200, pxWidth));
   const h = Math.max(1, Math.min(1200, pxHeight));
 
@@ -1124,7 +1124,7 @@ export async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
  *   埋め込み、再インポート時に構造ヒューリスティックに頼らずグループを確実に復元できるようにする。
  * @returns {Promise<{annotJsons:Array<Object>, newPngWrites:Array<{path:string, bytes:Uint8Array}>}>}
  */
-export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, zip, baseDir, groupId) {
+async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, zip, baseDir, groupId) {
   const closedIds = members.map(m => m.closedId);
   const openIds   = members.map(m => m.openId);
 
@@ -1183,7 +1183,7 @@ export async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHe
  * @param {string} baseDir
  * @returns {Promise<{annotJson:Object, newPngBytes:Uint8Array|null}|null>} 対応外の種別は null
  */
-export async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip, baseDir) {
+async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip, baseDir) {
   const rect = styleToRect(domData.style, pageWidth, pageHeight);
   const filename = libroMarkerFilename(domData.id);
 

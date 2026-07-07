@@ -148,7 +148,7 @@ import { pushUndo } from './undo-redo.js';
         document.addEventListener('mouseup',   onUp);
       });
 
-      updateStatus(`${cfg.label}の設定を変更して「更新する」を押してください`);
+      updateStatus();
     }
 
 
@@ -242,7 +242,7 @@ import { pushUndo } from './undo-redo.js';
         document.addEventListener('mouseup',   onUp);
       });
 
-      updateStatus(`${cfg.label}を設定して「作成」を押してください`);
+      updateStatus();
     }
 
 
@@ -263,7 +263,7 @@ import { pushUndo } from './undo-redo.js';
      * @param {number} pageX - ページ相対X座標
      * @param {number} pageY - ページ相対Y座標
      */
-    export function confirmQuickCreate(type, pageX, pageY) {
+    function confirmQuickCreate(type, pageX, pageY) {
       // ポップアップフォームから値を収集し、サイドバーの共通/種別固有フォームに転写する
       ['qcFormCommon', 'qcFormSpecific'].forEach((srcId, i) => {
         const src  = document.getElementById(srcId);
@@ -307,7 +307,7 @@ import { pushUndo } from './undo-redo.js';
      * @param {number} value - 初期値
      * @returns {HTMLElement} .pos-field 要素
      */
-    export function makePosField(id, value) {
+    function makePosField(id, value) {
       const field = document.createElement('div');
       field.className = 'pos-field';
       field.innerHTML = `
@@ -334,7 +334,7 @@ import { pushUndo } from './undo-redo.js';
     }
 
 
-    export function buildCommonFields(form, type, savedData, initRect, existingEl = null) {
+    function buildCommonFields(form, type, savedData, initRect, existingEl = null) {
       const px = initRect ? Math.round(initRect.x) : (parseInt(savedData.annPosX,   10) || 0);
       const py = initRect ? Math.round(initRect.y) : (parseInt(savedData.annPosY,   10) || 0);
       const pw = initRect ? Math.round(initRect.w) : (parseInt(savedData.annWidth,  10) || 100);
@@ -596,7 +596,7 @@ import { pushUndo } from './undo-redo.js';
      * @param {object}      savedData - 保存済みデータ
      * @param {HTMLElement|null} existingEl - 再設定対象要素（新規作成時は null）
      */
-    export function buildSpecificFields(form, type, savedData, existingEl = null) {
+    function buildSpecificFields(form, type, savedData, existingEl = null) {
       const cfg      = ANNOTATION_TYPE_CONFIG[type];
       const dispType = savedData.annDisplayType || 'marker';
 
@@ -950,13 +950,13 @@ import { pushUndo } from './undo-redo.js';
 
 
     /** DL用 dt 要素を生成するヘルパー */
-    export function _buildRadioDt(label) {
+    function _buildRadioDt(label) {
       const dt = document.createElement('dt');
       dt.textContent = label;
       return dt;
     }
 
-    export function _buildTextDt(label) {
+    function _buildTextDt(label) {
       const dt = document.createElement('dt');
       dt.textContent = label;
       return dt;
@@ -970,7 +970,7 @@ import { pushUndo } from './undo-redo.js';
      * @param {string} currentVal - 現在の選択値
      * @param {Array}  items      - [{value, label}, ...]
      */
-    export function _buildRadioDD(hiddenId, radioName, currentVal, items) {
+    function _buildRadioDD(hiddenId, radioName, currentVal, items) {
       const dd = document.createElement('dd');
       const radiosHtml = items.map(it =>
         `<label><input type="radio" name="${radioName}" value="${it.value}"${currentVal === it.value ? ' checked' : ''}> ${it.label}</label>`
@@ -992,7 +992,7 @@ import { pushUndo } from './undo-redo.js';
      * @param {string} value       - 初期値
      * @param {string} placeholder - プレースホルダー
      */
-    export function _buildTextDD(id, value, placeholder) {
+    function _buildTextDD(id, value, placeholder) {
       const dd = document.createElement('dd');
       const inp = document.createElement('input');
       inp.type = 'text';
@@ -1013,7 +1013,7 @@ import { pushUndo } from './undo-redo.js';
      * @param {string}      inputId   - ファイル名を反映する input の id
      * @param {string}      mediaType - 'audio' または 'video'
      */
-    export function _appendDropZone(ddEl, inputId, mediaType) {
+    function _appendDropZone(ddEl, inputId, mediaType) {
       const extHint = mediaType === 'audio' ? 'MP3' : 'MP4';
       const zone = document.createElement('div');
       zone.className = 'file-drop-zone';
@@ -1072,7 +1072,7 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} ddEl    - 追加先の dd 要素
      * @param {string}      inputId - ファイル名（拡張子込み）を反映する hidden input の id
      */
-    export function _appendIconImageDropZone(ddEl, inputId) {
+    function _appendIconImageDropZone(ddEl, inputId) {
       const zone = document.createElement('div');
       zone.className = 'file-drop-zone';
       zone.innerHTML = `
@@ -1202,7 +1202,7 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} ddEl    - 追加先の dd 要素
      * @param {string}      inputId - ファイル名（拡張子込み）を反映する hidden input の id
      */
-    export function _appendImageDropZone(ddEl, inputId) {
+    function _appendImageDropZone(ddEl, inputId) {
       const zone = document.createElement('div');
       zone.className = 'file-drop-zone';
       zone.innerHTML = `
@@ -1328,7 +1328,7 @@ import { pushUndo } from './undo-redo.js';
         if (!existingEl) { state.pendingRect = null; deactivateAnnotationMode(); }
         closeDialog();
         document.querySelector('.dialog-btn.ok').onclick = saveDialog;
-        updateStatus('キャンセルしました');
+        updateStatus();
       };
 
       // 保存
@@ -1423,9 +1423,7 @@ import { pushUndo } from './undo-redo.js';
             labelSpan.textContent = savedData.annLabel;
           }
           existingEl.dataset.savedData = JSON.stringify(savedData);
-          updateStatus(isLibroToggleNote && !keepsOriginalImage
-            ? '付箋の色を変更しました（次回LIBRO書き出し時に閉側のみ新規画像を生成します。開側の元画像は維持されます）'
-            : '付箋を更新しました');
+          updateStatus();
         } else {
           // 新規作成：連続作成用に設定を保存
           lastNewAnnData[type] = savedData;
@@ -1445,7 +1443,7 @@ import { pushUndo } from './undo-redo.js';
           note.dataset.page = state.currentPage;
           document.getElementById('pageLeft').appendChild(note);
           pushUndo({ type: 'create', elements: [note] });
-          updateStatus('付箋を配置しました（クリックで解答の表示/非表示）');
+          updateStatus();
         }
 
       } else if (BUTTON_TYPES.has(type)) {
@@ -1464,7 +1462,7 @@ import { pushUndo } from './undo-redo.js';
         if (savedData.annPosY !== undefined) existingEl.style.top  = parseInt(savedData.annPosY, 10) + 'px';
         renderButtonVisual(existingEl, type, savedData);
         existingEl.dataset.savedData = JSON.stringify(savedData);
-        updateStatus(`${ANNOTATION_TYPE_CONFIG[type]?.label || type}を更新しました`);
+        updateStatus();
 
       } else {
         // --- 汎用アノテーション（ページリンク / Plusファイル / 外部リンク / 音声再生 / 動画再生） ---
@@ -1526,7 +1524,7 @@ import { pushUndo } from './undo-redo.js';
           } else {
             makeResizable(existingEl);
           }
-          updateStatus(`${cfg.label}を更新しました`);
+          updateStatus();
         } else {
           // 新規作成：連続作成用に設定を保存し、displayType に応じて要素を生成
           lastNewAnnData[type] = savedData;
@@ -1572,7 +1570,7 @@ import { pushUndo } from './undo-redo.js';
           document.getElementById('pageLeft').appendChild(ann);
           pushUndo({ type: 'create', elements: [ann] });
           const dispLabel = displayType === 'icon' ? 'アイコン' : displayType === 'page-color' ? '紙面カラー' : displayType === 'image' ? '画像' : 'マーカー';
-          updateStatus(`${cfg.label}を配置しました（${dispLabel}型）`);
+          updateStatus();
         }
       }
 

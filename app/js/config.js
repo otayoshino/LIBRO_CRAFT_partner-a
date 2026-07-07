@@ -46,7 +46,7 @@
      * 紙面カラー型（.dt-page-color）の枠線・背景色を種別ごとに変えるため、
      * CSSカスタムプロパティ --ann-type-rgb 経由でCSS側に渡す用途で使う。
      */
-    export function annTypeRgbTriplet(rgbaColor) {
+    function annTypeRgbTriplet(rgbaColor) {
       const m = /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/.exec(rgbaColor || '');
       return m ? `${m[1]},${m[2]},${m[3]}` : '68,114,196';
     }

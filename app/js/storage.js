@@ -652,7 +652,7 @@ import { showToast, updateStatus } from './ui-common.js';
      * 種別固有フィールドはヒントテキストで代替表示する。
      * @param {string} type - アノテーション種別
      */
-    export function _renderGrayedPanel(type) {
+    function _renderGrayedPanel(type) {
       const emptyDiv = document.getElementById('sideDetailEmpty');
       const cfg = ANNOTATION_TYPE_CONFIG?.[type];
 
@@ -693,5 +693,5 @@ import { showToast, updateStatus } from './ui-common.js';
      */
     export function saveDialog() {
       closeDialog();
-      updateStatus('アノテーションを保存しました');
+      updateStatus();
     }

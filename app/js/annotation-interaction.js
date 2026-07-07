@@ -25,7 +25,7 @@ import { pushUndo } from './undo-redo.js';
       page.querySelectorAll('.ann-object:not(.ann-hidden-page), .ann-icon-obj:not(.ann-hidden-page), .ann-image-obj:not(.ann-hidden-page), .daimon-btn:not(.ann-hidden-page), .kotae-btn:not(.ann-hidden-page), .shomei-btn:not(.ann-hidden-page)')
         .forEach(a => a.classList.add('is-selected'));
       const total = page.querySelectorAll('.sticky-note:not(.ann-hidden-page), .ann-object:not(.ann-hidden-page), .ann-icon-obj:not(.ann-hidden-page), .ann-image-obj:not(.ann-hidden-page), .daimon-btn:not(.ann-hidden-page), .kotae-btn:not(.ann-hidden-page), .shomei-btn:not(.ann-hidden-page)').length;
-      updateStatus(`全オブジェクトを選択しました（${total}件）`);
+      updateStatus();
       updateAlignPanel();
     }
 
@@ -144,7 +144,7 @@ import { pushUndo } from './undo-redo.js';
         }
         return snap;
       });
-      updateStatus(`${state.annClipboard.length} 件のオブジェクトをコピーしました`);
+      updateStatus();
     }
 
 
@@ -350,7 +350,7 @@ import { pushUndo } from './undo-redo.js';
         openAnnotationSettingsDialog(last.dataset.type || 'sticky', last);
       }
       pushUndo({ type: 'create', elements: [...pasted] });
-      updateStatus(`${pasted.length} 件のオブジェクトを貼り付けました`);
+      updateStatus();
       updateAlignPanel();
     }
 
@@ -378,7 +378,7 @@ import { pushUndo } from './undo-redo.js';
         deactivateAnnotationMode();
         deselectAllObjects();
         closeDialog();
-        updateStatus('描画モードを解除しました');
+        updateStatus();
         return;
       }
 
@@ -395,7 +395,7 @@ import { pushUndo } from './undo-redo.js';
       state.currentDrawType = type;
       document.getElementById('pageLeft').classList.add('drawing-mode');
       const cfg = ANNOTATION_TYPE_CONFIG[type];
-      updateStatus(`${cfg.label}を配置する範囲をドラッグしてください（Escでキャンセル）`);
+      updateStatus();
 
       // 詳細設定パネルに選択種別のフォームを表示
       openAnnotationSettingsDialog(type);
@@ -951,7 +951,7 @@ import { pushUndo } from './undo-redo.js';
           document.addEventListener('mousemove', onMoveMulti);
           document.addEventListener('mouseup',   onUpMulti);
 
-          updateStatus(`Alt+ドラッグ：${cloneableSelected.length} 件のオブジェクトをコピーしました`);
+          updateStatus();
           return;
         }
 
@@ -1072,7 +1072,7 @@ import { pushUndo } from './undo-redo.js';
           reinitElement(clone);
           target = clone;
           altCopied = true;
-          updateStatus('Alt+ドラッグ：オブジェクトをコピーしました');
+          updateStatus();
         }
 
         const startX    = e.clientX;
@@ -1389,16 +1389,12 @@ import { pushUndo } from './undo-redo.js';
         const sel = finalSelection[0];
         const type = sel.dataset.type || 'sticky';
         openAnnotationSettingsDialog(type, sel);
-        updateStatus(
-          sel.classList.contains('sticky-note')
-            ? '付箋を選択中'
-            : `${ANNOTATION_TYPE_CONFIG[type]?.label ?? type}を選択中`
-        );
+        updateStatus();
       } else if (total > 1) {
-        updateStatus(`${total} 件のオブジェクトを選択中`);
+        updateStatus();
         updateAlignPanel();
       } else {
-        updateStatus('オブジェクトが見つかりませんでした');
+        updateStatus();
       }
     }
 
@@ -1519,5 +1515,5 @@ import { pushUndo } from './undo-redo.js';
 
       const labelMap = { left:'水平左揃え', centerH:'水平中央揃え', right:'水平右揃え',
                          top:'垂直上揃え',  centerV:'垂直中央揃え',  bottom:'垂直下揃え' };
-      updateStatus(`${labelMap[mode]}を実行しました（${els.length}件）`);
+      updateStatus();
     }

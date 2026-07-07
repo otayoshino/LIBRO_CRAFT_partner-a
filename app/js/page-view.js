@@ -400,7 +400,7 @@ import { updateStatus } from './ui-common.js';
       if (state.bookPages) renderPage(state.currentPage);
 
       updateAlignPanel();
-      updateStatus('表示フィット: ' + { page: 'ページ全体', height: '高さ', width: '幅' }[mode]);
+      updateStatus();
     }
 
     /* ============================
