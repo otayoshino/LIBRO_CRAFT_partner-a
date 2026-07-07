@@ -13,10 +13,10 @@ from urllib.parse import urlparse, parse_qs
 # ===========================
 # 設定定数
 # ===========================
-PORT = 8080
-HOST = "0.0.0.0"
+PORT: int = 8080
+HOST: str = "0.0.0.0"
 # サーバーのルートディレクトリ（このファイルが置かれているフォルダ）
-SERVE_DIR = os.path.dirname(os.path.abspath(__file__))
+SERVE_DIR: str = os.path.dirname(os.path.abspath(__file__))
 
 
 def get_local_ip() -> str:
@@ -38,20 +38,20 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
     開発環境でのクロスオリジンアクセスを許可する。
     """
 
-    def end_headers(self):
+    def end_headers(self) -> None:
         """レスポンスヘッダーにCORS許可ヘッダーを追加して送信する。"""
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         super().end_headers()
 
-    def do_OPTIONS(self):
+    def do_OPTIONS(self) -> None:
         """プリフライトリクエストに対応するためのOPTIONSハンドラー。"""
         self.send_response(204)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Content-Length")
         self.end_headers()
 
-    def do_POST(self):
+    def do_POST(self) -> None:
         """
         ファイルアップロードを処理する POSTハンドラー。
         /upload?filename=xxx にファイルの生バイナリを送信すると
@@ -91,7 +91,7 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.log_message("ファイルアップロード: %s (%d bytes)", filename, len(body))
         self._send_json(200, {"filename": filename, "saved": True})
 
-    def _send_json(self, status_code: int, data: dict):
+    def _send_json(self, status_code: int, data: dict) -> None:
         """
         JSON レスポンスを送信するユーティリティメソッド。
 
@@ -106,7 +106,7 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, format, *args):
+    def log_message(self, format: str, *args) -> None:
         """アクセスログをコンソールに出力する。"""
         print(f"[アクセス] {self.address_string()} - {format % args}")
 
