@@ -703,13 +703,12 @@ export async function parseLibroBookZip(zip) {
     return true;
   }
 
-  // Hide/Showペア用のannots画像をBlobURL化する
-  const togglePairs = [];
-  for (const tp of togglePairsRaw) {
+  // Hide/Showペア用のannots画像をBlobURL化する（各ペアは独立しているため並列実行する）
+  const togglePairsResults = await Promise.all(togglePairsRaw.map(async (tp) => {
     const closedBytes = await loadAnnotPngBytes(tp.baseDir + tp.closedFile);
     const openBytes   = await loadAnnotPngBytes(tp.baseDir + tp.openFile);
-    if (!closedBytes || !openBytes) continue;
-    togglePairs.push({
+    if (!closedBytes || !openBytes) return null;
+    return {
       pageNum: tp.pageNum,
       rect: tp.rect,
       pageWidth: tp.pageWidth,
@@ -723,22 +722,25 @@ export async function parseLibroBookZip(zip) {
       groupId:    tp.groupId,
       closedImageUrl: URL.createObjectURL(new Blob([closedBytes], { type: 'image/png' })),
       openImageUrl:   URL.createObjectURL(new Blob([openBytes],   { type: 'image/png' })),
-    });
-  }
+    };
+  }));
+  const togglePairs = togglePairsResults.filter(Boolean);
 
   // 拡張トグルネットワーク（色分けボタン・ステップボタン等）用のannots画像をBlobURL化する。
   // 生データ（member.raw、書き出し時にそのまま書き戻す）にはURLを書き込まず、
   // 表示専用のimagesテーブル（id -> blobUrl）として並置する。
-  const networkGroups = [];
-  for (const net of networksRaw) {
+  // ネットワーク単位・メンバー単位いずれも独立しているため並列実行する。
+  const networkGroups = await Promise.all(networksRaw.map(async (net) => {
     const images = new Map();
-    for (const m of net.members) {
+    const memberResults = await Promise.all(net.members.map(async (m) => {
       const bytes = await loadAnnotPngBytes(net.baseDir + m.filename);
-      if (!bytes) continue;
-      images.set(m._id, URL.createObjectURL(new Blob([bytes], { type: 'image/png' })));
-    }
-    networkGroups.push({ ...net, images });
-  }
+      return bytes ? { id: m._id, bytes } : null;
+    }));
+    memberResults.filter(Boolean).forEach(({ id, bytes }) => {
+      images.set(id, URL.createObjectURL(new Blob([bytes], { type: 'image/png' })));
+    });
+    return { ...net, images };
+  }));
 
   // pagelink/plusfile/externallink/audio/video の元画像（annots/xxxx.png）を読み込み、
   // 別オーサリングツール由来の見た目をそのまま再現できる場合は表示タイプを「画像」に上書きする。
@@ -939,6 +941,7 @@ export function renderNetworkGroups(networkGroups) {
   const pageRect = page.getBoundingClientRect();
 
   networkGroups.forEach(net => {
+    const memberById = new Map(net.members.map(m => [m._id, m]));
     net.slots.forEach((slot, slotIndex) => {
       const [x, y, w, h] = slot.rect;
       const leftPx   = (x / net.pageWidth)  * pageRect.width;
@@ -955,7 +958,7 @@ export function renderNetworkGroups(networkGroups) {
       slotEl.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
 
       slot.memberIds.forEach(id => {
-        const member = net.members.find(m => m._id === id);
+        const member = memberById.get(id);
         if (!member) return;
         const frame = document.createElement('img');
         frame.className = 'libro-network-frame';
@@ -1284,20 +1287,26 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     // 未知アノテーションの生データは無変更のまま書き戻す（内部管理用の_idは除去）
     const passthrough = (passthroughByPage.get(pageNum) || []).map(({ _id, ...clean }) => clean);
 
+    // 各アノテーションのfilenameは既存のdata-idベースで一意に決まっており、
+    // 変換処理も互いに独立しているため並列実行する。
+    const convertedResults = await Promise.all(
+      (byPage.get(pageNum) || []).map(domData => convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip, baseDir))
+    );
     const converted = [];
-    for (const domData of (byPage.get(pageNum) || [])) {
-      const result = await convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip, baseDir);
-      if (!result) continue;
+    convertedResults.forEach(result => {
+      if (!result) return;
       if (result.newPngBytes) zip.file(baseDir + result.annotJson.filename, result.newPngBytes);
       converted.push(result.annotJson);
-    }
+    });
 
+    const stickyGroupResults = await Promise.all(
+      (stickyGroupsByPage.get(pageNum) || []).map(group => convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, zip, baseDir, group.groupId))
+    );
     const stickyAnnots = [];
-    for (const group of (stickyGroupsByPage.get(pageNum) || [])) {
-      const { annotJsons, newPngWrites } = await convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, zip, baseDir, group.groupId);
+    stickyGroupResults.forEach(({ annotJsons, newPngWrites }) => {
       newPngWrites.forEach(({ path, bytes }) => zip.file(path, bytes));
       stickyAnnots.push(...annotJsons);
-    }
+    });
 
     pageJson.annots = [...passthrough, ...converted, ...stickyAnnots];
 
@@ -1324,27 +1333,28 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
       if (fileName) referencedAudio.add(`${fileName}.mp3`);
     } catch (_) {}
   });
-  for (const key of referencedAudio) {
+  // 各音声ファイルは互いに独立して読込・暗号化できるため並列実行する
+  await Promise.all([...referencedAudio].map(async (key) => {
     const soundPath = baseDir + 'sounds/' + key;
-    if (zip.file(soundPath)) continue; // 既存音声は無変更
+    if (zip.file(soundPath)) return; // 既存音声は無変更
     const blobUrl = mediaBlobs[key];
-    if (!blobUrl) continue;
+    if (!blobUrl) return;
     const res = await fetch(blobUrl);
     const buf = new Uint8Array(await res.arrayBuffer());
     zip.file(soundPath, encodePbve2000(buf));
-  }
+  }));
 
   // 別オーサリングツール由来などで元々暗号化されていなかったファイル（ページ画像、sounds/*.mp3、
   // annots/*.png）は、対応するアノテーションの編集有無にかかわらず必ず暗号化して保存する
   // （インポート時にlibroBook.unencryptedAssetPathsへ記録済み。編集により新規生成された
-  // ファイルが既に暗号化済みの場合はスキップする）。
-  for (const path of (libroBook.unencryptedAssetPaths || [])) {
+  // ファイルが既に暗号化済みの場合はスキップする）。各ファイルは互いに独立しているため並列実行する。
+  await Promise.all([...(libroBook.unencryptedAssetPaths || [])].map(async (path) => {
     const entry = zip.file(path);
-    if (!entry) continue;
+    if (!entry) return;
     const buf = await entry.async('arraybuffer');
-    if (isPbve2000Encoded(buf)) continue;
+    if (isPbve2000Encoded(buf)) return;
     zip.file(path, encodePbve2000(buf));
-  }
+  }));
 
   return zip;
 }

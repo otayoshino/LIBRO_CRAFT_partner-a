@@ -1199,7 +1199,8 @@ import { pushUndo } from './undo-redo.js';
           const MIN_SIZE  = 20;
 
           // 各選択オブジェクトの初期状態を記録（アイコン型・画像アイコン型はリサイズ対象外・位置移動のみ）
-          const snapshots = getSelectedObjects()
+          const selectedObjects = getSelectedObjects();
+          const snapshots = selectedObjects
             .filter(el => !el.classList.contains('ann-icon-obj') && !el.classList.contains('ann-image-obj'))
             .map(el => ({
               el,
@@ -1209,7 +1210,7 @@ import { pushUndo } from './undo-redo.js';
               height: el.offsetHeight,
             }));
           // アイコン型・画像アイコン型：位置のみ追従（リサイズなし）
-          const iconSnapshots = getSelectedObjects()
+          const iconSnapshots = selectedObjects
             .filter(el => el.classList.contains('ann-icon-obj') || el.classList.contains('ann-image-obj'))
             .map(el => ({
               el,
@@ -1382,9 +1383,10 @@ import { pushUndo } from './undo-redo.js';
         obj.classList.add('is-selected');
       });
 
-      const total = getSelectedObjects().length;
+      const finalSelection = getSelectedObjects();
+      const total = finalSelection.length;
       if (total === 1) {
-        const sel = getSelectedObjects()[0];
+        const sel = finalSelection[0];
         const type = sel.dataset.type || 'sticky';
         openAnnotationSettingsDialog(type, sel);
         updateStatus(
