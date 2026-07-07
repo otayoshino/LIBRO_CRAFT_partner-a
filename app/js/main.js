@@ -22,8 +22,8 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         updateStatus('描画をキャンセルしました');
       }
 
-      // Deleteキー：選択中のオブジェクトを削除（入力フィールドにフォーカス中は無効）
-      if (e.key === 'Delete') {
+      // Delete/Backspaceキー：選択中のオブジェクトを削除（入力フィールドにフォーカス中は無効）
+      if (e.key === 'Delete' || e.key === 'Backspace') {
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         if (document.body.classList.contains('is-view-mode')) return;
