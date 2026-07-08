@@ -15,7 +15,7 @@ __pycache__/
 
 ## 許可コマンド
 .claude/settings.json
+.claude/settings.local.json
 
 ## 個人資料
 yagisawa/
-
