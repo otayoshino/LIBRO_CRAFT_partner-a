@@ -82,7 +82,8 @@
       "Bash(pkill -f \"find / -iname\")",
       "Bash(node verify_spread.mjs)",
       "Bash(grep -n \"window.state\\\\|state,$\\\\|Object.assign\\(window\" /Users/meitec-yagisawa/github/LIBRO_CRAFT/app/js/main.js)",
-      "Bash(node verify_network_slot.mjs)"
+      "Bash(node verify_network_slot.mjs)",
+      "Bash(python3 serve.py)"
     ],
     "additionalDirectories": [
       "/tmp/orig_check",
