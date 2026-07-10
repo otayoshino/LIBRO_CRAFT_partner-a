@@ -283,7 +283,7 @@ import { pushUndo } from './undo-redo.js';
             t.classList.toggle('state-hidden',   allVisible);
           }
         });
-        swapButtonPressedImage(btn, !allVisible);
+        swapButtonPressedImage(btn, allVisible);
         updateStatus();
       });
     }
@@ -383,7 +383,7 @@ import { pushUndo } from './undo-redo.js';
           t.classList.toggle('state-visible', !allVisible);
           t.classList.toggle('state-hidden',   allVisible);
         });
-        swapButtonPressedImage(btn, !allVisible);
+        swapButtonPressedImage(btn, allVisible);
         updateStatus();
       });
     }
@@ -503,7 +503,7 @@ import { pushUndo } from './undo-redo.js';
             delete t.dataset.shomeiOutline;
           }
         });
-        swapButtonPressedImage(btn, !allShowing);
+        swapButtonPressedImage(btn, allShowing);
         updateStatus();
       });
     }
