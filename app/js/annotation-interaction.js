@@ -365,6 +365,7 @@ import { pushUndo } from './undo-redo.js';
       document.querySelectorAll('.ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn').forEach(a => a.classList.remove('is-selected'));
       state.selectedAnnotation = null;
       closeDialog();
+      updateStatus();
     }
 
 
@@ -1451,6 +1452,56 @@ import { pushUndo } from './undo-redo.js';
 
       // バウンディングボックスにリサイズハンドルを設置
       addBoundingBoxHandles(box);
+    }
+
+
+    /**
+     * 大問ボタンまたはその配下の付箋・証明ボタン・図等を選択しているとき、
+     * 同一 daimonId を共有するグループ全体を囲む枠を #pageLeft 上に描画する。
+     * 該当グループが選択されていない場合は既存の枠をすべて削除する。
+     */
+    export function updateDaimonGroupHighlight() {
+      const pageEl = document.getElementById('pageLeft');
+      document.querySelectorAll('.daimon-group-box').forEach(b => b.remove());
+      if (!pageEl) return;
+
+      const daimonIds = new Set();
+      getSelectedObjects().forEach(el => {
+        const did = el.dataset.daimonId;
+        if (did) daimonIds.add(did);
+      });
+      if (daimonIds.size === 0) return;
+
+      const pageOrigin = pageEl.getBoundingClientRect();
+      const scale = state.zoomLevel / 100;
+
+      daimonIds.forEach(did => {
+        const members = [...pageEl.querySelectorAll(`[data-daimon-id="${did}"]`)]
+          .filter(el => !el.classList.contains('ann-hidden-page'));
+        if (members.length === 0) return;
+
+        const rects = members.map(el => {
+          const cr = el.getBoundingClientRect();
+          return {
+            l: cr.left   - pageOrigin.left,
+            t: cr.top    - pageOrigin.top,
+            r: cr.right  - pageOrigin.left,
+            b: cr.bottom - pageOrigin.top,
+          };
+        });
+        const minL = Math.min(...rects.map(r => r.l));
+        const minT = Math.min(...rects.map(r => r.t));
+        const maxR = Math.max(...rects.map(r => r.r));
+        const maxB = Math.max(...rects.map(r => r.b));
+
+        const box = document.createElement('div');
+        box.className = 'daimon-group-box';
+        box.style.left   = minL / scale + 'px';
+        box.style.top    = minT / scale + 'px';
+        box.style.width  = (maxR - minL) / scale + 'px';
+        box.style.height = (maxB - minT) / scale + 'px';
+        pageEl.appendChild(box);
+      });
     }
 
 

@@ -2136,6 +2136,18 @@
       overflow: visible;
     }
 
+    /* 大問ボタングループ選択時のグループ範囲ガイド */
+    .daimon-group-box {
+      position: absolute;
+      pointer-events: none;
+      box-sizing: border-box;
+      border: dashed rgba(230,126,34,0.8);
+      border-width: calc(2px * var(--zoom-inv-scale, 1));
+      background: transparent;
+      z-index: 890;
+      overflow: visible;
+    }
+
     /* 複数選択時は個々のオブジェクトのリサイズハンドルを非表示 */
     body.is-multi-select .is-selected > .resize-handle { display: none; }
 

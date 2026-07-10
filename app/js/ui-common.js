@@ -1,4 +1,4 @@
-import { updateAlignPanel } from './annotation-interaction.js';
+import { updateAlignPanel, updateDaimonGroupHighlight } from './annotation-interaction.js';
 
     /** トースト非表示用タイマー */
     let _toastTimer = null;
@@ -64,4 +64,6 @@ import { updateAlignPanel } from './annotation-interaction.js';
     export function updateStatus() {
       // 選択数に応じて整列パネルの活性状態を更新
       updateAlignPanel();
+      // 大問ボタングループの選択枠を更新
+      updateDaimonGroupHighlight();
     }
