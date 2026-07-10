@@ -6,7 +6,7 @@ import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, styleToRect } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility, updateTocButtonState } from './page-view.js';
 import { mediaBlobs, state } from './state.js';
-import { showToast, updateStatus } from './ui-common.js';
+import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js';
 
         /**
          * アノテーションをローカルストレージに保存する。
@@ -220,6 +220,7 @@ import { showToast, updateStatus } from './ui-common.js';
     export async function handleZipFile(event) {
       const file = event.target.files[0];
       if (!file) return;
+      showLoader();
       try {
         const zip = await JSZip.loadAsync(file);
 
@@ -278,6 +279,8 @@ import { showToast, updateStatus } from './ui-common.js';
       } catch (e) {
         showToast('ZIP読込エラー: ファイルが壊れているか形式が正しくありません');
         console.error(e);
+      } finally {
+        hideLoader();
       }
     }
 

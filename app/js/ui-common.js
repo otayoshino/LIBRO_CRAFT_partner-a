@@ -16,6 +16,20 @@ import { updateAlignPanel } from './annotation-interaction.js';
       _toastTimer = setTimeout(() => el.classList.remove('is-visible'), duration);
     }
 
+    /**
+     * ZIP読込中ローディングオーバーレイを表示する。
+     */
+    export function showLoader() {
+      document.getElementById('loaderOverlay').classList.add('is-visible');
+    }
+
+    /**
+     * ZIP読込中ローディングオーバーレイを非表示にする。
+     */
+    export function hideLoader() {
+      document.getElementById('loaderOverlay').classList.remove('is-visible');
+    }
+
     export function toggleAcc(bodyId, btn) {
       const body = document.getElementById(bodyId);
       if (!body) return;
