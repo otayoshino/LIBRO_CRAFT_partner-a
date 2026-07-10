@@ -122,6 +122,17 @@ import { pushUndo } from './undo-redo.js';
     }
 
 
+    /**
+     * 全ての大問/答/証明ボタンの見た目を通常時画像へ戻す。
+     * 編集モードに戻る際、閲覧モードで押下されたボタンの見た目をリセットするために呼び出す。
+     */
+    export function resetAllButtonPressedImages() {
+      document.querySelectorAll('.daimon-btn, .kotae-btn, .shomei-btn').forEach(btn => {
+        swapButtonPressedImage(btn, false);
+      });
+    }
+
+
     /** #rgb / #rrggbb / rgb(...) 形式の色文字列を反転する。解釈できない場合は null を返す。 */
     function invertColorString(colorStr) {
       if (!colorStr || colorStr === 'none') return null;

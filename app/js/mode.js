@@ -1,4 +1,5 @@
 import { deactivateAnnotationMode, deselectAllObjects } from './annotation-interaction.js';
+import { resetAllButtonPressedImages } from './buttons.js';
 import { state } from './state.js';
 import { updateStatus } from './ui-common.js';
 
@@ -42,6 +43,9 @@ import { updateStatus } from './ui-common.js';
           delete note.dataset.shomeiOutline;
         }
       });
+
+      // 閲覧モード中に押下された大問/答/証明ボタンの見た目を通常時画像へ戻す
+      resetAllButtonPressedImages();
 
       // 図ボタンによって変更された図オブジェクトの表示状態を元に戻す
       document.querySelectorAll('.zu-obj').forEach(obj => {
