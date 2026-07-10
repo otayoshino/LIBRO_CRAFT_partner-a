@@ -44,6 +44,39 @@ import { updateStatus } from './ui-common.js';
 
 
     /**
+     * index.json の configs['toc-page'] が指す目次ページへ移動する。
+     * LIBRO book以外（独自ZIP形式）読込時やtoc-page未設定時はTOCボタン自体が
+     * 無効化されているため呼ばれない想定だが、念のため無効値は無視する。
+     */
+    export function goTocPage() {
+      const tocPage = getTocPageNumber();
+      if (tocPage === null) return;
+      state.currentPage = tocPage;
+      updatePageDisplay();
+    }
+
+
+    /**
+     * index.json の configs['toc-page'] を取得する。LIBRO book未読込・値未設定・
+     * 現在の総ページ数の範囲外の場合は null を返す。
+     * @returns {number|null}
+     */
+    function getTocPageNumber() {
+      const tocPage = state.libroBook?.indexJson?.configs?.['toc-page'];
+      if (!Number.isInteger(tocPage) || tocPage < 1 || tocPage > state.totalPages) return null;
+      return tocPage;
+    }
+
+
+    /**
+     * TOCボタンの活性・非活性をindex.jsonのtoc-page有無に応じて更新する。
+     */
+    export function updateTocButtonState() {
+      document.getElementById('tocBtn')?.classList.toggle('disabled', getTocPageNumber() === null);
+    }
+
+
+    /**
      * ページ表示を更新する。
      */
     export function updatePageDisplay() {
@@ -67,6 +100,8 @@ import { updateStatus } from './ui-common.js';
       }
       // 見開き（real-page-count超過ページ）バッジの表示更新
       updateSpreadBadge();
+      // TOCボタンの活性状態を更新
+      updateTocButtonState();
 
       // ページ移動時に選択を全解除する
       deselectAllObjects();

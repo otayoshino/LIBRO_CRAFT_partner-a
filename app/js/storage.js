@@ -4,7 +4,7 @@ import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, styleToRect } from './libro-format.js';
-import { loadLibroBookPages, updateAnnotationVisibility } from './page-view.js';
+import { loadLibroBookPages, updateAnnotationVisibility, updateTocButtonState } from './page-view.js';
 import { mediaBlobs, state } from './state.js';
 import { showToast, updateStatus } from './ui-common.js';
 
@@ -233,6 +233,11 @@ import { showToast, updateStatus } from './ui-common.js';
         Object.values(mediaBlobs).forEach(url => URL.revokeObjectURL(url));
         Object.keys(mediaBlobs).forEach(k => delete mediaBlobs[k]);
 
+        // 独自ZIP形式にはindex.jsonが無いため、前回LIBRO book読込分のtoc-page等が
+        // 残らないようlibroBookをクリアする
+        state.libroBook = null;
+        updateTocButtonState();
+
         // 音声・動画・Plusファイルを含む全ファイルをBlobURLに変換してキャッシュ
         const mimeMap = {
           '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
@@ -318,6 +323,7 @@ import { showToast, updateStatus } from './ui-common.js';
       // unencryptedAssetPathsは、別オーサリングツール由来で実際には暗号化されていなかった
       // 音声・アノテーション画像のパス一覧（書き出し時に強制暗号化する対象）
       state.libroBook = { zip, baseDir, indexJson, unencryptedAssetPaths };
+      updateTocButtonState();
       // book識別子：LIBRO book folder名（baseDir）。folder無し（index.jsonがzipルート直下）の場合は
       // 元zipファイル名にフォールバックする
       const bookId = baseDir || fallbackName;
