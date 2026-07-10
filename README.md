@@ -1,4 +1,4 @@
-# ContentsBuilder（LIBRO＋CRAFT）
+# LIBRO＋CRAFT
 
 Webブック（PDF由来のページ画像）に付箋・音声再生・ページリンク・外部リンクなどのアノテーションを追加編集するオーサリングツールです。
 
