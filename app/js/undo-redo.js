@@ -121,7 +121,17 @@ import { showToast, updateStatus } from './ui-common.js';
             });
             // 削除時に解除した daimonId / kotaeId / shomeiId を付箋に再付与
             if (op.linkedStickyChanges) {
-              op.linkedStickyChanges.forEach(({ el, daimonId, kotaeId, kotaeOrigBg, shomeiId, shomeiOrigBg, shomeiOutline, background, outline }) => {
+              op.linkedStickyChanges.forEach(change => {
+                const { el, daimonId, kotaeId, kotaeOrigBg, shomeiId, shomeiOrigBg, shomeiOutline, background, outline } = change;
+                // Redo用に変更後（=削除実行後）の現在値をこのエントリへ記録しておく
+                change.afterDaimonId     = el.dataset.daimonId;
+                change.afterKotaeId      = el.dataset.kotaeId;
+                change.afterKotaeOrigBg  = el.dataset.kotaeOrigBg;
+                change.afterShomeiId     = el.dataset.shomeiId;
+                change.afterShomeiOrigBg = el.dataset.shomeiOrigBg;
+                change.afterShomeiOutline = el.dataset.shomeiOutline;
+                change.afterBackground   = el.style.background;
+                change.afterOutline      = el.style.outline;
                 if (daimonId    !== undefined) el.dataset.daimonId    = daimonId;
                 if (kotaeId     !== undefined) el.dataset.kotaeId     = kotaeId;
                 if (kotaeOrigBg !== undefined) el.dataset.kotaeOrigBg = kotaeOrigBg;
@@ -201,7 +211,10 @@ import { showToast, updateStatus } from './ui-common.js';
           }
           // --- グループ化/解除の取り消し ---
           case 'group': {
-            op.targets.forEach(({ el, prevGroupId }) => {
+            op.targets.forEach(target => {
+              const { el, prevGroupId } = target;
+              // Redo用に変更後（現在）のgroupIdをこのターゲットへ記録しておく
+              target.afterGroupId = el.dataset.groupId;
               if (prevGroupId === undefined) delete el.dataset.groupId;
               else                           el.dataset.groupId = prevGroupId;
             });
@@ -287,6 +300,19 @@ import { showToast, updateStatus } from './ui-common.js';
             const el = page.querySelector(`[data-id="${snap.id}"]`);
             if (el) el.remove();
           });
+          // 紐付き付箋のdaimonId/kotaeId/shomeiId・元色・outlineを削除実行後の状態へ再適用
+          if (op.linkedStickyChanges) {
+            op.linkedStickyChanges.forEach(({ el, afterDaimonId, afterKotaeId, afterKotaeOrigBg, afterShomeiId, afterShomeiOrigBg, afterShomeiOutline, afterBackground, afterOutline }) => {
+              if (afterDaimonId === undefined) delete el.dataset.daimonId; else el.dataset.daimonId = afterDaimonId;
+              if (afterKotaeId === undefined) delete el.dataset.kotaeId; else el.dataset.kotaeId = afterKotaeId;
+              if (afterKotaeOrigBg === undefined) delete el.dataset.kotaeOrigBg; else el.dataset.kotaeOrigBg = afterKotaeOrigBg;
+              if (afterShomeiId === undefined) delete el.dataset.shomeiId; else el.dataset.shomeiId = afterShomeiId;
+              if (afterShomeiOrigBg === undefined) delete el.dataset.shomeiOrigBg; else el.dataset.shomeiOrigBg = afterShomeiOrigBg;
+              if (afterShomeiOutline === undefined) delete el.dataset.shomeiOutline; else el.dataset.shomeiOutline = afterShomeiOutline;
+              el.style.background = afterBackground;
+              el.style.outline    = afterOutline;
+            });
+          }
           deselectAllObjects();
           closeDialog();
           break;
@@ -333,7 +359,10 @@ import { showToast, updateStatus } from './ui-common.js';
         }
         // --- グループ化/解除の再適用 ---
         case 'group': {
-          // group op は before のみ保持のためスキップ
+          op.targets.forEach(({ el, afterGroupId }) => {
+            if (afterGroupId === undefined) delete el.dataset.groupId;
+            else                            el.dataset.groupId = afterGroupId;
+          });
           break;
         }
         // --- 大問ボタン作成の再適用 ---
@@ -347,19 +376,24 @@ import { showToast, updateStatus } from './ui-common.js';
         // --- 答ボタン作成の再適用 ---
         case 'kotae-create': {
           page.appendChild(op.btn);
-          op.linkedStickies.forEach(({ el }) => {
-            el.dataset.kotaeId  = op.btn.dataset.kotaeId;
-            el.style.background = '#ffffff';
+          op.linkedStickies.forEach(({ el, prevBackground }) => {
+            el.dataset.kotaeId    = op.btn.dataset.kotaeId;
+            el.dataset.kotaeOrigBg = prevBackground;
+            el.style.background   = '#ffffff';
           });
           break;
         }
         // --- 証明ボタン作成の再適用 ---
         case 'shomei-create': {
           page.appendChild(op.btn);
-          op.linkedStickies.forEach(({ el }) => {
-            el.dataset.shomeiId = op.btn.dataset.shomeiId;
-            el.style.background = '#ffffff';
-            el.style.outline    = '';
+          op.linkedStickies.forEach(({ el, prevBackground }) => {
+            el.dataset.shomeiId    = op.btn.dataset.shomeiId;
+            el.dataset.shomeiOrigBg = prevBackground;
+            el.classList.remove('state-hidden');
+            el.classList.add('state-visible');
+            el.style.background    = '#ffffff';
+            el.style.outline       = '';
+            delete el.dataset.shomeiOutline;
           });
           break;
         }
