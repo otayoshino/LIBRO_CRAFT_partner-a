@@ -1,17 +1,17 @@
 import { closeQuickCreateDialog, confirmAnnotation, openQuickCreateDialog } from './annotation-dialog.js';
 import { startAutoSaveInterval } from './autosave.js';
 import { createDaimonButton, createKotaeButton, createShomeiButton } from './buttons.js';
-import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObjects, deactivateAnnotationMode, finalizeDragSelect, getPageRelativePos, onDragSelectMove, onDrawPreviewMove, onPageMouseDown, onPageMouseMove, onPageMouseUp, pasteClipboard, selectAllObjects } from './annotation-interaction.js';
+import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObjects, cutSelectedObjects, deactivateAnnotationMode, deleteSelectedObjects, finalizeDragSelect, getPageRelativePos, onDragSelectMove, onDrawPreviewMove, onPageMouseDown, onPageMouseMove, onPageMouseUp, pasteClipboard, selectAllObjects } from './annotation-interaction.js';
 import { switchToViewMode } from './mode.js';
 import { applyZoomChange, goFirstPage, goLastPage, goTocPage, nextPage, prevPage, resizePage, setFit, updatePageDisplay, zoomIn, zoomOut } from './page-view.js';
-import { selectedStickySet, state } from './state.js';
+import { state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
 import { closeDialog, handleZipFile, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsLibroBook, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';
 import { toggleAcc, toggleNav, updateStatus } from './ui-common.js';
-import { pushUndo, redo, undo } from './undo-redo.js';
+import { redo, undo } from './undo-redo.js';
 
 
-    /* キーボードイベント（Esc / Delete / Space / Cmd+C / Cmd+V） */
+    /* キーボードイベント（Esc / Delete / Space / Cmd+C / Cmd+V / Cmd+X） */
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         cancelDragSelect();
@@ -27,190 +27,7 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         if (document.body.classList.contains('is-view-mode')) return;
-
-        let deleted = 0;
-
-        // 削除前にスナップショットを取得して Undo スタックに積む
-        const deleteSnapshots = [];
-        const linkedStickyChanges = [];
-
-        // 付箋のスナップショット
-        selectedStickySet.forEach(note => {
-          deleteSnapshots.push({
-            className:   note.className.replace(/\bis-selected\b/g, '').trim(),
-            id:          note.dataset.id,
-            type:        note.dataset.type || 'sticky',
-            savedData:   note.dataset.savedData,
-            groupId:     note.dataset.groupId,
-            daimonId:    note.dataset.daimonId,
-            kotaeId:     note.dataset.kotaeId,
-            kotaeOrigBg: note.dataset.kotaeOrigBg,
-            styleCssText: note.style.cssText,
-            pageNum:     note.dataset.page || '1',
-            // LIBRO由来の既存付箋（.libro-toggle）は子要素（画像2枚）と専用datasetの復元が必要
-            innerHTML:   note.dataset.libroToggle === '1' ? note.innerHTML : undefined,
-            libroToggle: note.dataset.libroToggle,
-            closedId:    note.dataset.closedId,
-            openId:      note.dataset.openId,
-            closedFile:  note.dataset.closedFile,
-            openFile:    note.dataset.openFile,
-          });
-        });
-
-        // アノテーションのスナップショット
-        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').forEach(ann => {
-          deleteSnapshots.push({
-            className:   ann.className.replace(/\bis-selected\b/g, '').trim(),
-            id:          ann.dataset.id,
-            type:        ann.dataset.type,
-            savedData:   ann.dataset.savedData,
-            styleCssText: ann.style.cssText,
-            pageNum:     ann.dataset.page || '1',
-          });
-        });
-
-        // 各種ボタンのスナップショット
-        document.querySelectorAll('.daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(btn => {
-          deleteSnapshots.push({
-            className:   btn.className.replace(/\bis-selected\b/g, '').trim(),
-            id:          btn.dataset.id,
-            type:        btn.dataset.type,
-            daimonId:    btn.dataset.daimonId,
-            kotaeId:     btn.dataset.kotaeId,
-            shomeiId:    btn.dataset.shomeiId,
-            zuId:        btn.dataset.zuId,
-            styleCssText: btn.style.cssText,
-            pageNum:     btn.dataset.page || '1',
-            savedData:   btn.dataset.savedData,
-            libroToggle: btn.dataset.libroToggle,
-          });
-          // 大問ボタン削除に伴う付箋の daimonId 変化を記録
-          if (btn.classList.contains('daimon-btn')) {
-            const did = btn.dataset.daimonId;
-            if (did) {
-              document.querySelectorAll(`.sticky-note[data-daimon-id="${did}"]`).forEach(n => {
-                linkedStickyChanges.push({ el: n, daimonId: did });
-              });
-            }
-          }
-          // 答ボタン削除に伴う付箋の kotaeId・背景色変化を記録
-          if (btn.classList.contains('kotae-btn')) {
-            const kid = btn.dataset.kotaeId;
-            if (kid) {
-              document.querySelectorAll(`.sticky-note[data-kotae-id="${kid}"]`).forEach(n => {
-                linkedStickyChanges.push({
-                  el: n, kotaeId: kid,
-                  kotaeOrigBg: n.dataset.kotaeOrigBg,
-                  background:  n.style.background,
-                });
-              });
-            }
-          }
-          // 証明ボタン削除に伴う付箋の shomeiId・背景色・枠線変化を記録
-          if (btn.classList.contains('shomei-btn')) {
-            const sid = btn.dataset.shomeiId;
-            if (sid) {
-              document.querySelectorAll(`.sticky-note[data-shomei-id="${sid}"]`).forEach(n => {
-                linkedStickyChanges.push({
-                  el: n, shomeiId: sid,
-                  shomeiOrigBg:     n.dataset.shomeiOrigBg,
-                  shomeiOutline:    n.dataset.shomeiOutline,
-                  background:       n.style.background,
-                  outline:          n.style.outline,
-                });
-              });
-            }
-          }
-        });
-
-        if (deleteSnapshots.length > 0) {
-          pushUndo({ type: 'delete', snapshots: deleteSnapshots, linkedStickyChanges });
-        }
-
-        // 選択中の付箋を削除
-        selectedStickySet.forEach(note => {
-          note.remove();
-          deleted++;
-        });
-        selectedStickySet.clear();
-
-        // 選択中のアノテーションを削除
-        document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').forEach(ann => {
-          ann.remove();
-          deleted++;
-        });
-
-        // 選択中の大問ボタンを削除（紐付き付箋の daimon-id も解除）
-        document.querySelectorAll('.daimon-btn.is-selected').forEach(btn => {
-          const did = btn.dataset.daimonId;
-          if (did) {
-            document.querySelectorAll(`.sticky-note[data-daimon-id="${did}"]`)
-              .forEach(n => { delete n.dataset.daimonId; });
-          }
-          btn.remove();
-          deleted++;
-        });
-
-        // 選択中の図ボタンを削除（紐付き図オブジェクトも続けて削除）
-        document.querySelectorAll('.zu-btn.is-selected').forEach(btn => {
-          const zid = btn.dataset.zuId;
-          if (zid) {
-            const obj = document.querySelector(`.zu-obj[data-zu-id="${zid}"]`);
-            if (obj) { obj.remove(); deleted++; }
-          }
-          btn.remove();
-          deleted++;
-        });
-
-        // 選択中の図オブジェクトを削除（紐付き図ボタンも続けて削除）
-        document.querySelectorAll('.zu-obj.is-selected').forEach(obj => {
-          const zid = obj.dataset.zuId;
-          if (zid) {
-            const btn = document.querySelector(`.zu-btn[data-zu-id="${zid}"]`);
-            if (btn) { btn.remove(); deleted++; }
-          }
-          obj.remove();
-          deleted++;
-        });
-
-        // 選択中の答ボタンを削除（紐付き付箋の元色を復元）
-        document.querySelectorAll('.kotae-btn.is-selected').forEach(btn => {
-          const kid = btn.dataset.kotaeId;
-          if (kid) {
-            document.querySelectorAll(`.sticky-note[data-kotae-id="${kid}"]`).forEach(n => {
-              if (n.dataset.kotaeOrigBg !== undefined) {
-                n.style.background = n.dataset.kotaeOrigBg;
-                delete n.dataset.kotaeOrigBg;
-              }
-              delete n.dataset.kotaeId;
-            });
-          }
-          btn.remove();
-          deleted++;
-        });
-
-        // 選択中の証明ボタンを削除（紐付き付箋の shomei-id・枠線・元色を復元）
-        document.querySelectorAll('.shomei-btn.is-selected').forEach(btn => {
-          const sid = btn.dataset.shomeiId;
-          if (sid) {
-            document.querySelectorAll(`.sticky-note[data-shomei-id="${sid}"]`).forEach(n => {
-              if (n.dataset.shomeiOrigBg !== undefined) {
-                n.style.background = n.dataset.shomeiOrigBg;
-                delete n.dataset.shomeiOrigBg;
-              }
-              n.style.outline = '';
-              delete n.dataset.shomeiOutline;
-              delete n.dataset.shomeiId;
-            });
-          }
-          btn.remove();
-          deleted++;
-        });
-
-        if (deleted > 0) {
-          closeDialog();
-          updateStatus();
-        }
+        deleteSelectedObjects();
       }
 
       // Cmd+Z / Ctrl+Z：操作を1つ取り消す
@@ -251,6 +68,15 @@ import { pushUndo, redo, undo } from './undo-redo.js';
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         e.preventDefault();
         pasteClipboard();
+      }
+
+      // Cmd+X / Ctrl+X：選択中オブジェクトを切り取り（コピー＋削除）
+      if (e.key === 'x' && (e.metaKey || e.ctrlKey)) {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (document.body.classList.contains('is-view-mode')) return;
+        e.preventDefault();
+        cutSelectedObjects();
       }
 
       // 矢印キー（右/下：次ページ、左/上：前ページ）でページ移動

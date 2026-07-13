@@ -1346,6 +1346,209 @@ import { pushUndo } from './undo-redo.js';
       return result;
     }
 
+    /**
+     * 選択中のオブジェクト（付箋・アノテーション・各種ボタン・図）を削除する。
+     * Undoスナップショット取得〜DOM削除〜紐付き付箋の解除処理まで含む。
+     */
+    export function deleteSelectedObjects() {
+      if (document.body.classList.contains('is-view-mode')) return;
+
+      let deleted = 0;
+
+      // 削除前にスナップショットを取得して Undo スタックに積む
+      const deleteSnapshots = [];
+      const linkedStickyChanges = [];
+
+      // 付箋のスナップショット
+      selectedStickySet.forEach(note => {
+        deleteSnapshots.push({
+          className:   note.className.replace(/\bis-selected\b/g, '').trim(),
+          id:          note.dataset.id,
+          type:        note.dataset.type || 'sticky',
+          savedData:   note.dataset.savedData,
+          groupId:     note.dataset.groupId,
+          daimonId:    note.dataset.daimonId,
+          kotaeId:     note.dataset.kotaeId,
+          kotaeOrigBg: note.dataset.kotaeOrigBg,
+          styleCssText: note.style.cssText,
+          pageNum:     note.dataset.page || '1',
+          // LIBRO由来の既存付箋（.libro-toggle）は子要素（画像2枚）と専用datasetの復元が必要
+          innerHTML:   note.dataset.libroToggle === '1' ? note.innerHTML : undefined,
+          libroToggle: note.dataset.libroToggle,
+          closedId:    note.dataset.closedId,
+          openId:      note.dataset.openId,
+          closedFile:  note.dataset.closedFile,
+          openFile:    note.dataset.openFile,
+        });
+      });
+
+      // アノテーションのスナップショット
+      document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').forEach(ann => {
+        deleteSnapshots.push({
+          className:   ann.className.replace(/\bis-selected\b/g, '').trim(),
+          id:          ann.dataset.id,
+          type:        ann.dataset.type,
+          savedData:   ann.dataset.savedData,
+          styleCssText: ann.style.cssText,
+          pageNum:     ann.dataset.page || '1',
+        });
+      });
+
+      // 各種ボタンのスナップショット
+      document.querySelectorAll('.daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').forEach(btn => {
+        deleteSnapshots.push({
+          className:   btn.className.replace(/\bis-selected\b/g, '').trim(),
+          id:          btn.dataset.id,
+          type:        btn.dataset.type,
+          daimonId:    btn.dataset.daimonId,
+          kotaeId:     btn.dataset.kotaeId,
+          shomeiId:    btn.dataset.shomeiId,
+          zuId:        btn.dataset.zuId,
+          styleCssText: btn.style.cssText,
+          pageNum:     btn.dataset.page || '1',
+          savedData:   btn.dataset.savedData,
+          libroToggle: btn.dataset.libroToggle,
+        });
+        // 大問ボタン削除に伴う付箋の daimonId 変化を記録
+        if (btn.classList.contains('daimon-btn')) {
+          const did = btn.dataset.daimonId;
+          if (did) {
+            document.querySelectorAll(`.sticky-note[data-daimon-id="${did}"]`).forEach(n => {
+              linkedStickyChanges.push({ el: n, daimonId: did });
+            });
+          }
+        }
+        // 答ボタン削除に伴う付箋の kotaeId・背景色変化を記録
+        if (btn.classList.contains('kotae-btn')) {
+          const kid = btn.dataset.kotaeId;
+          if (kid) {
+            document.querySelectorAll(`.sticky-note[data-kotae-id="${kid}"]`).forEach(n => {
+              linkedStickyChanges.push({
+                el: n, kotaeId: kid,
+                kotaeOrigBg: n.dataset.kotaeOrigBg,
+                background:  n.style.background,
+              });
+            });
+          }
+        }
+        // 証明ボタン削除に伴う付箋の shomeiId・背景色・枠線変化を記録
+        if (btn.classList.contains('shomei-btn')) {
+          const sid = btn.dataset.shomeiId;
+          if (sid) {
+            document.querySelectorAll(`.sticky-note[data-shomei-id="${sid}"]`).forEach(n => {
+              linkedStickyChanges.push({
+                el: n, shomeiId: sid,
+                shomeiOrigBg:     n.dataset.shomeiOrigBg,
+                shomeiOutline:    n.dataset.shomeiOutline,
+                background:       n.style.background,
+                outline:          n.style.outline,
+              });
+            });
+          }
+        }
+      });
+
+      if (deleteSnapshots.length > 0) {
+        pushUndo({ type: 'delete', snapshots: deleteSnapshots, linkedStickyChanges });
+      }
+
+      // 選択中の付箋を削除
+      selectedStickySet.forEach(note => {
+        note.remove();
+        deleted++;
+      });
+      selectedStickySet.clear();
+
+      // 選択中のアノテーションを削除
+      document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').forEach(ann => {
+        ann.remove();
+        deleted++;
+      });
+
+      // 選択中の大問ボタンを削除（紐付き付箋の daimon-id も解除）
+      document.querySelectorAll('.daimon-btn.is-selected').forEach(btn => {
+        const did = btn.dataset.daimonId;
+        if (did) {
+          document.querySelectorAll(`.sticky-note[data-daimon-id="${did}"]`)
+            .forEach(n => { delete n.dataset.daimonId; });
+        }
+        btn.remove();
+        deleted++;
+      });
+
+      // 選択中の図ボタンを削除（紐付き図オブジェクトも続けて削除）
+      document.querySelectorAll('.zu-btn.is-selected').forEach(btn => {
+        const zid = btn.dataset.zuId;
+        if (zid) {
+          const obj = document.querySelector(`.zu-obj[data-zu-id="${zid}"]`);
+          if (obj) { obj.remove(); deleted++; }
+        }
+        btn.remove();
+        deleted++;
+      });
+
+      // 選択中の図オブジェクトを削除（紐付き図ボタンも続けて削除）
+      document.querySelectorAll('.zu-obj.is-selected').forEach(obj => {
+        const zid = obj.dataset.zuId;
+        if (zid) {
+          const btn = document.querySelector(`.zu-btn[data-zu-id="${zid}"]`);
+          if (btn) { btn.remove(); deleted++; }
+        }
+        obj.remove();
+        deleted++;
+      });
+
+      // 選択中の答ボタンを削除（紐付き付箋の元色を復元）
+      document.querySelectorAll('.kotae-btn.is-selected').forEach(btn => {
+        const kid = btn.dataset.kotaeId;
+        if (kid) {
+          document.querySelectorAll(`.sticky-note[data-kotae-id="${kid}"]`).forEach(n => {
+            if (n.dataset.kotaeOrigBg !== undefined) {
+              n.style.background = n.dataset.kotaeOrigBg;
+              delete n.dataset.kotaeOrigBg;
+            }
+            delete n.dataset.kotaeId;
+          });
+        }
+        btn.remove();
+        deleted++;
+      });
+
+      // 選択中の証明ボタンを削除（紐付き付箋の shomei-id・枠線・元色を復元）
+      document.querySelectorAll('.shomei-btn.is-selected').forEach(btn => {
+        const sid = btn.dataset.shomeiId;
+        if (sid) {
+          document.querySelectorAll(`.sticky-note[data-shomei-id="${sid}"]`).forEach(n => {
+            if (n.dataset.shomeiOrigBg !== undefined) {
+              n.style.background = n.dataset.shomeiOrigBg;
+              delete n.dataset.shomeiOrigBg;
+            }
+            n.style.outline = '';
+            delete n.dataset.shomeiOutline;
+            delete n.dataset.shomeiId;
+          });
+        }
+        btn.remove();
+        deleted++;
+      });
+
+      if (deleted > 0) {
+        closeDialog();
+        updateStatus();
+      }
+    }
+
+    /**
+     * 選択中のオブジェクトを切り取る（コピー＋削除）。
+     */
+    export function cutSelectedObjects() {
+      if (document.body.classList.contains('is-view-mode')) return;
+      const targets = getSelectedObjects();
+      if (targets.length === 0) { showToast('切り取るオブジェクトを選択してください。'); return; }
+      copySelectedObjects();      // state.annClipboard へスナップショット保存
+      deleteSelectedObjects();    // Undoスナップショット付きで削除
+    }
+
 
     /**
      * ドラッグ選択（ラバーバンド）を確定し、指定矩形内に含まれるオブジェクトを選択状態にする。
