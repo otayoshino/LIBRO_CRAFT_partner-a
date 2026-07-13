@@ -1606,11 +1606,28 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
+     * 選択状態に応じて付箋パーツ操作パネル（#accStickyOps）の項目の
+     * 活性/非活性を切り替える。
+     * 非活性条件：アノテーションオブジェクト（ページリンク・外部リンク・
+     * 音声・動画・Plusファイル）が選択されている、または何も選択されていない。
+     * 付箋・大問/答/証明ボタンのみが選択されている場合は活性。
+     */
+    export function updateStickyOpsPanel() {
+      const items = document.querySelectorAll('#accStickyOps .panel-stack > li');
+      if (items.length === 0) return;
+      const annCount = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected').length;
+      const btnCount = document.querySelectorAll('.daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length;
+      const disabled = annCount > 0 || (selectedStickySet.size === 0 && btnCount === 0);
+      items.forEach(li => li.classList.toggle('is_disabled', disabled));
+    }
+
+    /**
      * 選択数に応じて整列パネルの有効/グレーアウトを切り替え、
      * 複数選択時は外接バウンディングボックスを #pageLeft 上に描画する。
      * 選択が2件未満の場合はボックスを削除する。
      */
     export function updateAlignPanel() {
+      updateStickyOpsPanel();
       const panel = document.getElementById('alignPanel');
       if (!panel) return;
       const els = getSelectedObjects();
