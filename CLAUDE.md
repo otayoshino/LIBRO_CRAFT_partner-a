@@ -36,7 +36,7 @@ python server.py
 
 ### アノテーション種別
 
-`ANNOTATION_TYPE_CONFIG`（[app/js/config.js](app/js/config.js)）に種別ごとのラベル・色・アイコンSVGを定義。種別: `pagelink`（ページリンク）, `plusfile`, `externallink`（外部リンク）, `audio`（音声再生）, `video`（動画再生）, `sticky`（付箋）, `zu`（図）, `kotae`（答ボタン）, `daimon`（大問ボタン）, `shomei`（証明ボタン）。
+`ANNOTATION_TYPE_CONFIG`（[app/js/config.js](app/js/config.js)）に種別ごとのラベル・色・アイコンSVGを定義。種別: `pagelink`（ページリンク）, `plusfile`, `externallink`（外部リンク）, `audio`（音声再生）, `video`（動画再生）, `sticky`（付箋）, `kotae`（答ボタン）, `daimon`（大問ボタン）, `shomei`（証明ボタン）。
 
 新規種別を追加する場合の修正箇所チェックリストは [add-annotation-type Skill](.claude/skills/add-annotation-type/SKILL.md) を参照。
 

@@ -5,7 +5,7 @@ description: app/index.html に新規アノテーション種別（付箋・音�
 
 # 新規アノテーション種別の追加
 
-[app/js/config.js](../../../app/js/config.js) 内の `ANNOTATION_TYPE_CONFIG` に種別ごとのラベル・色・アイコンSVGを定義する構成になっている（既存種別: `pagelink` / `plusfile` / `externallink` / `audio` / `video` / `sticky` / `zu` / `kotae` / `daimon` / `shomei`）。
+[app/js/config.js](../../../app/js/config.js) 内の `ANNOTATION_TYPE_CONFIG` に種別ごとのラベル・色・アイコンSVGを定義する構成になっている（既存種別: `pagelink` / `plusfile` / `externallink` / `audio` / `video` / `sticky` / `kotae` / `daimon` / `shomei`）。
 
 新規種別を追加する場合、以下の箇所すべてに対応が必要（どれか一つでも漏れると保存・読込・表示が壊れる）。
 
@@ -20,5 +20,5 @@ description: app/index.html に新規アノテーション種別（付箋・音�
 ## 注意
 
 - localStorage経由（自動保存）と独自ZIP入出力（JSZip）の2系統が存在するため、片方だけ対応すると一方の保存経路でデータが失われる。
-- 既存種別（例えば `zu`）の実装箇所を grep して同じパターンで実装すると漏れが少ない。
+- 既存種別（例えば `kotae`）の実装箇所を grep して同じパターンで実装すると漏れが少ない。
 - ボタン位置・サイズの保存形式は紙面に対する`%`形式（後方互換で旧形式のxRatio/yRatio/wRatio/hRatio・px絶対値も読込のみ対応）。詳細は [ui-change-constraints](../ui-change-constraints/SKILL.md) 参照。新規種別でも位置・サイズを持つ場合はこの設計に合わせる。

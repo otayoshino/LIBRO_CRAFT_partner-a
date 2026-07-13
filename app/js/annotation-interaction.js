@@ -1347,7 +1347,7 @@ import { pushUndo } from './undo-redo.js';
     }
 
     /**
-     * 選択中のオブジェクト（付箋・アノテーション・各種ボタン・図）を削除する。
+     * 選択中のオブジェクト（付箋・アノテーション・各種ボタン）を削除する。
      * Undoスナップショット取得〜DOM削除〜紐付き付箋の解除処理まで含む。
      */
     export function deleteSelectedObjects() {
@@ -1403,7 +1403,6 @@ import { pushUndo } from './undo-redo.js';
           daimonId:    btn.dataset.daimonId,
           kotaeId:     btn.dataset.kotaeId,
           shomeiId:    btn.dataset.shomeiId,
-          zuId:        btn.dataset.zuId,
           styleCssText: btn.style.cssText,
           pageNum:     btn.dataset.page || '1',
           savedData:   btn.dataset.savedData,
@@ -1473,28 +1472,6 @@ import { pushUndo } from './undo-redo.js';
             .forEach(n => { delete n.dataset.daimonId; });
         }
         btn.remove();
-        deleted++;
-      });
-
-      // 選択中の図ボタンを削除（紐付き図オブジェクトも続けて削除）
-      document.querySelectorAll('.zu-btn.is-selected').forEach(btn => {
-        const zid = btn.dataset.zuId;
-        if (zid) {
-          const obj = document.querySelector(`.zu-obj[data-zu-id="${zid}"]`);
-          if (obj) { obj.remove(); deleted++; }
-        }
-        btn.remove();
-        deleted++;
-      });
-
-      // 選択中の図オブジェクトを削除（紐付き図ボタンも続けて削除）
-      document.querySelectorAll('.zu-obj.is-selected').forEach(obj => {
-        const zid = obj.dataset.zuId;
-        if (zid) {
-          const btn = document.querySelector(`.zu-btn[data-zu-id="${zid}"]`);
-          if (btn) { btn.remove(); deleted++; }
-        }
-        obj.remove();
         deleted++;
       });
 
@@ -1676,7 +1653,7 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
-     * 大問ボタンまたはその配下の付箋・証明ボタン・図等を選択しているとき、
+     * 大問ボタンまたはその配下の付箋・証明ボタン等を選択しているとき、
      * 同一 daimonId を共有するグループ全体を囲む枠を #pageLeft 上に描画する。
      * 該当グループが選択されていない場合は既存の枠をすべて削除する。
      */

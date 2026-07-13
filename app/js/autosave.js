@@ -61,7 +61,6 @@ import { showToast } from './ui-common.js';
           daimonId: el.dataset.daimonId,
           kotaeId: el.dataset.kotaeId,
           kotaeOrigBg: el.dataset.kotaeOrigBg,
-          zuId: el.dataset.zuId,
           shomeiId: el.dataset.shomeiId,
           shomeiOrigBg: el.dataset.shomeiOrigBg,
           shomeiOutline: el.dataset.shomeiOutline,

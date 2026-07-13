@@ -65,7 +65,6 @@ import { showToast, updateStatus } from './ui-common.js';
               if (snap.daimonId)    el.dataset.daimonId  = snap.daimonId;
               if (snap.kotaeId)     el.dataset.kotaeId   = snap.kotaeId;
               if (snap.kotaeOrigBg !== undefined) el.dataset.kotaeOrigBg = snap.kotaeOrigBg;
-              if (snap.zuId)        el.dataset.zuId      = snap.zuId;
               if (snap.shomeiId)    el.dataset.shomeiId  = snap.shomeiId;
               el.dataset.page = snap.pageNum || '1';
               el.style.cssText = snap.styleCssText;

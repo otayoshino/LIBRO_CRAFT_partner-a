@@ -34,7 +34,6 @@
         iconSvg: '<path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>',
       },
       sticky: { label: '付箋', color: null, iconSvg: '' },
-      zu:     { label: '図',  color: null, iconSvg: '' },
       kotae:  { label: '答ボタン',  color: null, iconSvg: '' },
       daimon: { label: '大問ボタン', color: null, iconSvg: '' },
       shomei: { label: '証明ボタン', color: null, iconSvg: '' },

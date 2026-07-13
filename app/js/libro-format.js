@@ -27,7 +27,7 @@ const CRAFT_META_SCHEMA_VERSION = 1;
  * annots[] 単位のlibro-craft-metaを付与しうる種別（Hide/Showトグル系のみ。
  * pagelink/uri/launchはactions構成のみで一意判定できるため対象外）。
  */
-const CRAFT_META_TOGGLE_TYPES = new Set(['sticky', 'kotae', 'daimon', 'shomei', 'zu']);
+const CRAFT_META_TOGGLE_TYPES = new Set(['sticky', 'kotae', 'daimon', 'shomei']);
 
 /**
  * Pbve2000形式のデータを復号する。

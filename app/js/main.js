@@ -146,7 +146,6 @@ import { redo, undo } from './undo-redo.js';
           e.target.closest('.ann-icon-obj') ||
           e.target.closest('.ann-image-obj') ||
           e.target.closest('.daimon-btn')  ||
-          e.target.closest('.zu-btn')      ||
           e.target.closest('.kotae-btn')   ||
           e.target.closest('.shomei-btn')) return;
       e.preventDefault();

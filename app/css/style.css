@@ -1317,8 +1317,6 @@
     .is-view-mode .ann-image-obj.is-selected,
     .is-view-mode .sticky-note.is-selected,
     .is-view-mode .daimon-btn.is-selected,
-    .is-view-mode .zu-btn.is-selected,
-    .is-view-mode .zu-obj.is-selected,
     .is-view-mode .kotae-btn.is-selected,
     .is-view-mode .shomei-btn.is-selected {
       outline: none;

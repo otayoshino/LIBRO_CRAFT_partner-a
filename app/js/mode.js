@@ -47,12 +47,6 @@ import { updateStatus } from './ui-common.js';
       // 閲覧モード中に押下された大問/答/証明ボタンの見た目を通常時画像へ戻す
       resetAllButtonPressedImages();
 
-      // 図ボタンによって変更された図オブジェクトの表示状態を元に戻す
-      document.querySelectorAll('.zu-obj').forEach(obj => {
-        obj.classList.remove('state-hidden');
-        obj.classList.add('state-visible');
-      });
-
       const btn = document.getElementById('modeSwitchBtn');
       btn.classList.replace('toEdit', 'toDisplay');
       btn.querySelector('svg use').setAttribute('href', 'icons/sprite.svg#icon-mode-switch');

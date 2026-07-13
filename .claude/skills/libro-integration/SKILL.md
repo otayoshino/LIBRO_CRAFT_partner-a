@@ -10,7 +10,7 @@ description: LIBRO の book フォルダ形式（index.json / p####.json / 暗�
 ## 実装状況
 
 - **インポート**（`parseLibroBookZip`）：既知・未知を問わず全アノテーションを読み込み、既知種別は編集可能なDOMオブジェクトへ、未知アノテーション・大問ボタンのHide/Showペアは編集不可のpassthroughデータとして保持する。
-- **エクスポート**（`buildLibroBookExport` / `convertAnnotationToLibroAnnot`）：`pagelink`（`GoTo`+`FitPage`）・`externallink`（`URI`）・`audio`（`Launch`）・`plusfile`（`URI`の`toAppendix(...)`）の4種別、および`video`のうちLIBRO由来の`toMovie`/`toMovieBNR`リンク（`annVideoSrc: '2'`）はLIBRO actionへ変換して書き出せる。`video`の内部ファイル/外部タグ指定（`annVideoSrc: '0'/'1'`）・`zu` / `kotae` / `shomei`は変換ロジックが無く、新規作成分は書き出し時に失われる。
+- **エクスポート**（`buildLibroBookExport` / `convertAnnotationToLibroAnnot`）：`pagelink`（`GoTo`+`FitPage`）・`externallink`（`URI`）・`audio`（`Launch`）・`plusfile`（`URI`の`toAppendix(...)`）の4種別、および`video`のうちLIBRO由来の`toMovie`/`toMovieBNR`リンク（`annVideoSrc: '2'`）はLIBRO actionへ変換して書き出せる。`video`の内部ファイル/外部タグ指定（`annVideoSrc: '0'/'1'`）・`kotae` / `shomei`は変換ロジックが無く、新規作成分は書き出し時に失われる。
 - **付箋グループ**（`convertStickyGroupToLibroAnnots`）：Hide/Showトグルペアとして書き出し対応済み。`libro-craft-meta`（独自メタデータ、`CRAFT_META_KEY`）に `role`/`group-id` を埋め込み再インポート時にグループ復元する。
 - **大問ボタン**（`daimon`）：位置編集・削除をしていない場合に限り、読込時の生データをそのまま書き戻すpassthrough方式で消失を防いでいる（位置編集した場合は反映されない既知の制約）。
 - **拡張トグルネットワーク**（色分けボタン・ステップボタン等、1:1トグルや大問ボタンの形状に収まらない、3要素以上が絡むHide/Show構造）：`.libro-network-slot`（`.libro-network-frame`を内部に持つ）として認識・再表示し、位置・サイズ編集のみ対応する（`convertPageAnnotations`内の余剰target判定→`expandNetworkClosure`によるBFS閉包検出、`renderNetworkGroups`で描画）。閲覧モードのクリック連動は各フレームが保持する元の`actions[]`をそのまま再生する汎用インタプリタ方式。選択・削除・Undo・編集ダイアログ・内容編集（フレーム追加削除・画像差し替え）・新規作成は未対応。書き出しは`state.libroNetworkPassthrough`から編集後のrectのみ上書きしたpassthroughで行う。

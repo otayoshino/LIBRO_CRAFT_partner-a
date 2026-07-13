@@ -485,11 +485,9 @@ import { pushUndo } from './undo-redo.js';
       const h = parseFloat(document.getElementById('annHeight')?.value) || 0;
       const colorIdx = parseInt(document.getElementById('annColor')?.value || '0', 10);
 
-      // ボタン系要素（答/大問/図/証明ボタン）か判定するヘルパー
+      // ボタン系要素（答/大問/証明ボタン）か判定するヘルパー
       const isButtonEl = el => el.classList.contains('daimon-btn') ||
                                 el.classList.contains('kotae-btn') ||
-                                el.classList.contains('zu-btn') ||
-                                el.classList.contains('zu-obj') ||
                                 el.classList.contains('shomei-btn');
 
       if (allTargets.length === 1) {

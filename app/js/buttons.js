@@ -250,7 +250,6 @@ import { pushUndo } from './undo-redo.js';
         const did = btn.dataset.daimonId;
         const targets = [
           ...document.querySelectorAll(`.sticky-note[data-daimon-id="${did}"]`),
-          ...document.querySelectorAll(`.zu-obj[data-daimon-id="${did}"]`)
         ];
         if (targets.length === 0) return;
         // 全オブジェクトが「開いている状態」かを判定

@@ -46,7 +46,6 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
               daimonId: el.dataset.daimonId,
               kotaeId: el.dataset.kotaeId,
               kotaeOrigBg: el.dataset.kotaeOrigBg,
-              zuId: el.dataset.zuId,
               shomeiId: el.dataset.shomeiId,
               shomeiOrigBg: el.dataset.shomeiOrigBg,
               shomeiOutline: el.dataset.shomeiOutline,
@@ -93,8 +92,7 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
                 // ボタン系クラスはCSSでサイズが定義されているため、位置（left/top）のみ復元する
                 const isBtnClass = el.classList.contains('daimon-btn') ||
                                    el.classList.contains('kotae-btn')  ||
-                                   el.classList.contains('shomei-btn') ||
-                                   el.classList.contains('zu-btn');
+                                   el.classList.contains('shomei-btn');
                 // 優先順位: (1) % 形式  (2) xRatio/yRatio/wRatio/hRatio  (3) px 形式
                 if (obj.style) {
                   const leftPctMatch   = obj.style.match(/left:\s*([\d.]+)%/);
@@ -150,7 +148,6 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
                 if (obj.daimonId) el.dataset.daimonId = obj.daimonId;
                 if (obj.kotaeId) el.dataset.kotaeId = obj.kotaeId;
                 if (obj.kotaeOrigBg) el.dataset.kotaeOrigBg = obj.kotaeOrigBg;
-                if (obj.zuId) el.dataset.zuId = obj.zuId;
                 if (obj.shomeiId) el.dataset.shomeiId = obj.shomeiId;
                 if (obj.shomeiOrigBg) el.dataset.shomeiOrigBg = obj.shomeiOrigBg;
                 if (obj.shomeiOutline) el.dataset.shomeiOutline = obj.shomeiOutline;
@@ -175,8 +172,6 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
                   let sd = {};
                   try { sd = JSON.parse(obj.savedData || '{}'); } catch (_) {}
                   renderButtonVisual(el, obj.type, sd);
-                } else if (el.classList.contains('zu-btn')) {
-                  el.textContent = '図';
                 }
                 // ハンドラ再設定
                 reinitElement(el);
@@ -370,7 +365,6 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
           daimonId:      el.dataset.daimonId,
           kotaeId:       el.dataset.kotaeId,
           kotaeOrigBg:   el.dataset.kotaeOrigBg,
-          zuId:          el.dataset.zuId,
           shomeiId:      el.dataset.shomeiId,
           shomeiOrigBg:  el.dataset.shomeiOrigBg,
           shomeiOutline: el.dataset.shomeiOutline,
@@ -457,7 +451,7 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
      * 動画はLIBRO由来のtoMovie/toMovieBNRリンク（annVideoSrc: '2'）のみ対応し、
      * 内部ファイル/外部タグ指定はLIBRO側に対応actionが無いため未対応のまま。
      * LIBRO由来の大問ボタンは編集非対応のため、削除されていない限り生データを無変更のまま書き戻す
-     * （位置編集した場合は反映されない）。それ以外の種別（図・答/証明ボタン、新規作成の大問ボタン等）
+     * （位置編集した場合は反映されない）。それ以外の種別（答/証明ボタン、新規作成の大問ボタン等）
      * が存在する場合はトーストで警告し、書き出し対象から除外する。
      */
     export async function saveAnnotationsAsLibroBook() {
