@@ -31,7 +31,7 @@ import { redo, undo } from './undo-redo.js';
       }
 
       // Cmd+Z / Ctrl+Z：操作を1つ取り消す
-      if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      if (e.key.toLowerCase() === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         e.preventDefault();
@@ -39,7 +39,7 @@ import { redo, undo } from './undo-redo.js';
       }
 
       // Cmd+Shift+Z / Ctrl+Shift+Z：取り消した操作をやり直す（Redo）
-      if (e.key === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      if (e.key.toLowerCase() === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         e.preventDefault();
@@ -47,7 +47,7 @@ import { redo, undo } from './undo-redo.js';
       }
 
       // Cmd+A / Ctrl+A：ページ内の全オブジェクトを選択
-      if (e.key === 'a' && (e.metaKey || e.ctrlKey)) {
+      if (e.key.toLowerCase() === 'a' && (e.metaKey || e.ctrlKey)) {
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         e.preventDefault();
@@ -55,7 +55,7 @@ import { redo, undo } from './undo-redo.js';
       }
 
       // Cmd+C / Ctrl+C：選択中オブジェクトをコピー
-      if (e.key === 'c' && (e.metaKey || e.ctrlKey)) {
+      if (e.key.toLowerCase() === 'c' && (e.metaKey || e.ctrlKey)) {
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         e.preventDefault();
@@ -63,7 +63,7 @@ import { redo, undo } from './undo-redo.js';
       }
 
       // Cmd+V / Ctrl+V：クリップボードからペースト
-      if (e.key === 'v' && (e.metaKey || e.ctrlKey)) {
+      if (e.key.toLowerCase() === 'v' && (e.metaKey || e.ctrlKey)) {
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         e.preventDefault();
@@ -71,7 +71,7 @@ import { redo, undo } from './undo-redo.js';
       }
 
       // Cmd+X / Ctrl+X：選択中オブジェクトを切り取り（コピー＋削除）
-      if (e.key === 'x' && (e.metaKey || e.ctrlKey)) {
+      if (e.key.toLowerCase() === 'x' && (e.metaKey || e.ctrlKey)) {
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         if (document.body.classList.contains('is-view-mode')) return;
