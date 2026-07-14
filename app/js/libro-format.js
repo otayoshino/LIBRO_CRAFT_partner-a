@@ -1245,10 +1245,14 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
 
 /**
  * ContentsBuilderの現在の状態からLIBRO book zipを書き出す。
- * 保持している元zip（インスタンスをそのまま変更）に対し、annots[]が変わったページの
- * p####.jsonと、新規マーカーPNG・新規音声（Pbve2000暗号化）のみを上書き・追加する。
+ * state.libroBook（zip・indexJson・unencryptedAssetPaths）は一切変更しない非破壊処理：
+ * 冒頭でzip・indexJson・unencryptedAssetPathsをすべて作業用にコピーし、以降の変更は
+ * このコピーに対してのみ行う。同一セッションで何度呼び出しても結果は決定論的になる
+ * （呼び出し元のDOM dataset等が常に「元zipのファイル名」を指し続けられるため）。
+ * コピーに対し、annots[]が変わったページのp####.jsonと、新規マーカーPNG・新規音声
+ * （Pbve2000暗号化）のみを上書き・追加する。
  * ページ画像・既存のannots PNG・既存の音声は基本的に書き換えないが、
- * libroBook.unencryptedAssetPaths に記録されたファイル（別オーサリングツール由来で
+ * unencryptedAssetPaths に記録されたファイル（別オーサリングツール由来で
  * 元々暗号化されていなかったsounds/*.mp3・annots/*.png）だけは、対応するアノテーションの
  * 編集有無にかかわらず強制的にPbve2000暗号化して上書きする。
  * index.jsonは configs.libro-craft-meta（book全体マーカー、docs/libro_integration_計画書.md 4-3b参照）
@@ -1274,7 +1278,27 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
  * @returns {Promise<JSZip>}
  */
 export async function buildLibroBookExport(libroBook, domAnnotations, passthroughAnnotations, domStickyGroups = []) {
-  const { zip, baseDir, indexJson } = libroBook;
+  const { baseDir } = libroBook;
+
+  // ============================================================
+  // セッション状態（state.libroBook）を一切変更しない非破壊エクスポートにするため、
+  // zip・indexJson・unencryptedAssetPathsをすべて作業用にコピーしてから処理する。
+  // ID正規化（リネーム・削除）はこのコピーに対してのみ行い、元のzip/indexJsonは不変に保つ。
+  // これによりDOM側dataset（closedFile/openFile等）は常に「元zipのファイル名」を
+  // 指し続けるため、同一セッションで何度書き出しても結果は決定論的になる。
+  //
+  // JSZip（vendor固定版 3.10.1）にはfiles辞書を独立複製する公式APIが無く、
+  // clone()はfolder()参照用の浅いビューでfiles辞書自体を共有してしまうため使えない
+  // （確認済み）。代わりに、ZipObjectそのものは.file()/.remove()で置換・削除されるだけで
+  // in-place変更されない（3.10.1のJSZip.prototype.file実装で確認済み）ことを利用し、
+  // files辞書のエントリ（ZipObject参照）だけを新しいJSZipインスタンスへコピーする。
+  // バイト列の複製は発生しないためコストはほぼゼロ。
+  const zip = new JSZip();
+  Object.keys(libroBook.zip.files).forEach(k => { zip.files[k] = libroBook.zip.files[k]; });
+
+  const indexJson = JSON.parse(JSON.stringify(libroBook.indexJson));
+  const unencryptedAssetPaths = new Set(libroBook.unencryptedAssetPaths || []);
+
   const pageMetaList = indexJson.pages || [];
 
   const byPage = new Map();
@@ -1423,9 +1447,9 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
       if (bytes) zip.file(newPath, bytes);
       // 別オーサリングツール由来などで元々暗号化されていなかったファイル（unencryptedAssetPaths）を
       // リネームする場合は、書き出し末尾の強制暗号化パスが新パスを見つけられるよう付け替える。
-      if (libroBook.unencryptedAssetPaths?.has(oldPath)) {
-        libroBook.unencryptedAssetPaths.delete(oldPath);
-        libroBook.unencryptedAssetPaths.add(newPath);
+      if (unencryptedAssetPaths.has(oldPath)) {
+        unencryptedAssetPaths.delete(oldPath);
+        unencryptedAssetPaths.add(newPath);
       }
       annot.filename = newFilename;
     });
@@ -1496,7 +1520,7 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
   // annots/*.png）は、対応するアノテーションの編集有無にかかわらず必ず暗号化して保存する
   // （インポート時にlibroBook.unencryptedAssetPathsへ記録済み。編集により新規生成された
   // ファイルが既に暗号化済みの場合はスキップする）。各ファイルは互いに独立しているため並列実行する。
-  await Promise.all([...(libroBook.unencryptedAssetPaths || [])].map(async (path) => {
+  await Promise.all([...unencryptedAssetPaths].map(async (path) => {
     const entry = zip.file(path);
     if (!entry) return;
     const buf = await entry.async('arraybuffer');
