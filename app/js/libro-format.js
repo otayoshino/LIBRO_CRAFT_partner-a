@@ -998,6 +998,19 @@ function libroMarkerFilename(id) {
 
 
 /**
+ * annotのfilename（"annots/XXXX.png"形式）から数値IDを抽出する。
+ * annots/ffff.png（見開き合成ページのページ内リンク等）のように数値で
+ * ないfilenameの場合はnullを返す。
+ * @param {{filename?:string}} annot
+ * @returns {number|null}
+ */
+function filenameToNumericId(annot) {
+  const m = (annot.filename || '').match(/(\d+)\.\w+$/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+
+/**
  * "left:x%;top:y%;width:w%;height:h%;" 形式のstyle文字列を、
  * ページ画像ピクセル座標系の rect（rectToStyleの逆変換）に変換する。
  * @param {string} style
@@ -1239,7 +1252,16 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
  * 元々暗号化されていなかったsounds/*.mp3・annots/*.png）だけは、対応するアノテーションの
  * 編集有無にかかわらず強制的にPbve2000暗号化して上書きする。
  * index.jsonは configs.libro-craft-meta（book全体マーカー、docs/libro_integration_計画書.md 4-3b参照）
- * の追記のみ行い、既存のoutline等は変更しない。
+ * の追記に加え、実bookの構造（LIBROプラスはindex.json側を参照する）に合わせ、各ページの
+ * annots/annot-rangeをp####.json側と同一内容でpages[]側にもミラーする（0件になった場合は
+ * 両方から削除し、空配列を残さない）。既存のoutline等は変更しない。
+ * ページ単位のアノテーションID正規化：LIBRO+ビューアはHide/Showのtargetsを
+ * 「annot-range[0] + annots配列内の位置」で解決する位置ベースモデルであるため
+ * （.claude/skills/libro-integration/SKILL.md参照）、各ページのannots確定後、
+ * 配列順に応じてID・filename（annots/XXXX.png）・targetsを連番・穴なしへ再採番する。
+ * 付箋の閉/開ペア（グループ付箋は各メンバーのペア）は隣接ID（開＝小ID、閉＝大ID）になるよう
+ * ユニット化してソートし、それ以外（passthrough・converted・大問ペア等）は1annot=1ユニットとする。
+ * ファイル名が変わるannotはannots/*.pngをリネームする（zip内の旧ファイルは削除）。
  * @param {{zip:JSZip, baseDir:string, indexJson:Object, unencryptedAssetPaths?:Set<string>}} libroBook - state.libroBook
  * @param {Array<{id:number, page:number, type:string, style:string, savedData:string}>} domAnnotations
  *   - LIBROに変換可能な種別（pagelink/externallink/audio）のDOM由来アノテーションデータ
@@ -1284,8 +1306,13 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     const pageWidth  = pageJson.width;
     const pageHeight = pageJson.height;
 
-    // 未知アノテーションの生データは無変更のまま書き戻す（内部管理用の_idは除去）
-    const passthrough = (passthroughByPage.get(pageNum) || []).map(({ _id, ...clean }) => clean);
+    // 未知アノテーションの生データは無変更のまま書き戻す（内部管理用の_idは除去）。
+    // state.libroUnknownAnnotations/libroDaimonPassthrough/libroNetworkPassthrough等の
+    // state上のオブジェクトを直接参照しているため、後段のID正規化で書き換える前提として
+    // deep copyする（{_id,...clean}の分割は浅いコピーでactions配列等は元オブジェクトと
+    // 共有されたままのため、そのままでは再エクスポート時に二重変換されてしまう）。
+    const passthrough = (passthroughByPage.get(pageNum) || [])
+      .map(({ _id, ...clean }) => JSON.parse(JSON.stringify(clean)));
 
     // 各アノテーションのfilenameは既存のdata-idベースで一意に決まっており、
     // 変換処理も互いに独立しているため並列実行する。
@@ -1302,18 +1329,139 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     const stickyGroupResults = await Promise.all(
       (stickyGroupsByPage.get(pageNum) || []).map(group => convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, zip, baseDir, group.groupId))
     );
-    const stickyAnnots = [];
-    stickyGroupResults.forEach(({ annotJsons, newPngWrites }) => {
+    stickyGroupResults.forEach(({ newPngWrites }) => {
       newPngWrites.forEach(({ path, bytes }) => zip.file(path, bytes));
-      stickyAnnots.push(...annotJsons);
+    });
+    // convertStickyGroupToLibroAnnotsはメンバーごとに[閉,開]の順でannotJsonsへpushしているため、
+    // 2件ずつ組にすれば元のペア関係を復元できる。ID正規化パスでは新しい実データ準拠の並び
+    // （開＝hiddenが先、閉が後）にするため、組にする際に順序を入れ替える。
+    const stickyUnits = [];
+    stickyGroupResults.forEach(({ annotJsons }) => {
+      for (let k = 0; k < annotJsons.length; k += 2) {
+        stickyUnits.push([annotJsons[k + 1], annotJsons[k]]); // [開, 閉]
+      }
     });
 
-    pageJson.annots = [...passthrough, ...converted, ...stickyAnnots];
+    // ============================================================
+    // ページ単位のアノテーションID正規化。
+    // LIBRO+ビューアはHide/Showのtargetsを「annot-range[0] + annots配列内の位置」で
+    // 解決する位置ベースモデルであることが実機検証で確定しているため、書き出し時に
+    // 各ページのIDを「連番・穴なし・交錯なし」へ正規化しないと、新規付箋の開閉が
+    // 別のアノテーションを指してしまう等の誤動作が起こる。
+    // ============================================================
 
-    const usedIds = pageJson.annots
-      .map(a => { const m = (a.filename || '').match(/(\d+)\.\w+$/); return m ? parseInt(m[1], 10) : null; })
-      .filter(id => id != null);
-    if (usedIds.length) pageJson['annot-range'] = [Math.min(...usedIds), Math.max(...usedIds)];
+    // 元のannot-range（この後pageJsonを上書きする前の値。無ければundefined）
+    const originalRange = pageJson['annot-range'];
+
+    // 論理ユニット：CRAFT管理の付箋（メンバー単位の閉/開ペア）は[開,閉]の2件で1ユニット、
+    // それ以外（passthrough・converted・大問ペアの各raw等）は1annot=1ユニットとする。
+    const units = [
+      ...passthrough.map(a => [a]),
+      ...converted.map(a => [a]),
+      ...stickyUnits,
+    ];
+
+    // 正規化前の配列順（従来の生成順＝passthrough→converted→付箋[閉,開]）における
+    // 各annotの位置。数値filenameを持たないannot（annots/ffff.png等）のソートキー算出に使う。
+    const legacyOrderAnnots = [...passthrough, ...converted, ...stickyGroupResults.flatMap(r => r.annotJsons)];
+    const origIndexByAnnot = new Map(legacyOrderAnnots.map((a, idx) => [a, idx]));
+    const rangeBase0 = originalRange ? originalRange[0] : 0;
+
+    // ユニットの並び替えキー＝ユニット内の最小「旧ID」（数値filename由来）。
+    // 数値filenameを持たないユニット（単独annotのみ）は originalRange[0]+元の配列位置 とする。
+    const unitKey = (unit) => {
+      const numericIds = unit.map(filenameToNumericId).filter(id => id != null);
+      if (numericIds.length) return Math.min(...numericIds);
+      return rangeBase0 + (origIndexByAnnot.get(unit[0]) ?? 0);
+    };
+
+    // 安定ソート（キーが同値の場合は元の並び順を維持する）
+    const sortedAnnots = units
+      .map((unit, idx) => ({ unit, key: unitKey(unit), idx }))
+      .sort((a, b) => a.key - b.key || a.idx - b.idx)
+      .flatMap(x => x.unit);
+
+    // base：元のannot-rangeがあればその先頭を踏襲し、無い新規annotationページは
+    // 「ページ1のbase=1、それ以外は(pageNum-1)*annot-id-block-size」で新規発行する
+    // （ページ1のbase=1は実機検証済み。0は未検証のため使わない）。
+    const blockSize = indexJson.configs?.['annot-id-block-size'] ?? 300;
+    const base = originalRange ? originalRange[0] : (pageNum === 1 ? 1 : (pageNum - 1) * blockSize);
+
+    // 旧ID→新IDのマップを構築する。数値filenameが無いannotの「旧ID」は
+    // rangeBase0+元の配列位置という合成値だが、Hide/Show targetsからは参照され得ない
+    // （見開きページ等はGoTo単体のためtargetsを持たない）ため実害はない。
+    const oldToNewId = new Map();
+    sortedAnnots.forEach((annot, idx) => {
+      const newId = base + idx;
+      const oldId = filenameToNumericId(annot) ?? (rangeBase0 + (origIndexByAnnot.get(annot) ?? 0));
+      oldToNewId.set(oldId, newId);
+    });
+
+    // filenameの改名対象（数値filenameを持ち、かつIDが変わるannotのみ）を洗い出す。
+    // 「旧バイト列を全て読み切ってから新パスへ書き込む」2パス方式にすることで、
+    // ID入れ替え（スワップ）が発生した場合の旧新ファイル名の衝突・上書き事故を防止する。
+    const renameTargets = [];
+    sortedAnnots.forEach(annot => {
+      const oldId = filenameToNumericId(annot);
+      if (oldId == null) return;
+      const newId = oldToNewId.get(oldId);
+      if (newId === oldId) return;
+      renameTargets.push({ oldId, oldPath: baseDir + annot.filename, annot, newId });
+    });
+    // Pass1: 旧バイト列を読み切る
+    const oldBytesById = new Map();
+    for (const { oldId, oldPath } of renameTargets) {
+      if (oldBytesById.has(oldId)) continue;
+      const entry = zip.file(oldPath);
+      if (entry) oldBytesById.set(oldId, await entry.async('uint8array'));
+    }
+    // Pass2: 新パスへ書き込み、filenameフィールドを更新
+    renameTargets.forEach(({ oldId, oldPath, annot, newId }) => {
+      const newFilename = libroMarkerFilename(newId);
+      const newPath = baseDir + newFilename;
+      const bytes = oldBytesById.get(oldId);
+      if (bytes) zip.file(newPath, bytes);
+      // 別オーサリングツール由来などで元々暗号化されていなかったファイル（unencryptedAssetPaths）を
+      // リネームする場合は、書き出し末尾の強制暗号化パスが新パスを見つけられるよう付け替える。
+      if (libroBook.unencryptedAssetPaths?.has(oldPath)) {
+        libroBook.unencryptedAssetPaths.delete(oldPath);
+        libroBook.unencryptedAssetPaths.add(newPath);
+      }
+      annot.filename = newFilename;
+    });
+    // 不要になった旧ファイルを削除する（新パスとして引き続き使われているものは除く）
+    const stillUsedPaths = new Set(sortedAnnots.map(a => baseDir + a.filename));
+    renameTargets.forEach(({ oldPath }) => {
+      if (!stillUsedPaths.has(oldPath)) zip.remove(oldPath);
+    });
+
+    // Hide/Show targetsを新IDへ書き換える。対応が見つからないtargetは変更せず警告のみ出す
+    // （ページを跨ぐ参照等、想定外の構造に対する安全側フォールバック）。
+    sortedAnnots.forEach(annot => {
+      (annot.actions || []).forEach(action => {
+        if (!Array.isArray(action.targets)) return;
+        action.targets = action.targets.map(t => {
+          if (oldToNewId.has(t)) return oldToNewId.get(t);
+          console.warn(`LIBRO書き出し: page ${pageNum} のtarget id ${t} に対応する新IDが見つからないため変更せず残します`);
+          return t;
+        });
+      });
+    });
+
+    pageJson.annots = sortedAnnots;
+
+    // LIBROプラスはindex.json側のpages[].annots/annot-rangeを参照するため、
+    // p####.json側と完全同一の内容をindex.json側にもミラーする（実bookの構造に準拠）。
+    if (sortedAnnots.length) {
+      pageJson['annot-range'] = [base, base + sortedAnnots.length];
+      pageMeta.annots = pageJson.annots;
+      pageMeta['annot-range'] = pageJson['annot-range'];
+    } else {
+      delete pageJson.annots;
+      delete pageJson['annot-range'];
+      delete pageMeta.annots;
+      delete pageMeta['annot-range'];
+    }
 
     zip.file(pageJsonPath, JSON.stringify(pageJson));
   }
