@@ -541,14 +541,16 @@ function convertPageAnnotations(pageJson, pageNum) {
       }
     } else if (kind === 'launch') {
       const launch = a.actions.find(ac => ac.action === 'Launch');
-      const baseName = (launch?.filename || '').split('/').pop().replace(/\.mp3$/i, '');
+      const rawBaseName = (launch?.filename || '').split('/').pop().replace(/\.mp3$/i, '');
+      const annPlayMode = /^in_/i.test(rawBaseName) ? '1' : '0';
+      const baseName = stripAudioPrefix(rawBaseName);
       known.push({
         className: 'ann-object',
         type: 'audio',
         id: a._id,
         page: pageNum,
         style: style + `background:${ANNOTATION_TYPE_CONFIG.audio.color};`,
-        savedData: JSON.stringify({ annDisplayType: 'marker', annFile: baseName, annPlayMode: '0' }),
+        savedData: JSON.stringify({ annDisplayType: 'marker', annFile: baseName, annPlayMode }),
         _iconFilename: a.filename,
       });
     } else {
@@ -642,12 +644,14 @@ export async function parseLibroBookZip(zip) {
     pages.push({ pageNum, width: pageWidth, height: pageHeight, imageUrl, jsonPath: pageMeta.json });
 
     // 参照されている音声ファイルをPbve2000復号してmediaBlobsへキャッシュ
-    // （resolveMediaSrc は "ファイル名.mp3" 形式のキーを参照するため、拡張子込みで格納する）。
+    // （resolveMediaSrc は "ファイル名.mp3" 形式のキーを参照するため、拡張子込みで格納する。
+    // 実ファイル名先頭のex_/in_プレフィックスはLIBRO書き出し専用の変換でのみ使うため、
+    // mediaBlobsのキーからは常に除去した本体名を使う）。
     // 別オーサリングツール由来で実際には暗号化されていない場合があるため、ヘッダーを見て判定する。
     for (const annot of (pageJson.annots || [])) {
       for (const action of (annot.actions || [])) {
         if (action.action === 'Launch' && action.filename) {
-          const baseName = action.filename.split('/').pop();
+          const baseName = stripAudioPrefix(action.filename.split('/').pop());
           if (mediaBlobs[baseName]) continue;
           const entry = zip.file(baseDir + action.filename);
           if (!entry) continue;
@@ -1012,6 +1016,31 @@ function filenameToNumericId(annot) {
 
 
 /**
+ * 音声ファイル名（拡張子有無どちらでも可）先頭の ex_/in_ プレフィックス（大文字小文字問わず）を除去する。
+ * annFile・mediaBlobsのキーは常にこの「プレフィックス無し」の状態で扱う。
+ * @param {string} name
+ * @returns {string}
+ */
+function stripAudioPrefix(name) {
+  return (name || '').replace(/^(ex_|in_)/i, '');
+}
+
+
+/**
+ * annFile（プレフィックス無しの本体名）とannPlayMode（'0'=コントローラーあり/'1'=なし）から、
+ * LIBRO book書き出し時に実際にsounds/へ書き込むファイル名（ex_/in_プレフィックス＋拡張子込み）を組み立てる。
+ * @param {string} annFile
+ * @param {string} annPlayMode
+ * @returns {string}
+ */
+function libroSoundFilename(annFile, annPlayMode) {
+  const base = stripAudioPrefix((annFile || '').trim());
+  const prefix = annPlayMode === '1' ? 'in_' : 'ex_';
+  return `${prefix}${base}.mp3`;
+}
+
+
+/**
  * "left:x%;top:y%;width:w%;height:h%;" 形式のstyle文字列を、
  * ページ画像ピクセル座標系の rect（rectToStyleの逆変換）に変換する。
  * @param {string} style
@@ -1214,7 +1243,7 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
   } else if (domData.type === 'externallink') {
     actions = [{ action: 'URI', uri: sd.annUrl || '' }];
   } else if (domData.type === 'audio') {
-    actions = [{ action: 'Launch', filename: `sounds/${(sd.annFile || '').trim()}.mp3` }];
+    actions = [{ action: 'Launch', filename: `sounds/${libroSoundFilename(sd.annFile, sd.annPlayMode)}` }];
   } else if (domData.type === 'plusfile') {
     actions = [{ action: 'URI', uri: `toAppendix("${(sd.annFile || '').trim()}",${sd.annShowMode || '0'})` }];
   } else if (domData.type === 'video' && sd.annVideoSrc === '2') {
@@ -1534,19 +1563,22 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
   zip.file(baseDir + 'index.json', JSON.stringify(indexJson));
 
   // 新規追加された音声ファイル（元zipにまだ存在しないもの）のみPbve2000暗号化して追加
-  const referencedAudio = new Set();
+  // キー：実際にzipへ書き込むファイル名（ex_/in_プレフィックス込み）→ mediaBlobs参照キー（プレフィックス無し）
+  const referencedAudio = new Map();
   domAnnotations.forEach(a => {
     if (a.type !== 'audio') return;
     try {
-      const fileName = (JSON.parse(a.savedData || '{}').annFile || '').trim();
-      if (fileName) referencedAudio.add(`${fileName}.mp3`);
+      const sd = JSON.parse(a.savedData || '{}');
+      const baseName = stripAudioPrefix((sd.annFile || '').trim());
+      if (!baseName) return;
+      referencedAudio.set(libroSoundFilename(sd.annFile, sd.annPlayMode), `${baseName}.mp3`);
     } catch (_) {}
   });
   // 各音声ファイルは互いに独立して読込・暗号化できるため並列実行する
-  await Promise.all([...referencedAudio].map(async (key) => {
-    const soundPath = baseDir + 'sounds/' + key;
+  await Promise.all([...referencedAudio].map(async ([zipFileName, mediaKey]) => {
+    const soundPath = baseDir + 'sounds/' + zipFileName;
     if (zip.file(soundPath)) return; // 既存音声は無変更
-    const blobUrl = mediaBlobs[key];
+    const blobUrl = mediaBlobs[mediaKey];
     if (!blobUrl) return;
     const res = await fetch(blobUrl);
     const buf = new Uint8Array(await res.arrayBuffer());

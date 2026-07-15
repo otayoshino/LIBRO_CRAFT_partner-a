@@ -1043,9 +1043,21 @@ import { pushUndo } from './undo-redo.js';
         const file = e.dataTransfer.files[0];
         if (!file) return;
 
-        // 拡張子なしのファイル名を入力欄に即時反映
-        const baseName = file.name.replace(/\.[^/.]+$/, '');
         const fileInput = ddEl.querySelector(`#${inputId}`);
+        const baseName = file.name.replace(/\.[^/.]+$/, '');
+
+        // 音声のみ：同名ファイルが既に別アノテーションで使用中の場合は上書き前に警告する
+        // （「自分自身の差し替え」＝現在このダイアログが編集中のファイル名と同じ場合は警告不要）
+        if (mediaType === 'audio' && mediaBlobs[file.name]) {
+          const currentValue = fileInput ? fileInput.value.trim() : '';
+          const isSelfReplace = currentValue === baseName;
+          if (!isSelfReplace) {
+            const proceed = confirm(`「${file.name}」は既に他のアノテーションで使用されています。上書きしますか？`);
+            if (!proceed) return;
+          }
+        }
+
+        // 拡張子なしのファイル名を入力欄に即時反映
         if (fileInput) fileInput.value = baseName;
 
         // ファイルをBlobURLに変換してmediaBlobsへキャッシュ（サーバー不要）
