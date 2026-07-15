@@ -682,7 +682,8 @@ export async function parseLibroBookZip(zip) {
     if (!entry) return null;
     const buf = await entry.async('arraybuffer');
     if (isPbve2000Encoded(buf)) return decodePbve2000(buf);
-    unencryptedAssetPaths.add(path);
+    // annots/*.pngは仕様上「平文（暗号化対象外）」が正しいため、ページ画像・sounds/*.mp3とは異なり
+    // unencryptedAssetPathsには登録しない（登録すると書き出し時に誤って強制暗号化されてしまう）。
     return new Uint8Array(buf);
   }
 
@@ -1130,14 +1131,15 @@ async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
  *   - openMode='transparent': 完全透明PNGを新規生成（「開」のみ。新規付箋のみで発生）
  * @param {number} pageWidth
  * @param {number} pageHeight
- * @param {JSZip} zip
- * @param {string} baseDir
  * @param {string} groupId - グループ内の全メンバーが共有する一意なid（storage.jsのdata-group-id、
  *   ソロ付箋は合成id）。libro-craft-metaの group-id としてメンバー全員の closed/open annotに
  *   埋め込み、再インポート時に構造ヒューリスティックに頼らずグループを確実に復元できるようにする。
- * @returns {Promise<{annotJsons:Array<Object>, newPngWrites:Array<{path:string, bytes:Uint8Array}>}>}
+ * @returns {Promise<{annotJsons:Array<Object>, newPngWrites:Array<{annot:Object, bytes:Uint8Array}>}>}
+ *   newPngWritesのannotは対応するannotJsons要素そのもの（同一オブジェクト参照）。呼び出し側が
+ *   ID正規化でannot.filenameを書き換えた後、その最終filenameへ直接バイト列を書き込むため、
+ *   ここではpathを組み立てず生成直後のannotJsonオブジェクトへの参照のみを渡す。
  */
-async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, zip, baseDir, groupId) {
+async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, groupId) {
   const closedIds = members.map(m => m.closedId);
   const openIds   = members.map(m => m.openId);
 
@@ -1149,16 +1151,7 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, z
     const closedFile = m.closedFile || libroMarkerFilename(m.closedId);
     const openFile   = m.openFile   || libroMarkerFilename(m.openId);
 
-    if (m.closedMode === 'color') {
-      const closedBytes = await rasterizeStickyClosedPng(m.color, rect[2], rect[3]);
-      newPngWrites.push({ path: baseDir + closedFile, bytes: closedBytes });
-    }
-    if (m.openMode === 'transparent') {
-      const openBytes = await rasterizeStickyOpenPng(rect[2], rect[3]);
-      newPngWrites.push({ path: baseDir + openFile, bytes: openBytes });
-    }
-
-    annotJsons.push({
+    const closedAnnot = {
       filename: closedFile,
       rect,
       actions: [
@@ -1166,8 +1159,8 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, z
         { action: 'Show', targets: openIds },
       ],
       [CRAFT_META_KEY]: { type: 'sticky', role: 'closed', 'group-id': groupId },
-    });
-    annotJsons.push({
+    };
+    const openAnnot = {
       filename: openFile,
       rect,
       hidden: true,
@@ -1176,7 +1169,19 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, z
         { action: 'Show', targets: closedIds },
       ],
       [CRAFT_META_KEY]: { type: 'sticky', role: 'open', 'group-id': groupId },
-    });
+    };
+
+    if (m.closedMode === 'color') {
+      const closedBytes = await rasterizeStickyClosedPng(m.color, rect[2], rect[3]);
+      newPngWrites.push({ annot: closedAnnot, bytes: closedBytes });
+    }
+    if (m.openMode === 'transparent') {
+      const openBytes = await rasterizeStickyOpenPng(rect[2], rect[3]);
+      newPngWrites.push({ annot: openAnnot, bytes: openBytes });
+    }
+
+    annotJsons.push(closedAnnot);
+    annotJsons.push(openAnnot);
   }
 
   return { annotJsons, newPngWrites };
@@ -1317,6 +1322,18 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     stickyGroupsByPage.get(g.pageNum).push(g);
   });
 
+  // annots/は全ページ共有の名前空間で、かつアノテーションIDはグローバル採番のため、
+  // 「後続ページの旧IDパス」が「処理済みページの新パス」と偶然一致し得る。ページ単位で
+  // 即時にzip読み書き・削除を行うと、その一致により中身の取り違え・誤削除が起こるため、
+  // ページループ内では「annotごとの最終filename」と「内容ソース」の収集のみ行い、
+  // 実際のzip読み書き・削除は全ページ処理後（ループの外）で一括して行う。
+  const pendingCopies = [];             // { annot, oldPath } - 旧パスの既存内容を最終filenameへコピーする
+  const pendingNewWrites = [];          // { annot, bytes } - 新規生成バイト列を最終filenameへ書き込む
+  const annotsWithNewBytes = new Set(); // pendingNewWritesに載っているannotオブジェクトの集合（重複判定用）
+  const allOldPaths = new Set();        // リネームで不要になり得る旧パス（全ページ分の和集合）
+  const allFinalPaths = new Set();      // 全ページの最終filename（全annots pngの和集合）
+  const unencryptedRepaths = [];        // { oldPath, newPath } - unencryptedAssetPathsの付け替え（全ページ分）
+
   for (let i = 0; i < pageMetaList.length; i++) {
     const pageMeta = pageMetaList[i];
     const pageNum = i + 1;
@@ -1346,15 +1363,21 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     const converted = [];
     convertedResults.forEach(result => {
       if (!result) return;
-      if (result.newPngBytes) zip.file(baseDir + result.annotJson.filename, result.newPngBytes);
       converted.push(result.annotJson);
+      if (result.newPngBytes) {
+        pendingNewWrites.push({ annot: result.annotJson, bytes: result.newPngBytes });
+        annotsWithNewBytes.add(result.annotJson);
+      }
     });
 
     const stickyGroupResults = await Promise.all(
-      (stickyGroupsByPage.get(pageNum) || []).map(group => convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, zip, baseDir, group.groupId))
+      (stickyGroupsByPage.get(pageNum) || []).map(group => convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, group.groupId))
     );
     stickyGroupResults.forEach(({ newPngWrites }) => {
-      newPngWrites.forEach(({ path, bytes }) => zip.file(path, bytes));
+      newPngWrites.forEach(({ annot, bytes }) => {
+        pendingNewWrites.push({ annot, bytes });
+        annotsWithNewBytes.add(annot);
+      });
     });
     // convertStickyGroupToLibroAnnotsはメンバーごとに[閉,開]の順でannotJsonsへpushしているため、
     // 2件ずつ組にすれば元のペア関係を復元できる。ID正規化パスでは新しい実データ準拠の並び
@@ -1422,41 +1445,25 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     });
 
     // filenameの改名対象（数値filenameを持ち、かつIDが変わるannotのみ）を洗い出す。
-    // 「旧バイト列を全て読み切ってから新パスへ書き込む」2パス方式にすることで、
-    // ID入れ替え（スワップ）が発生した場合の旧新ファイル名の衝突・上書き事故を防止する。
-    const renameTargets = [];
+    // 実際のzip読み書き・削除はここでは行わず、annot.filenameの更新と内容ソースの記録のみ行う
+    // （実際の読み書き・削除はループの外で全ページ分まとめて行う。クロスページ衝突対策）。
     sortedAnnots.forEach(annot => {
       const oldId = filenameToNumericId(annot);
       if (oldId == null) return;
       const newId = oldToNewId.get(oldId);
       if (newId === oldId) return;
-      renameTargets.push({ oldId, oldPath: baseDir + annot.filename, annot, newId });
-    });
-    // Pass1: 旧バイト列を読み切る
-    const oldBytesById = new Map();
-    for (const { oldId, oldPath } of renameTargets) {
-      if (oldBytesById.has(oldId)) continue;
-      const entry = zip.file(oldPath);
-      if (entry) oldBytesById.set(oldId, await entry.async('uint8array'));
-    }
-    // Pass2: 新パスへ書き込み、filenameフィールドを更新
-    renameTargets.forEach(({ oldId, oldPath, annot, newId }) => {
+      const oldPath = baseDir + annot.filename;
       const newFilename = libroMarkerFilename(newId);
-      const newPath = baseDir + newFilename;
-      const bytes = oldBytesById.get(oldId);
-      if (bytes) zip.file(newPath, bytes);
+      allOldPaths.add(oldPath);
       // 別オーサリングツール由来などで元々暗号化されていなかったファイル（unencryptedAssetPaths）を
       // リネームする場合は、書き出し末尾の強制暗号化パスが新パスを見つけられるよう付け替える。
       if (unencryptedAssetPaths.has(oldPath)) {
-        unencryptedAssetPaths.delete(oldPath);
-        unencryptedAssetPaths.add(newPath);
+        unencryptedRepaths.push({ oldPath, newPath: baseDir + newFilename });
       }
       annot.filename = newFilename;
-    });
-    // 不要になった旧ファイルを削除する（新パスとして引き続き使われているものは除く）
-    const stillUsedPaths = new Set(sortedAnnots.map(a => baseDir + a.filename));
-    renameTargets.forEach(({ oldPath }) => {
-      if (!stillUsedPaths.has(oldPath)) zip.remove(oldPath);
+      // 新規生成バイト列が既にある場合（新規付箋・新規マーカー等）は、そのバイト列を
+      // 最終filenameへ直接書き込むだけでよく、旧パスからの内容コピーは不要。
+      if (!annotsWithNewBytes.has(annot)) pendingCopies.push({ annot, oldPath });
     });
 
     // Hide/Show targetsを新IDへ書き換える。対応が見つからないtargetは変更せず警告のみ出す
@@ -1473,6 +1480,7 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     });
 
     pageJson.annots = sortedAnnots;
+    sortedAnnots.forEach(a => allFinalPaths.add(baseDir + a.filename));
 
     // LIBROプラスはindex.json側のpages[].annots/annot-rangeを参照するため、
     // p####.json側と完全同一の内容をindex.json側にもミラーする（実bookの構造に準拠）。
@@ -1489,6 +1497,35 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
 
     zip.file(pageJsonPath, JSON.stringify(pageJson));
   }
+
+  // ============================================================
+  // annots pngの実際のzip読み書き・削除を、全ページのfilename確定後に一括して行う
+  // （クロスページ衝突対策。詳細は.claude/skills/libro-integration/SKILL.md参照）。
+  // Pass1で「旧パス由来」の内容を全ページ分読み切ってから（この時点ではまだ1件も
+  // 書き込んでいないため、後続ページの旧パスが処理済みページの新内容で上書きされていることはない）、
+  // Pass2で全annotの最終filenameへ書き込む。削除は最後に、全ページの旧パス集合から
+  // 全ページの最終filename集合を差し引いた残りだけを対象にする。
+  // ============================================================
+  const copyBytesByOldPath = new Map();
+  for (const { oldPath } of pendingCopies) {
+    if (copyBytesByOldPath.has(oldPath)) continue;
+    const entry = zip.file(oldPath);
+    if (entry) copyBytesByOldPath.set(oldPath, await entry.async('uint8array'));
+  }
+  pendingCopies.forEach(({ annot, oldPath }) => {
+    const bytes = copyBytesByOldPath.get(oldPath);
+    if (bytes) zip.file(baseDir + annot.filename, bytes);
+  });
+  pendingNewWrites.forEach(({ annot, bytes }) => {
+    zip.file(baseDir + annot.filename, bytes);
+  });
+  unencryptedRepaths.forEach(({ oldPath, newPath }) => {
+    unencryptedAssetPaths.delete(oldPath);
+    unencryptedAssetPaths.add(newPath);
+  });
+  allOldPaths.forEach(oldPath => {
+    if (!allFinalPaths.has(oldPath)) zip.remove(oldPath);
+  });
 
   // book全体マーカー：このbookが（少なくとも一度）CRAFTで書き出されたことを示す。
   // 既存の configs（generator等）は上書きせず併存させる。
