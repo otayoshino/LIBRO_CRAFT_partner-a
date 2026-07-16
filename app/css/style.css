@@ -1734,10 +1734,12 @@
       background-color: rgba(var(--ann-type-rgb, 68,114,196), 0.16) !important;
       border: var(--ann-bw) solid rgba(var(--ann-type-rgb, 68,114,196), 0.9);
       outline: none;
+      box-shadow: none;
     }
     .is-view-mode .ann-object.dt-page-color {
       background: transparent !important;
       outline: none;
+      box-shadow: none;
     }
 
     /* 位置・サイズ入力行 */
