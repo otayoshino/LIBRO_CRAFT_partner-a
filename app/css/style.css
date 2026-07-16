@@ -2591,3 +2591,117 @@
       background: #fff;
       width: 100%;
     }
+
+    /* ============================
+       インデックス編集モーダル
+    ============================ */
+    #indexEditorOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 9500; /* トースト(9999)より下、音声/Plusポップアップ(9100-9200)より上 */
+      align-items: center;
+      justify-content: center;
+    }
+    #indexEditorOverlay.is-open { display: flex; }
+    .index-editor {
+      width: min(720px, calc(100vw - 48px));
+      max-height: calc(100vh - 96px);
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .index-editor-title {
+      margin: 0;
+      padding: 12px 16px;
+      background: #444;
+      color: #eee;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    #indexEditorRows {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .index-editor-empty {
+      margin: 24px 0;
+      text-align: center;
+      color: #888;
+      font-size: 13px;
+    }
+    .index-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .index-row.level-2 { padding-left: 24px; }
+    .index-row.level-3 { padding-left: 48px; }
+    .index-row-level {
+      flex-shrink: 0;
+      height: 28px;
+      font-size: 12px;
+    }
+    .index-row-text {
+      flex: 1;
+      min-width: 0;
+      height: 28px;
+      padding: 0 8px;
+      font-size: 13px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .index-row-page {
+      flex-shrink: 0;
+      width: 64px;
+      height: 28px;
+      padding: 0 8px;
+      font-size: 13px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .index-row-btn {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #f5f5f5;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+    }
+    .index-row-btn:hover { background: #e4e4e4; }
+    .index-editor-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid #ddd;
+      flex-shrink: 0;
+    }
+    .index-editor-actions .spacer { flex: 1; }
+    .index-editor-actions button {
+      height: 30px;
+      padding: 0 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #f5f5f5;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .index-editor-actions button:hover { background: #e4e4e4; }
+    .index-editor-actions button.ok {
+      background: #4c9ae2;
+      border-color: #4c9ae2;
+      color: #fff;
+    }
+    .index-editor-actions button.ok:hover { background: #366da0; }

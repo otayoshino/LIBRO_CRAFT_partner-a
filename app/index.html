@@ -80,6 +80,10 @@
 
     <!-- アクションブロック -->
     <div class="blk action">
+      <!-- インデックス編集（アイコン・詳細配置は仮置き、後日検討） -->
+      <button class="nav-btn disabled" id="indexEditBtn" data-tip="インデックス編集" onclick="openIndexEditor()">
+        <svg width="18" height="18"><use href="icons/sprite.svg#icon-toc"></use></svg>
+      </button>
       <!-- 保存ドロップダウン -->
       <div class="save-dropdown-wrap">
         <button class="nav-btn" data-tip="保存" onclick="toggleSaveDropdown(event)">
@@ -390,6 +394,20 @@
   <!-- 画面中央トースト -->
   <div class="toast-overlay">
     <div class="toast-msg" id="toastMsg"></div>
+  </div>
+
+  <!-- インデックス編集モーダル -->
+  <div id="indexEditorOverlay">
+    <div class="index-editor">
+      <p class="index-editor-title">インデックス編集</p>
+      <div id="indexEditorRows"></div>
+      <div class="index-editor-actions">
+        <button type="button" onclick="addIndexRow()">＋ 項目を追加</button>
+        <span class="spacer"></span>
+        <button type="button" onclick="closeIndexEditor(false)">キャンセル</button>
+        <button type="button" class="ok" onclick="closeIndexEditor(true)">OK</button>
+      </div>
+    </div>
   </div>
 
   <!-- ===========================

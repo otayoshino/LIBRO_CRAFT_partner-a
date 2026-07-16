@@ -3,6 +3,7 @@ import { startAutoSaveInterval } from './autosave.js';
 import { createDaimonButton, createKotaeButton, createShomeiButton } from './buttons.js';
 import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObjects, cutSelectedObjects, deactivateAnnotationMode, deleteSelectedObjects, finalizeDragSelect, getPageRelativePos, onDragSelectMove, onDrawPreviewMove, onPageMouseDown, onPageMouseMove, onPageMouseUp, pasteClipboard, selectAllObjects } from './annotation-interaction.js';
 import { switchToViewMode } from './mode.js';
+import { addIndexRow, closeIndexEditor, openIndexEditor } from './index-outline.js';
 import { applyZoomChange, goFirstPage, goLastPage, goTocPage, nextPage, prevPage, resizePage, setFit, updatePageDisplay, zoomIn, zoomOut } from './page-view.js';
 import { state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
@@ -13,6 +14,13 @@ import { redo, undo } from './undo-redo.js';
 
     /* キーボードイベント（Esc / Delete / Space / Cmd+C / Cmd+V / Cmd+X） */
     document.addEventListener('keydown', (e) => {
+      // インデックス編集モーダル表示中は紙面向けショートカット
+      // （矢印ページ移動・Delete削除・Ctrl+Z等）を全て抑止し、Escapeで閉じるのみ受け付ける
+      if (document.getElementById('indexEditorOverlay')?.classList.contains('is-open')) {
+        if (e.key === 'Escape') closeIndexEditor(false);
+        return;
+      }
+
       if (e.key === 'Escape') {
         cancelDragSelect();
         closeQuickCreateDialog();
@@ -352,5 +360,8 @@ Object.assign(window, {
   alignObjects,
   onPageMouseDown,
   onPageMouseMove,
-  onPageMouseUp
+  onPageMouseUp,
+  openIndexEditor,
+  closeIndexEditor,
+  addIndexRow
 });
