@@ -234,6 +234,7 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
         // 残らないようlibroBookをクリアする
         state.libroBook = null;
         updateTocButtonState();
+        updateIndexEditBtnState();
 
         // 音声・動画・Plusファイルを含む全ファイルをBlobURLに変換してキャッシュ
         const mimeMap = {

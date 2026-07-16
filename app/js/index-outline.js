@@ -33,7 +33,7 @@ let rows = [];
 
 /** 文字列先頭のU+FEFF（BOM文字）を1つ除去する。 */
 function stripBom(s) {
-  return s.replace(/^﻿/, '');
+  return s.replace(/^\uFEFF/, '');
 }
 
 
@@ -242,7 +242,7 @@ function buildOutlineFromRows() {
     // 元データに前後空白がある未編集行が「編集済み」扱いになりバイト不変性が壊れる。
     const description = (row.origText !== null && stripBom(row.origText) === row.text)
       ? row.origText
-      : '﻿' + text;
+      : '\uFEFF' + text;
 
     // 元項目の未知プロパティを引き継いだ新オブジェクトを作る（children/dest-pageは作り直す）
     const item = { ...(row.orig || {}), description };
