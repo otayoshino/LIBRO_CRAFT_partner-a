@@ -596,7 +596,7 @@ import { pushUndo } from './undo-redo.js';
      */
     function buildSpecificFields(form, type, savedData, existingEl = null) {
       const cfg      = ANNOTATION_TYPE_CONFIG[type];
-      const dispType = savedData.annDisplayType || 'marker';
+      const dispType = savedData.annDisplayType || 'icon';
 
       if (type === 'sticky') {
         // 付箋固有：フィールドなし（内容入力は不要）
@@ -674,7 +674,7 @@ import { pushUndo } from './undo-redo.js';
       dtDt.textContent = '表示タイプ';
       form.appendChild(dtDt);
       const dtDd = document.createElement('dd');
-      const pageColorOption = type === 'pagelink' ? `
+      const pageColorOption = ['pagelink', 'audio', 'video', 'plusfile', 'externallink'].includes(type) ? `
           <label class="disp-type-option${dispType === 'page-color' ? ' is-active' : ''}" id="dtOpt-page-color">
             <div class="disp-type-top">
               <input type="radio" name="annDisplayTypeRadio" value="page-color"${dispType === 'page-color' ? ' checked' : ''}>
@@ -694,7 +694,7 @@ import { pushUndo } from './undo-redo.js';
             </div>
             <span class="disp-type-label">アイコン</span>
           </label>
-          <label class="disp-type-option${dispType === 'marker' ? ' is-active' : ''}" id="dtOpt-marker">
+          <label class="disp-type-option${dispType === 'marker' ? ' is-active' : ''}" id="dtOpt-marker" style="display:none">
             <div class="disp-type-top">
               <input type="radio" name="annDisplayTypeRadio" value="marker"${dispType === 'marker' ? ' checked' : ''}>
               <div class="disp-type-preview disp-type-preview--marker">テキスト</div>
