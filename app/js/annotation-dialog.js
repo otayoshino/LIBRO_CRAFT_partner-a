@@ -888,7 +888,7 @@ import { pushUndo } from './undo-redo.js';
         const fileDd = _buildTextDD('annFile', savedData.annFile || '', 'ファイル名を入力');
         fileDd.querySelector('input').insertAdjacentHTML('afterend',
           '<p class="field-note">※ファイル名の拡張子「.mp3」は除く</p>');
-        _appendDropZone(fileDd, 'annFile', 'audio');
+        _appendDropZone(fileDd, 'annFile', 'audio', existingEl);
         form.appendChild(fileDd);
         form.appendChild(_buildRadioDt('再生方法'));
         form.appendChild(_buildRadioDD('annPlayMode', 'annPlayModeRadio', playMode, [
@@ -1010,8 +1010,9 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} ddEl      - 追加先の dd 要素
      * @param {string}      inputId   - ファイル名を反映する input の id
      * @param {string}      mediaType - 'audio' または 'video'
+     * @param {HTMLElement} [existingEl] - 編集対象アノテーションの既存DOM要素（新規作成時はnull）
      */
-    function _appendDropZone(ddEl, inputId, mediaType) {
+    function _appendDropZone(ddEl, inputId, mediaType, existingEl = null) {
       const extHint = mediaType === 'audio' ? 'MP3' : 'MP4';
       const zone = document.createElement('div');
       zone.className = 'file-drop-zone';
@@ -1049,8 +1050,15 @@ import { pushUndo } from './undo-redo.js';
         // 音声のみ：同名ファイルが既に別アノテーションで使用中の場合は上書き前に警告する
         // （「自分自身の差し替え」＝現在このダイアログが編集中のファイル名と同じ場合は警告不要）
         if (mediaType === 'audio' && mediaBlobs[file.name]) {
-          const currentValue = fileInput ? fileInput.value.trim() : '';
-          const isSelfReplace = currentValue === baseName;
+          let savedAnnFile = '';
+          if (existingEl) {
+            try {
+              savedAnnFile = JSON.parse(existingEl.dataset.savedData || '{}').annFile || '';
+            } catch (err) {
+              savedAnnFile = '';
+            }
+          }
+          const isSelfReplace = savedAnnFile === baseName;
           if (!isSelfReplace) {
             const proceed = confirm(`「${file.name}」は既に他のアノテーションで使用されています。上書きしますか？`);
             if (!proceed) return;
