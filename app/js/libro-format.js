@@ -1071,7 +1071,7 @@ export function styleToRect(style, pageWidth, pageHeight) {
  * @param {number} pxHeight
  * @returns {Promise<Uint8Array>}
  */
-async function rasterizeMarkerPng(type, pxWidth, pxHeight) {
+async function rasterizeMarkerPng(type, pxWidth, pxHeight, annDisplayType, annColor) {
   const cfg = ANNOTATION_TYPE_CONFIG[type] || {};
   const w = Math.max(1, Math.min(1200, pxWidth));
   const h = Math.max(1, Math.min(1200, pxHeight));
@@ -1080,6 +1080,56 @@ async function rasterizeMarkerPng(type, pxWidth, pxHeight) {
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
+
+  // 紙面カラー型：完全透過画像
+  if (annDisplayType === 'page-color') {
+    // 空のcanvasをそのままPNG化（透明）
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+
+  // アイコン型：円形グラデーション背景+白アイコン
+  if (annDisplayType === 'icon') {
+    // annColorはICON_COLOR_OPTIONSのインデックス（0=青, 1=緑, 2=黄）
+    const iconColors = [
+      { stops: [['#67d0ff', 0], ['#4c9ae2', 0.3], ['#366da0', 1]] },  // 青
+      { stops: [['#7ddf8a', 0], ['#4cae5e', 0.3], ['#2d7a3d', 1]] },  // 緑
+      { stops: [['#ffe066', 0], ['#e0b800', 0.3], ['#a07800', 1]] },  // 黄
+    ];
+    const colorIndex = Math.max(0, Math.min(2, parseInt(annColor, 10) || 0));
+    const colors = iconColors[colorIndex];
+
+    // 円形クリップを設定
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    // グラデーション背景を描画（180deg = 上から下）
+    const gradient = ctx.createLinearGradient(w / 2, 0, w / 2, h);
+    colors.stops.forEach(([color, offset]) => {
+      gradient.addColorStop(offset, color);
+    });
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    // 白いアイコンを60%サイズで中央配置
+    const pathData = (cfg.iconSvg || '').match(/d="([^"]+)"/)?.[1];
+    if (pathData) {
+      const iconSize = Math.min(w, h) * 0.6;
+      const scale = iconSize / 24; // アイコンは24x24 viewBox基準
+      ctx.save();
+      ctx.translate((w - iconSize) / 2, (h - iconSize) / 2);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill(new Path2D(pathData));
+      ctx.restore();
+    }
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+
+  // マーカー型（既定値）：塗り色矩形+白アイコン
   ctx.fillStyle = cfg.color || 'rgba(120,120,120,0.6)';
   ctx.fillRect(0, 0, w, h);
 
@@ -1270,7 +1320,7 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
       }
     }
   } else if (!zip.file(baseDir + filename)) {
-    newPngBytes = await rasterizeMarkerPng(domData.type, rect[2], rect[3]);
+    newPngBytes = await rasterizeMarkerPng(domData.type, rect[2], rect[3], sd.annDisplayType, sd.annColor);
   }
 
   return { annotJson: { filename, rect, actions }, newPngBytes };
