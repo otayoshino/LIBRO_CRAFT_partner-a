@@ -33,7 +33,7 @@ import { showToast } from './ui-common.js';
 
     /**
      * 現在のDOMからアノテーション状態を抽出する。
-     * saveAnnotations() と同じ抽出ロジック（%座標・スタイル・各種dataset）。
+     * %座標・スタイル・各種datasetを保存フォーマットと同じ形で抽出する。
      */
     function collectAnnotationSnapshotData() {
       const page = document.getElementById('pageLeft');

@@ -63,7 +63,7 @@ function flattenOutline(items, level, out) {
 
 /**
  * インデックス編集モーダルを開く。LIBRO book 未読込時は何もしない
- * （ボタン自体も updateIndexEditBtnState で非活性化されている）。
+ * （ボタン自体も updateLibroBookBtnStates で非活性化されている）。
  */
 export function openIndexEditor() {
   if (!state.libroBook) return;
@@ -110,9 +110,11 @@ export function addIndexRow() {
 }
 
 
-/** インデックス編集ボタンの活性・非活性をLIBRO book読込有無に応じて更新する。 */
-export function updateIndexEditBtnState() {
-  document.getElementById('indexEditBtn')?.classList.toggle('disabled', !state.libroBook);
+/** インデックス編集・LIBRO書き出しボタンの活性・非活性をLIBRO book読込有無に応じて更新する。 */
+export function updateLibroBookBtnStates() {
+  const disabled = !state.libroBook;
+  document.getElementById('indexEditBtn')?.classList.toggle('disabled', disabled);
+  document.getElementById('libroExportBtn')?.classList.toggle('disabled', disabled);
 }
 
 

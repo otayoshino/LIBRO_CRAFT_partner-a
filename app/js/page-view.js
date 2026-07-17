@@ -1,5 +1,5 @@
 import { deselectAllObjects, updateAlignPanel } from './annotation-interaction.js';
-import { updateIndexEditBtnState } from './index-outline.js';
+import { updateLibroBookBtnStates } from './index-outline.js';
 import { state } from './state.js';
 import { updateStatus } from './ui-common.js';
 
@@ -103,8 +103,8 @@ import { updateStatus } from './ui-common.js';
       updateSpreadBadge();
       // TOCボタンの活性状態を更新
       updateTocButtonState();
-      // インデックス編集ボタンの活性状態を更新
-      updateIndexEditBtnState();
+      // インデックス編集・LIBRO書き出しボタンの活性状態を更新
+      updateLibroBookBtnStates();
 
       // ページ移動時に選択を全解除する
       deselectAllObjects();

@@ -5,70 +5,9 @@ import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, rende
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, styleToRect } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility, updateTocButtonState } from './page-view.js';
-import { updateIndexEditBtnState } from './index-outline.js';
+import { updateLibroBookBtnStates } from './index-outline.js';
 import { mediaBlobs, state } from './state.js';
 import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js';
-
-        /**
-         * アノテーションをローカルストレージに保存する。
-         */
-        /**
-         * アノテーションをJSONファイルとしてダウンロード保存する。
-         */
-        export function saveAnnotations() {
-          const page = document.getElementById('pageLeft');
-          // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
-          // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
-          const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
-          // LIBRO book由来の付箋（.libro-toggle）はLIBRO書き出し専用のため、通常のローカル保存対象からは除外する
-          const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn');
-          const data = Array.from(elements).map(el => {
-            // px値取得
-            const left = parseFloat(el.style.left) || 0;
-            const top = parseFloat(el.style.top) || 0;
-            const width = parseFloat(el.style.width) || el.offsetWidth;
-            const height = parseFloat(el.style.height) || el.offsetHeight;
-            // %変換
-            const leftPct = (left / pageRect.width) * 100;
-            const topPct = (top / pageRect.height) * 100;
-            const widthPct = (width / pageRect.width) * 100;
-            const heightPct = (height / pageRect.height) * 100;
-            // styleを%で構築（背景色も保存）
-            const bg = el.style.background || el.style.backgroundColor || '';
-            const style = `left:${leftPct}%;top:${topPct}%;width:${widthPct}%;height:${heightPct}%;${bg ? 'background:' + bg + ';' : ''}`;
-            const obj = {
-              className: el.className,
-              type: el.dataset.type,
-              id: el.dataset.id,
-              page: el.dataset.page,
-              style: style,
-              savedData: el.dataset.savedData || '',
-              groupId: el.dataset.groupId,
-              daimonId: el.dataset.daimonId,
-              kotaeId: el.dataset.kotaeId,
-              kotaeOrigBg: el.dataset.kotaeOrigBg,
-              shomeiId: el.dataset.shomeiId,
-              shomeiOrigBg: el.dataset.shomeiOrigBg,
-              shomeiOutline: el.dataset.shomeiOutline,
-              fuhyoji: el.dataset.fuhyoji
-            };
-            return obj;
-          });
-          // JSONファイルとしてダウンロード
-          const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'annotations.json';
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-          }, 100);
-          showToast('アノテーションをファイル保存しました');
-        }
-
 
         /**
          * アノテーション配列からDOMを再構築する共通処理。
@@ -104,7 +43,7 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
                   // 背景色を抽出（付箋の塗り復元に必要）
                   const bgMatch = obj.style.match(/background:([^;]+)/);
                   if (leftPctMatch) {
-                    // (1) % 形式（saveAnnotations が出力する現行フォーマット）
+                    // (1) % 形式（現行の保存フォーマット）
                     styleStr += `left:${parseFloat(leftPctMatch[1]) * pageRect.width / 100}px;`;
                     if (topPctMatch) styleStr += `top:${parseFloat(topPctMatch[1]) * pageRect.height / 100}px;`;
                     if (!isBtnClass) {
@@ -234,7 +173,7 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
         // 残らないようlibroBookをクリアする
         state.libroBook = null;
         updateTocButtonState();
-        updateIndexEditBtnState();
+        updateLibroBookBtnStates();
 
         // 音声・動画・Plusファイルを含む全ファイルをBlobURLに変換してキャッシュ
         const mimeMap = {
@@ -324,7 +263,7 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
       // 音声・アノテーション画像のパス一覧（書き出し時に強制暗号化する対象）
       state.libroBook = { zip, baseDir, indexJson, unencryptedAssetPaths };
       updateTocButtonState();
-      updateIndexEditBtnState();
+      updateLibroBookBtnStates();
       // book識別子：LIBRO book folder名（baseDir）。folder無し（index.jsonがzipルート直下）の場合は
       // 元zipファイル名にフォールバックする
       const bookId = baseDir || fallbackName;
@@ -335,116 +274,6 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
         : '';
       showToast(`LIBRO bookを読み込みました（${pages.length}ページ、未知アノテーション${unknownAnnotations.length}件${unencryptedNote}）`);
       await checkAndPromptRestoreForBook(bookId);
-    }
-
-
-    /**
-     * 現在のアノテーションと関連する音声・動画ファイルをまとめてZIPで保存する。
-     * annFile フィールドを持つアノテーションのメディアファイルを収集してZIPに同梱する。
-     */
-    export async function saveAnnotationsAsZip() {
-      const page = document.getElementById('pageLeft');
-      // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
-      // アノテーション座標もズーム前の基準サイズを前提としているため、ここで揃える。
-      const pageRect = { width: page.offsetWidth, height: page.offsetHeight };
-      const elements = page.querySelectorAll('.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .ann-image-obj, .daimon-btn, .kotae-btn, .shomei-btn');
-      const data = Array.from(elements).map(el => {
-        const left = parseFloat(el.style.left) || 0;
-        const top  = parseFloat(el.style.top)  || 0;
-        const width  = parseFloat(el.style.width)  || el.offsetWidth;
-        const height = parseFloat(el.style.height) || el.offsetHeight;
-        const leftPct   = (left   / pageRect.width)  * 100;
-        const topPct    = (top    / pageRect.height) * 100;
-        const widthPct  = (width  / pageRect.width)  * 100;
-        const heightPct = (height / pageRect.height) * 100;
-        return {
-          className:     el.className,
-          type:          el.dataset.type,
-          id:            el.dataset.id,
-          page:          el.dataset.page,
-          style:         `left:${leftPct}%;top:${topPct}%;width:${widthPct}%;height:${heightPct}%;`,
-          savedData:     el.dataset.savedData || '',
-          groupId:       el.dataset.groupId,
-          daimonId:      el.dataset.daimonId,
-          kotaeId:       el.dataset.kotaeId,
-          kotaeOrigBg:   el.dataset.kotaeOrigBg,
-          shomeiId:      el.dataset.shomeiId,
-          shomeiOrigBg:  el.dataset.shomeiOrigBg,
-          shomeiOutline: el.dataset.shomeiOutline,
-          fuhyoji:       el.dataset.fuhyoji,
-        };
-      });
-
-      const zip = new JSZip();
-      zip.file('annotations.json', JSON.stringify(data, null, 2));
-
-      // annFile を持つアノテーション（音声・動画・Plusファイル）をZIPに同梱（重複除去）
-      const mediaExtMap = { audio: 'mp3', video: 'mp4' };
-      const collected = new Set();
-      data.forEach(obj => {
-        try {
-          const sd = JSON.parse(obj.savedData || '{}');
-          if (!sd.annFile) return;
-          const fileName = sd.annFile.trim();
-          if (!fileName) return;
-
-          if (obj.type === 'plusfile') {
-            // Plusファイル：ファイル名そのまま（拡張子込み）
-            if (!collected.has(fileName)) {
-              collected.add(fileName);
-              const src = mediaBlobs[fileName] || `./${fileName}`;
-              zip.file(fileName, fetch(src).then(r => {
-                if (!r.ok) throw new Error(`fetch failed: ${src}`);
-                return r.blob();
-              }).catch(() => null));
-            }
-          } else {
-            const ext = mediaExtMap[obj.type];
-            if (!ext) return;
-            const key = `${fileName}.${ext}`;
-            if (!collected.has(key)) {
-              collected.add(key);
-              const src = mediaBlobs[key] || `/mock/ver2/_media/${encodeURIComponent(fileName)}.${ext}`;
-              zip.file(key, fetch(src).then(r => {
-                if (!r.ok) throw new Error(`fetch failed: ${src}`);
-                return r.blob();
-              }).catch(() => null));
-            }
-          }
-        } catch (_) {}
-      });
-
-      // btnImageFile を持つ大問/答/証明ボタンの画像素材もZIPに同梱（重複除去、押下時バリアントは含めず読込時に再生成する）
-      data.forEach(obj => {
-        if (!['daimon', 'kotae', 'shomei'].includes(obj.type)) return;
-        try {
-          const sd = JSON.parse(obj.savedData || '{}');
-          const fileName = (sd.btnImageFile || '').trim();
-          if (!fileName || collected.has(fileName)) return;
-          collected.add(fileName);
-          const src = mediaBlobs[fileName];
-          if (!src) return;
-          zip.file(fileName, fetch(src).then(r => {
-            if (!r.ok) throw new Error(`fetch failed: ${src}`);
-            return r.blob();
-          }).catch(() => null));
-        } catch (_) {}
-      });
-
-      try {
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const url = URL.createObjectURL(zipBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'annotations.zip';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
-        showToast('ZIPで保存しました');
-      } catch (e) {
-        showToast('ZIP保存エラー: ' + e.message);
-        console.error(e);
-      }
     }
 
 
@@ -606,25 +435,6 @@ import { hideLoader, showLoader, showToast, updateStatus } from './ui-common.js'
       } catch (e) {
         showToast('LIBRO書き出しエラー: ' + e.message);
         console.error(e);
-      }
-    }
-
-
-    /**
-     * 保存ドロップダウンメニューの表示・非表示を切り替える。
-     * @param {Event} e - クリックイベント
-     */
-    export function toggleSaveDropdown(e) {
-      e.stopPropagation();
-      const menu = document.getElementById('saveDropdownMenu');
-      const isOpen = menu.classList.toggle('is-open');
-      if (isOpen) {
-        // メニュー外クリックで閉じる
-        const close = () => {
-          menu.classList.remove('is-open');
-          document.removeEventListener('click', close);
-        };
-        document.addEventListener('click', close);
       }
     }
 

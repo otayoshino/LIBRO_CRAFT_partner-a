@@ -40,13 +40,12 @@ python server.py
 
 新規種別を追加する場合の修正箇所チェックリストは [add-annotation-type Skill](.claude/skills/add-annotation-type/SKILL.md) を参照。
 
-### 保存・読み込みの3系統
+### 保存・読み込み
 
 - **IndexedDB自動保存**：`app/js/autosave.js` がDOMのアノテーション状態を定期的にIndexedDB（`ContentsBuilderAutoSave`）へスナップショット保存し、次回同一book読み込み完了時に復元確認を行う（ページ内で完結）
-- **独自ZIP形式**：`saveAnnotationsAsZip()` による `annotations.json` ＋ メディアファイル一式のエクスポート（`saveAnnotations()` は単体JSONファイルのダウンロード保存のみで、対応する読込機能は廃止済み）
-- **LIBRO book形式**：`saveAnnotationsAsLibroBook()` によるLIBRO bookフォルダ形式（暗号化ページ画像＋JSON）でのエクスポート。ページリンク・外部リンク・音声再生の3種別のみ対応、他は未対応（詳細は [libro-integration Skill](.claude/skills/libro-integration/SKILL.md)）
+- **LIBRO book形式エクスポート**：`saveAnnotationsAsLibroBook()` によるLIBRO bookフォルダ形式（暗号化ページ画像＋JSON）でのエクスポート。手動保存はこの1系統のみ（単体JSON保存・独自ZIP形式エクスポートは廃止済み）。対応種別の詳細は [libro-integration Skill](.claude/skills/libro-integration/SKILL.md)
 
-読み込みはいずれも `handleZipFile()` が入口で、ZIPルート直下に `index.json` があればLIBRO book形式、なければ独自ZIP形式として自動判別する。
+読み込みは `handleZipFile()` が入口で、ZIPルート直下に `index.json` があればLIBRO book形式、なければ独自ZIP形式（過去にエクスポートした `annotations.json` ＋メディア一式）として自動判別する。
 
 ### モード切替
 

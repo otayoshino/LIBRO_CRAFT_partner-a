@@ -173,47 +173,6 @@
       pointer-events: none;
     }
 
-    /* 保存ドロップダウン */
-    .save-dropdown-wrap {
-      position: relative;
-    }
-    #saveDropdownMenu {
-      display: none;
-      position: absolute;
-      top: calc(100% + 4px);
-      right: 0;
-      background: #fff;
-      color: #333;
-      border-radius: 6px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-      min-width: 200px;
-      z-index: 300;
-      overflow: hidden;
-    }
-    #saveDropdownMenu.is-open {
-      display: block;
-    }
-    #saveDropdownMenu button {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      padding: 10px 14px;
-      font-size: 13px;
-      color: #333;
-      background: none;
-      border: none;
-      cursor: pointer;
-      text-align: left;
-      transition: background 0.12s;
-    }
-    #saveDropdownMenu button:hover {
-      background: #f0f3fb;
-    }
-    #saveDropdownMenu button + button {
-      border-top: 1px solid #eee;
-    }
-
     /* ページ番号入力 */
     .nav .grp.direct {
       display: flex;

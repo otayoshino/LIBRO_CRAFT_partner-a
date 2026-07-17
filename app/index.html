@@ -84,26 +84,10 @@
       <button class="nav-btn disabled" id="indexEditBtn" data-tip="インデックス編集" onclick="openIndexEditor()">
         <svg width="18" height="18"><use href="icons/sprite.svg#icon-toc"></use></svg>
       </button>
-      <!-- 保存ドロップダウン -->
-      <div class="save-dropdown-wrap">
-        <button class="nav-btn" data-tip="保存" onclick="toggleSaveDropdown(event)">
-          <svg width="16" height="16"><use href="icons/sprite.svg#icon-save"></use></svg>
-        </button>
-        <div id="saveDropdownMenu">
-          <button onclick="saveAnnotations(); document.getElementById('saveDropdownMenu').classList.remove('is-open');">
-            <svg width="14" height="14"><use href="icons/sprite.svg#icon-save-json"></use></svg>
-            JSONのみ保存
-          </button>
-          <button onclick="saveAnnotationsAsZip(); document.getElementById('saveDropdownMenu').classList.remove('is-open');">
-            <svg width="14" height="14"><use href="icons/sprite.svg#icon-save-zip"></use></svg>
-            ZIPで保存（音声・動画含む）
-          </button>
-          <button onclick="saveAnnotationsAsLibroBook(); document.getElementById('saveDropdownMenu').classList.remove('is-open');">
-            <svg width="14" height="14"><use href="icons/sprite.svg#icon-save-zip"></use></svg>
-            LIBRO形式で書き出す
-          </button>
-        </div>
-      </div>
+      <!-- LIBRO形式書き出し（LIBRO book未読込時は非活性。活性制御は updateLibroBookBtnStates） -->
+      <button class="nav-btn disabled" id="libroExportBtn" data-tip="LIBRO形式で書き出す" onclick="saveAnnotationsAsLibroBook()">
+        <svg width="16" height="16"><use href="icons/sprite.svg#icon-save"></use></svg>
+      </button>
       <!-- 読込用ファイル選択input（非表示） -->
       <input type="file" id="zipFileInput" accept=".zip" style="display:none" onchange="handleZipFile(event)">
       <button class="nav-btn" data-tip="ZIP読込" onclick="loadAnnotationsFromZip()">

@@ -7,7 +7,7 @@ import { addIndexRow, closeIndexEditor, openIndexEditor } from './index-outline.
 import { applyZoomChange, goFirstPage, goLastPage, goTocPage, nextPage, prevPage, resizePage, setFit, updatePageDisplay, zoomIn, zoomOut } from './page-view.js';
 import { state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
-import { closeDialog, handleZipFile, loadAnnotationsFromZip, saveAnnotations, saveAnnotationsAsLibroBook, saveAnnotationsAsZip, saveDialog, toggleSaveDropdown } from './storage.js';
+import { closeDialog, handleZipFile, loadAnnotationsFromZip, saveAnnotationsAsLibroBook, saveDialog } from './storage.js';
 import { toggleAcc, toggleNav, updateStatus } from './ui-common.js';
 import { redo, undo } from './undo-redo.js';
 
@@ -342,9 +342,6 @@ Object.assign(window, {
   zoomIn,
   zoomOut,
   setFit,
-  toggleSaveDropdown,
-  saveAnnotations,
-  saveAnnotationsAsZip,
   saveAnnotationsAsLibroBook,
   handleZipFile,
   loadAnnotationsFromZip,
