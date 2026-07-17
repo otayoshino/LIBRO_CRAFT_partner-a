@@ -1005,51 +1005,46 @@ import { pushUndo } from './undo-redo.js';
 
     /**
      * ファイルドロップゾーンを dd 要素に追加するヘルパー。
-     * ドロップされたファイルをサーバーにアップロードし、inputId のフィールドに
-     * 拡張子なしのファイル名をセットする。
+     * ドロップで受け取ったファイルをBlobURLに変換してmediaBlobsへ格納し、
+     * inputId のフィールドに拡張子なしのファイル名をセットする。
+     * 音声（mediaType: 'audio'）のみ、ゾーンのクリックでファイル選択ダイアログからも
+     * 指定できる（動画は別途改修予定のためD&Dのみの従来挙動を維持する）。
      * @param {HTMLElement} ddEl      - 追加先の dd 要素
      * @param {string}      inputId   - ファイル名を反映する input の id
      * @param {string}      mediaType - 'audio' または 'video'
      * @param {HTMLElement} [existingEl] - 編集対象アノテーションの既存DOM要素（新規作成時はnull）
      */
     function _appendDropZone(ddEl, inputId, mediaType, existingEl = null) {
-      const extHint = mediaType === 'audio' ? 'MP3' : 'MP4';
+      const isAudio = mediaType === 'audio';
+      const extHint = isAudio ? 'MP3' : 'MP4';
       const zone = document.createElement('div');
       zone.className = 'file-drop-zone';
       zone.innerHTML = `
-        <p>ここに ${extHint} ファイルをドロップ</p>
+        <p>ここに ${extHint} ファイルをドロップ${isAudio ? '、またはクリックして選択' : ''}</p>
         <p class="drop-status"></p>
       `;
+      if (isAudio) zone.style.cursor = 'pointer';
       const statusEl = zone.querySelector('.drop-status');
 
-      // ドラッグオーバー：ハイライト表示
-      zone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        zone.classList.add('is-dragover');
-      });
-
-      // ドラッグ離脱：ハイライト解除
-      zone.addEventListener('dragleave', (e) => {
-        e.stopPropagation();
-        zone.classList.remove('is-dragover');
-      });
-
-      // ドロップ：ファイルをBlobURLに変換してmediaBlobsへ格納し、ファイル名をセット
-      zone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        zone.classList.remove('is-dragover');
-
-        const file = e.dataTransfer.files[0];
+      // ドロップ／ファイル選択の共通処理：BlobURL化してmediaBlobsへ格納し、ファイル名をセット
+      const handleFile = (file) => {
         if (!file) return;
+
+        // 音声のみ：annFileは拡張子なし前提で、再生時に .mp3 を補ってmediaBlobsを引くため、
+        // MP3以外のファイルは設定できても再生できない。ここで弾く。
+        // （動画は別途改修予定のため従来どおりチェックしない）
+        if (isAudio && !/\.mp3$/i.test(file.name)) {
+          statusEl.textContent = '✕ MP3ファイルを指定してください';
+          statusEl.className = 'drop-status is-error';
+          return;
+        }
 
         const fileInput = ddEl.querySelector(`#${inputId}`);
         const baseName = file.name.replace(/\.[^/.]+$/, '');
 
         // 音声のみ：同名ファイルが既に別アノテーションで使用中の場合は上書き前に警告する
         // （「自分自身の差し替え」＝現在このダイアログが編集中のファイル名と同じ場合は警告不要）
-        if (mediaType === 'audio' && mediaBlobs[file.name]) {
+        if (isAudio && mediaBlobs[file.name]) {
           let savedAnnFile = '';
           if (existingEl) {
             try {
@@ -1076,7 +1071,44 @@ import { pushUndo } from './undo-redo.js';
         mediaBlobs[file.name] = URL.createObjectURL(file);
         statusEl.textContent = `✔ ${file.name} を読み込みました`;
         statusEl.className = 'drop-status is-success';
+      };
+
+      // ドラッグオーバー：ハイライト表示
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add('is-dragover');
       });
+
+      // ドラッグ離脱：ハイライト解除
+      zone.addEventListener('dragleave', (e) => {
+        e.stopPropagation();
+        zone.classList.remove('is-dragover');
+      });
+
+      // ドロップ：共通処理へ
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('is-dragover');
+        handleFile(e.dataTransfer.files[0]);
+      });
+
+      // 音声のみ：クリックでファイル選択ダイアログを開く（_appendIconImageDropZone と同パターン）
+      // ※ fileInput はファイル名テキスト欄を指す既存の変数名のため、filePicker と命名して区別する
+      if (isAudio) {
+        const filePicker = document.createElement('input');
+        filePicker.type = 'file';
+        filePicker.accept = '.mp3,audio/mpeg';
+        filePicker.style.display = 'none';
+        zone.appendChild(filePicker);
+
+        zone.addEventListener('click', () => filePicker.click());
+        filePicker.addEventListener('change', () => {
+          handleFile(filePicker.files[0]);
+          filePicker.value = '';
+        });
+      }
 
       ddEl.appendChild(zone);
     }
