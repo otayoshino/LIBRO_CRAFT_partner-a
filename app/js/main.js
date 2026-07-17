@@ -21,6 +21,17 @@ import { redo, undo } from './undo-redo.js';
         return;
       }
 
+      // クイック作成/編集ポップアップ表示中も紙面向けショートカットを全て抑止し、
+      // Escapeで閉じる（描画モード解除を含む）のみ受け付ける
+      if (document.getElementById('quickCreatePopup')) {
+        if (e.key === 'Escape') {
+          closeQuickCreateDialog();
+          if (state.currentDrawType) deactivateAnnotationMode();
+          updateStatus();
+        }
+        return;
+      }
+
       if (e.key === 'Escape') {
         cancelDragSelect();
         closeQuickCreateDialog();
@@ -112,6 +123,27 @@ import { redo, undo } from './undo-redo.js';
         }
       }
     });
+
+    /* ==================================
+       クイックポップアップ表示中のモーダル化
+       annotation-dialog.js には手を入れず、body直下の #quickCreatePopup の
+       出現・消滅を MutationObserver で監視してオーバーレイを連動させる。
+       （ポップアップは常に document.body 直下に追加・削除されるため
+         childList のみの監視で検知できる）
+    ================================== */
+    const syncQuickPopupOverlay = () => {
+      const popupOpen = !!document.getElementById('quickCreatePopup');
+      const overlay   = document.getElementById('quickPopupOverlay');
+      if (popupOpen && !overlay) {
+        const el = document.createElement('div');
+        el.id        = 'quickPopupOverlay';
+        el.className = 'quick-popup-overlay';
+        document.body.appendChild(el);
+      } else if (!popupOpen && overlay) {
+        overlay.remove();
+      }
+    };
+    new MutationObserver(syncQuickPopupOverlay).observe(document.body, { childList: true });
 
     /* Spaceキー離し：パンモードを解除 */
     document.addEventListener('keyup', (e) => {
