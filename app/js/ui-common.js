@@ -1,4 +1,5 @@
 import { updateAlignPanel, updateDaimonGroupHighlight } from './annotation-interaction.js';
+import { state } from './state.js';
 
     /** トースト非表示用タイマー */
     let _toastTimer = null;
@@ -36,6 +37,17 @@ import { updateAlignPanel, updateDaimonGroupHighlight } from './annotation-inter
       const closing = !body.classList.contains('is-closed');
       body.classList.toggle('is-closed', closing);
       btn.classList.toggle('is-closed', closing);
+    }
+
+    /**
+     * ZIP（book）の読み込み状態に応じてサイドバー（オーサリング）全体の
+     * 活性/非活性を切り替える。未読み込み時は inert 属性でマウス・キーボード
+     * 操作を無効化し、CSS（.side.authoring[inert]）でグレーアウト表示する。
+     */
+    export function updateAuthoringSideState() {
+      const aside = document.querySelector('.side.authoring');
+      if (!aside) return;
+      aside.toggleAttribute('inert', !state.currentBookId);
     }
 
 
