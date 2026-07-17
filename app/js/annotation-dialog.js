@@ -1485,7 +1485,7 @@ import { pushUndo } from './undo-redo.js';
       } else {
         // --- 汎用アノテーション（ページリンク / Plusファイル / 外部リンク / 音声再生 / 動画再生） ---
         const cfg         = ANNOTATION_TYPE_CONFIG[type];
-        const displayType = savedData.annDisplayType || 'marker';
+        const displayType = savedData.annDisplayType || 'icon';
         // 'existing'（LIBRO由来ページリンクの「既存ページリンクカラー」選択時）や
         // 未設定時はデフォルト塗り色（ANN_COLOR_OPTIONS[0]）にフォールバックする
         const colorIdx    = parseInt(savedData.annColor, 10);

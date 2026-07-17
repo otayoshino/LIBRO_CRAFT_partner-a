@@ -252,16 +252,16 @@ import { redo, undo } from './undo-redo.js';
         openQuickCreateDialog(state.currentDrawType, start.x, start.y, e.clientX, e.clientY);
         return;
       }
-      // ドラッグ作成：マーカー形式で即時作成
+      // ドラッグ作成：紙面カラー形式で即時作成
       state.pendingRect = { x, y, w, h };
       const _specForm = document.getElementById('dialogFormSpecific');
       if (_specForm) {
         const _dtEl = _specForm.querySelector('#annDisplayType');
         if (_dtEl) {
-          _dtEl.value = 'marker';
+          _dtEl.value = 'page-color';
         } else {
           const _inp = document.createElement('input');
-          _inp.type = 'hidden'; _inp.id = 'annDisplayType'; _inp.value = 'marker';
+          _inp.type = 'hidden'; _inp.id = 'annDisplayType'; _inp.value = 'page-color';
           _inp.dataset.qcInject = '1';
           _specForm.appendChild(_inp);
         }
