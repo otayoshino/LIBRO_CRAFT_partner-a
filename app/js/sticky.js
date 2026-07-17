@@ -116,9 +116,9 @@ import { pushUndo, redo } from './undo-redo.js';
 
 
     /**
-     * 付箋非表示ボタンの処理。
-     * 選択中の付箋を白一色に変更し、閲覧モードでは
-     * 非表示状態の付箋を押下で表示するよう設定する。
+     * 「付箋を隠す」ボタンの処理。
+     * 選択中の付箋を紙色（白一色）に変更する。
+     * 閲覧モードでは通常付箋と同様にクリックで開閉（トグル）する。
      * 編集モード中のみ実行可能。
      */
     export function onMisetteiBtnClick() {
@@ -140,10 +140,7 @@ import { pushUndo, redo } from './undo-redo.js';
       // 選択中の付箋の背景色を白一色に変更し、専用フラグを付与する
       selectedStickySet.forEach(note => {
         note.style.background = '#ffffff';
-        note.dataset.fuhyoji = '1'; // 「付箋非表示」ボタンで設定された付箋と識別するフラグ
-        // 非表示状態にする（閲覧モードでクリック時のみ表示）
-        note.classList.remove('state-visible');
-        note.classList.add('state-hidden');
+        note.dataset.fuhyoji = '1'; // 「付箋を隠す」ボタンで設定された付箋と識別するフラグ
       });
       // Undoスタックに積む
       pushUndo({ type: 'sticky-hide', targets: prevStates });
@@ -160,8 +157,6 @@ import { pushUndo, redo } from './undo-redo.js';
         if (redo) {
           el.style.background = '#ffffff';
           el.dataset.fuhyoji = '1';
-          el.classList.remove('state-visible');
-          el.classList.add('state-hidden');
         } else {
           el.style.background = prevBackground || '';
           if (prevFuhyoji === undefined) {
@@ -283,32 +278,16 @@ import { pushUndo, redo } from './undo-redo.js';
           return;
         }
 
-        const isFuhyoji = note.dataset.fuhyoji === '1';
-        if (isFuhyoji) {
-          // 「付箋非表示」設定済み：表示状態のときは反応しない。非表示のときのみ表示する。
-          if (note.classList.contains('state-visible')) return;
-          const gid = note.dataset.groupId;
-          const targets = gid
-            ? Array.from(document.querySelectorAll(`.sticky-note[data-group-id="${gid}"]`))
-            : [note];
-          targets.forEach(t => {
-            if (!t.classList.contains('state-hidden')) return;
-            t.classList.remove('state-hidden');
-            t.classList.add('state-visible');
-          });
-          updateStatus();
-        } else {
-          // 通常付箋：トグル（即時）
-          const isVisible = note.classList.contains('state-visible');
-          const gid = note.dataset.groupId;
-          const targets = gid
-            ? Array.from(document.querySelectorAll(`.sticky-note[data-group-id="${gid}"]`))
-            : [note];
-          targets.forEach(t => {
-            t.classList.toggle('state-visible', !isVisible);
-            t.classList.toggle('state-hidden',   isVisible);
-          });
-          updateStatus();
-        }
+        // 付箋の開閉トグル（「付箋を隠す」設定済みの白付箋も通常付箋と同じ挙動）
+        const isVisible = note.classList.contains('state-visible');
+        const gid = note.dataset.groupId;
+        const targets = gid
+          ? Array.from(document.querySelectorAll(`.sticky-note[data-group-id="${gid}"]`))
+          : [note];
+        targets.forEach(t => {
+          t.classList.toggle('state-visible', !isVisible);
+          t.classList.toggle('state-hidden',   isVisible);
+        });
+        updateStatus();
       });
     }
