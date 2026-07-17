@@ -121,3 +121,7 @@
       { label: '赤（答）',   value: '#a85a4a' },
       { label: '紫（証明）', value: '#7a4aa8' },
     ];
+
+
+    /** 大問ボタン（プリセットモード）の押下状態の背景色。LIBRO実データ（annots/0920.png）実測色に合わせる */
+    export const DAIMON_PRESSED_COLOR = '#666666';

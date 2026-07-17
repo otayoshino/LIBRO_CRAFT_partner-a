@@ -1,6 +1,6 @@
 import { openEditPopup } from './annotation-dialog.js';
 import { makeDraggable } from './annotation-interaction.js';
-import { BTN_COLOR_OPTIONS } from './config.js';
+import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR } from './config.js';
 import { mediaBlobs, selectedStickySet, state } from './state.js';
 import { showToast, updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
@@ -105,20 +105,35 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
-     * カスタム画像が設定されたボタンの押下時見た目を切り替える（画像未設定のボタンは何もしない）。
+     * ボタンの押下時見た目を切り替える。
+     * カスタム画像設定済み（btnHasImage === '1'）：押下/通常の画像素材をスワップする。
+     * プリセットモードの大問ボタンのみ：背景をグレーソリッド（DAIMON_PRESSED_COLOR）⇔元のプリセット色に切り替える。
      * @param {HTMLElement} btn      - daimon-btn/kotae-btn/shomei-btn 要素
-     * @param {boolean}     isPressed - true: 押下時（表示中）画像へ切替 / false: 通常時画像へ切替
+     * @param {boolean}     isPressed - true: 押下時（表示中）見た目へ切替 / false: 通常時見た目へ切替
      */
     function swapButtonPressedImage(btn, isPressed) {
-      if (btn.dataset.btnHasImage !== '1') return;
-      let savedData = {};
-      try { savedData = JSON.parse(btn.dataset.savedData || '{}'); } catch (_) {}
-      const imageFile = (savedData.btnImageFile || '').trim();
-      if (!imageFile) return;
-      const img = btn.querySelector('.btn-face');
-      if (!img) return;
-      const key = isPressed ? `pressed__${imageFile}` : imageFile;
-      if (mediaBlobs[key]) img.src = mediaBlobs[key];
+      if (btn.dataset.btnHasImage === '1') {
+        let savedData = {};
+        try { savedData = JSON.parse(btn.dataset.savedData || '{}'); } catch (_) {}
+        const imageFile = (savedData.btnImageFile || '').trim();
+        if (!imageFile) return;
+        const img = btn.querySelector('.btn-face');
+        if (!img) return;
+        const key = isPressed ? `pressed__${imageFile}` : imageFile;
+        if (mediaBlobs[key]) img.src = mediaBlobs[key];
+        return;
+      }
+
+      if (btn.dataset.type !== 'daimon') return;
+      if (isPressed) {
+        btn.style.background = DAIMON_PRESSED_COLOR;
+      } else {
+        let savedData = {};
+        try { savedData = JSON.parse(btn.dataset.savedData || '{}'); } catch (_) {}
+        const presetIdx = parseInt(savedData.btnPreset, 10);
+        const preset = BTN_COLOR_OPTIONS[Number.isInteger(presetIdx) ? presetIdx : 0] || BTN_COLOR_OPTIONS[0];
+        btn.style.background = preset.value;
+      }
     }
 
 

@@ -1,5 +1,5 @@
 import { mediaBlobs } from './state.js';
-import { ANNOTATION_TYPE_CONFIG } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR } from './config.js';
 import { addStickyClickHandler } from './sticky.js';
 import { makeDraggable, makeResizable } from './annotation-interaction.js';
 import { addDaimonClickHandler, renderButtonVisual } from './buttons.js';
@@ -397,6 +397,16 @@ function convertPageAnnotations(pageJson, pageNum) {
   metaResult.pairs.forEach(({ closed, open, groupId, type }) => {
     maxId = Math.max(maxId, closed._id || 0, open._id || 0);
     const kind = type === 'daimon' ? 'daimon' : 'sticky';
+    // 大問ボタンはrenderTogglePairsがtp.groupIds（紐付き付箋のid列）を見て
+    // dataset.daimonIdをリンクするため、自身のactions[]から紐付きid（自己参照を除く）を
+    // 算出する（detectDaimonGroupの構造ヒューリスティック判定と同じ抽出方法）。
+    const groupIds = kind === 'daimon'
+      ? (() => {
+          const selfIds = new Set([closed._id, open._id]);
+          return [...new Set([...flattenTargets(closed.actions), ...flattenTargets(open.actions)])]
+            .filter(id => !selfIds.has(id));
+        })()
+      : undefined;
     togglePairs.push({
       pageNum,
       closedId:   closed._id,
@@ -408,6 +418,7 @@ function convertPageAnnotations(pageJson, pageNum) {
       pageHeight,
       kind,
       groupId,
+      groupIds,
     });
     if (kind === 'daimon') daimonPassthrough.push({ pageNum, closedId: closed._id, closed, open });
   });
@@ -1193,6 +1204,129 @@ async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
 
 
 /**
+ * 大問ボタン（プリセットモード）の通常時PNGを、CRAFT上の見た目（プリセット背景色＋白文字ラベル「大問」）
+ * どおりにラスタライズする。カスタム画像モード（btnImageFileあり）はこの関数を使わず、
+ * 呼び出し側でmediaBlobsの画像バイトをそのまま使用する。
+ * @param {{btnPreset?:string}} savedData
+ * @param {number} pxWidth
+ * @param {number} pxHeight
+ * @returns {Promise<Uint8Array>}
+ */
+async function rasterizeDaimonNormalPng(savedData, pxWidth, pxHeight) {
+  const w = Math.max(1, Math.min(1200, pxWidth));
+  const h = Math.max(1, Math.min(1200, pxHeight));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  const presetIdx = parseInt(savedData?.btnPreset, 10);
+  const preset = BTN_COLOR_OPTIONS[Number.isInteger(presetIdx) ? presetIdx : 0] || BTN_COLOR_OPTIONS[0];
+  ctx.fillStyle = preset.value;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.round(h * 0.45)}px 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('大問', w / 2, h / 2 + 1);
+
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+
+/**
+ * 大問ボタンの押下時PNGを、グレーソリッド（DAIMON_PRESSED_COLOR、実データannots/0920.pngの
+ * 実測色）で塗った矩形としてラスタライズする。実データは角がわずかに透明の角丸だが、
+ * ソリッド矩形で十分とする（計画書参照）。
+ * @param {number} pxWidth
+ * @param {number} pxHeight
+ * @returns {Promise<Uint8Array>}
+ */
+async function rasterizeDaimonPressedPng(pxWidth, pxHeight) {
+  const w = Math.max(1, Math.min(1200, pxWidth));
+  const h = Math.max(1, Math.min(1200, pxHeight));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = DAIMON_PRESSED_COLOR;
+  ctx.fillRect(0, 0, w, h);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+
+/**
+ * 新規作成の大問ボタン1個を、LIBROのHide/Showペア（4アクション形式、実データp0004.json
+ * ID920/921ペア準拠）に変換する。通常時（closed・visible・大ID側）は紐付き付箋を一括
+ * Hide/Showして解答を表示させ、押下時（open・hidden・小ID側）はその逆操作で元に戻す。
+ * targetsには紐付き付箋のclosed/open id列＋自身のペアidを実データ準拠の4アクション
+ * （グループ一括Hide/Show 1組＋自己Hide/Show 1組）で設定する。
+ * @param {{closedId:number, openId:number, style:string, savedData:Object, groupId:string,
+ *   members:Array<{closedId:number, openId:number}>}} daimonData
+ *   - closedId/openId: 大問ボタン自身のペアid（storage.jsでdataset.id/dataset.daimonPressedIdから解決）
+ *   - members: 紐付く付箋（新規・LIBRO由来いずれも）のclosed/open idの配列
+ * @param {number} pageWidth
+ * @param {number} pageHeight
+ * @returns {Promise<{annotJsons:[Object,Object], newPngWrites:Array<{annot:Object, bytes:Uint8Array}>}>}
+ *   annotJsonsは [closed(通常), open(押下)] の順。newPngWritesの扱いはconvertStickyGroupToLibroAnnots参照。
+ */
+async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeight) {
+  const { closedId, openId, style, savedData, groupId, members } = daimonData;
+  const rect = styleToRect(style, pageWidth, pageHeight);
+  const closedFile = libroMarkerFilename(closedId);
+  const openFile    = libroMarkerFilename(openId);
+
+  const memberClosedIds = members.map(m => m.closedId);
+  const memberOpenIds   = members.map(m => m.openId);
+
+  const closedAnnot = {
+    filename: closedFile,
+    rect,
+    actions: [
+      { action: 'Hide', targets: [...memberClosedIds, closedId] },
+      { action: 'Show', targets: [...memberOpenIds, openId] },
+      { action: 'Hide', targets: [closedId] },
+      { action: 'Show', targets: [openId] },
+    ],
+    [CRAFT_META_KEY]: { type: 'daimon', role: 'closed', 'group-id': groupId },
+  };
+  const openAnnot = {
+    filename: openFile,
+    rect,
+    hidden: true,
+    actions: [
+      { action: 'Hide', targets: [...memberOpenIds, openId] },
+      { action: 'Show', targets: [...memberClosedIds, closedId] },
+      { action: 'Hide', targets: [openId] },
+      { action: 'Show', targets: [closedId] },
+    ],
+    [CRAFT_META_KEY]: { type: 'daimon', role: 'open', 'group-id': groupId },
+  };
+
+  const newPngWrites = [];
+  const imageFile = (savedData?.btnImageFile || '').trim();
+  if (imageFile && mediaBlobs[imageFile]) {
+    // カスタム画像モード：既存の画像アイコン型書き出しと同じ方式で、mediaBlobsの画像バイトを
+    // そのまま使用する（annots/*.pngは平文のためPbve2000エンコードしない）
+    const buf = new Uint8Array(await (await fetch(mediaBlobs[imageFile])).arrayBuffer());
+    newPngWrites.push({ annot: closedAnnot, bytes: buf });
+  } else {
+    const normalBytes = await rasterizeDaimonNormalPng(savedData, rect[2], rect[3]);
+    newPngWrites.push({ annot: closedAnnot, bytes: normalBytes });
+  }
+  const pressedBytes = await rasterizeDaimonPressedPng(rect[2], rect[3]);
+  newPngWrites.push({ annot: openAnnot, bytes: pressedBytes });
+
+  return { annotJsons: [closedAnnot, openAnnot], newPngWrites };
+}
+
+
+/**
  * 1グループ（グループ化されていない単独付箋の場合はメンバー1件）分の付箋を、
  * LIBROの annots[] 要素（メンバーごとに「閉」「開」2件）に変換する。
  * グループ内のどのメンバーをクリックしてもグループ全体が同時にトグルするよう、
@@ -1359,9 +1493,11 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
  * @param {Array<{pageNum:number, members:Array<Object>, groupId:string}>} [domStickyGroups] - 付箋のグループ一覧
  *   （groupId未設定の付箋は単独1件のグループとして渡す。groupIdはlibro-craft-metaのgroup-idとして
  *   埋め込まれ、再インポート時のグループ復元に使う。members仕様は convertStickyGroupToLibroAnnots 参照）
+ * @param {Array<Object>} [domDaimonButtons] - 新規作成の大問ボタン一覧（storage.jsが紐付き付箋の
+ *   closed/open idを解決済みのデータ。仕様は convertDaimonButtonToLibroAnnots 参照）
  * @returns {Promise<JSZip>}
  */
-export async function buildLibroBookExport(libroBook, domAnnotations, passthroughAnnotations, domStickyGroups = []) {
+export async function buildLibroBookExport(libroBook, domAnnotations, passthroughAnnotations, domStickyGroups = [], domDaimonButtons = []) {
   const { baseDir } = libroBook;
 
   // ============================================================
@@ -1399,6 +1535,11 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
   domStickyGroups.forEach(g => {
     if (!stickyGroupsByPage.has(g.pageNum)) stickyGroupsByPage.set(g.pageNum, []);
     stickyGroupsByPage.get(g.pageNum).push(g);
+  });
+  const daimonButtonsByPage = new Map();
+  domDaimonButtons.forEach(d => {
+    if (!daimonButtonsByPage.has(d.pageNum)) daimonButtonsByPage.set(d.pageNum, []);
+    daimonButtonsByPage.get(d.pageNum).push(d);
   });
 
   // annots/は全ページ共有の名前空間で、かつアノテーションIDはグローバル採番のため、
@@ -1468,6 +1609,20 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
       }
     });
 
+    // 新規作成の大問ボタン：紐付き付箋のclosed/open idを使ったHide/Showペアへ変換する。
+    // convertDaimonButtonToLibroAnnotsは[closed(通常), open(押下)]の順でannotJsonsを返すため、
+    // 実データ準拠の並び（押下＝hiddenが先、通常が後）にするためユニット化時に順序を入れ替える。
+    const daimonResults = await Promise.all(
+      (daimonButtonsByPage.get(pageNum) || []).map(d => convertDaimonButtonToLibroAnnots(d, pageWidth, pageHeight))
+    );
+    daimonResults.forEach(({ newPngWrites }) => {
+      newPngWrites.forEach(({ annot, bytes }) => {
+        pendingNewWrites.push({ annot, bytes });
+        annotsWithNewBytes.add(annot);
+      });
+    });
+    const daimonUnits = daimonResults.map(({ annotJsons }) => [annotJsons[1], annotJsons[0]]); // [押下, 通常]
+
     // ============================================================
     // ページ単位のアノテーションID正規化。
     // LIBRO+ビューアはHide/Showのtargetsを「annot-range[0] + annots配列内の位置」で
@@ -1479,17 +1634,24 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     // 元のannot-range（この後pageJsonを上書きする前の値。無ければundefined）
     const originalRange = pageJson['annot-range'];
 
-    // 論理ユニット：CRAFT管理の付箋（メンバー単位の閉/開ペア）は[開,閉]の2件で1ユニット、
-    // それ以外（passthrough・converted・大問ペアの各raw等）は1annot=1ユニットとする。
+    // 論理ユニット：CRAFT管理の付箋（メンバー単位の閉/開ペア）・新規大問ボタン（自身のペア）は
+    // それぞれ2件で1ユニット、それ以外（passthrough・converted・LIBRO由来大問ペアの各raw等）は
+    // 1annot=1ユニットとする。
     const units = [
       ...passthrough.map(a => [a]),
       ...converted.map(a => [a]),
       ...stickyUnits,
+      ...daimonUnits,
     ];
 
-    // 正規化前の配列順（従来の生成順＝passthrough→converted→付箋[閉,開]）における
+    // 正規化前の配列順（従来の生成順＝passthrough→converted→付箋[閉,開]→大問[通常,押下]）における
     // 各annotの位置。数値filenameを持たないannot（annots/ffff.png等）のソートキー算出に使う。
-    const legacyOrderAnnots = [...passthrough, ...converted, ...stickyGroupResults.flatMap(r => r.annotJsons)];
+    const legacyOrderAnnots = [
+      ...passthrough,
+      ...converted,
+      ...stickyGroupResults.flatMap(r => r.annotJsons),
+      ...daimonResults.flatMap(r => r.annotJsons),
+    ];
     const origIndexByAnnot = new Map(legacyOrderAnnots.map((a, idx) => [a, idx]));
     const rangeBase0 = originalRange ? originalRange[0] : 0;
 

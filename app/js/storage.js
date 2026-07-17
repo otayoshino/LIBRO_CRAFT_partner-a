@@ -306,10 +306,17 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
       // LIBRO由来の大問ボタン（削除も位置編集もされていないもの）は、生データをそのまま
       // 書き戻すため domAnnotations には含めず、キー（"page:closedId"）だけを記録する
       const survivingDaimonIds = new Set();
+      // 新規作成の大問ボタン（LIBRO由来でない）は、紐付き付箋のID解決後にまとめて
+      // Hide/Showペアへ変換するため、ここでは要素だけを保持しdomAnnotationsには含めない
+      const newDaimonButtons = [];
       elements.forEach(el => {
         const type = el.dataset.type;
         if (type === 'daimon' && el.dataset.libroToggle === '1') {
           survivingDaimonIds.add(`${el.dataset.page}:${el.dataset.id}`);
+          return;
+        }
+        if (type === 'daimon') {
+          newDaimonButtons.push(el);
           return;
         }
         // 動画はLIBRO由来のtoMovie/toMovieBNRリンク（annVideoSrc: '2'）のみ書き出し可能
@@ -346,6 +353,11 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
         groupBuckets.get(gid).push(el);
       });
 
+      // 大問ボタンが紐付く付箋のclosed/open idを引くための逆引き（付箋要素→id）。
+      // 新規作成の大問ボタンをLIBROのHide/Showペアに変換する際、紐付き付箋の
+      // targetsを組み立てるのに使う（新規付箋・LIBRO由来付箋のどちらでも解決できる）。
+      const stickyIdsByEl = new Map();
+
       const domStickyGroups = [];
       groupBuckets.forEach((members, gid) => {
         const pageNum = parseInt(members[0].dataset.page, 10) || 1;
@@ -357,34 +369,87 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
           const style = `left:${(left / pageRect.width) * 100}%;top:${(top / pageRect.height) * 100}%;` +
                         `width:${(width / pageRect.width) * 100}%;height:${(height / pageRect.height) * 100}%;`;
 
+          let closedId, openId, desc;
           if (el.dataset.libroToggle === '1') {
             // 既存付箋：id・画像は基本そのまま再利用する。
             // 「開」（解答等が描き込まれている可能性がある元画像）は常に無変更のまま維持し、
             // 色が上書きされた場合（dataset.stickyColorOverride）のみ「閉」だけを新規生成する。
-            const closedId = parseInt(el.dataset.closedId, 10);
-            const openId   = parseInt(el.dataset.openId, 10);
+            closedId = parseInt(el.dataset.closedId, 10);
+            openId   = parseInt(el.dataset.openId, 10);
             const closedFile = el.dataset.closedFile;
             const openFile   = el.dataset.openFile;
             if (el.dataset.stickyColorOverride) {
               const colorIdx = parseInt(el.dataset.stickyColorOverride, 10);
               const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
-              return { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color, style };
+              desc = { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color, style };
+            } else {
+              desc = { closedId, openId, closedFile, openFile, closedMode: 'reuse', openMode: 'reuse', style };
             }
-            return { closedId, openId, closedFile, openFile, closedMode: 'reuse', openMode: 'reuse', style };
+          } else {
+            // 新規付箋：閉id（dataset.id）は既存を再利用し、開idは初回のみ発行してdatasetにキャッシュする
+            // （再エクスポート時に毎回新規idを発行して不要なファイルが増えるのを防ぐため）
+            closedId = parseInt(el.dataset.id, 10);
+            if (!el.dataset.stickyOpenId) el.dataset.stickyOpenId = String(++state.annIdCounter);
+            openId = parseInt(el.dataset.stickyOpenId, 10);
+            let sd = {};
+            try { sd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
+            const colorIdx = parseInt(sd.annColor || '0', 10);
+            const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+            desc = { closedId, openId, closedMode: 'color', openMode: 'transparent', color, style };
           }
-
-          // 新規付箋：閉id（dataset.id）は既存を再利用し、開idは初回のみ発行してdatasetにキャッシュする
-          // （再エクスポート時に毎回新規idを発行して不要なファイルが増えるのを防ぐため）
-          const closedId = parseInt(el.dataset.id, 10);
-          if (!el.dataset.stickyOpenId) el.dataset.stickyOpenId = String(++state.annIdCounter);
-          const openId = parseInt(el.dataset.stickyOpenId, 10);
-          let sd = {};
-          try { sd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
-          const colorIdx = parseInt(sd.annColor || '0', 10);
-          const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
-          return { closedId, openId, closedMode: 'color', openMode: 'transparent', color, style };
+          stickyIdsByEl.set(el, { closedId, openId });
+          return desc;
         });
         domStickyGroups.push({ pageNum, members: memberDescs, groupId: gid });
+      });
+
+      // 新規作成の大問ボタン：紐付く付箋（新規・LIBRO由来いずれも）のclosed/open idを
+      // stickyIdsByElから解決し、LIBROのHide/Showペア（4アクション形式）へ変換できる形に集約する。
+      // 証明ボタンに紐付いた大問ボタンは、証明ボタン自体が書き出し未対応のため
+      // 従来どおり警告のうえ対象から除外する（付箋のみ紐付いた大問ボタンのみを対象とする）。
+      const domDaimonButtons = [];
+      newDaimonButtons.forEach(btn => {
+        const did = btn.dataset.daimonId;
+        const hasShomeiLink = did && document.querySelector(`.shomei-btn[data-daimon-id="${did}"]`);
+        const linkedStickies = did ? [...document.querySelectorAll(`.sticky-note[data-daimon-id="${did}"]`)] : [];
+        const members = linkedStickies.map(el => stickyIdsByEl.get(el)).filter(Boolean);
+        if (hasShomeiLink || members.length === 0) {
+          unsupportedTypes.add(ANNOTATION_TYPE_CONFIG.daimon?.label || 'daimon');
+          return;
+        }
+
+        const left   = parseFloat(btn.style.left)   || 0;
+        const top    = parseFloat(btn.style.top)    || 0;
+        // 大問ボタンはCSS固定サイズ（style.width/heightを持たない）のためoffsetWidth/Heightに
+        // 頼るが、紐付き付箋が別ページにある場合など、書き出し操作時に大問ボタン自身が
+        // 現在表示中のページでない（.ann-hidden-page＝display:noneで実寸0になる）ことがある。
+        // 計測のため一時的に非表示クラスを外して実寸を取得し、直後に元に戻す。
+        const wasHiddenPage = btn.classList.contains('ann-hidden-page');
+        if (wasHiddenPage) btn.classList.remove('ann-hidden-page');
+        const width  = parseFloat(btn.style.width)  || btn.offsetWidth;
+        const height = parseFloat(btn.style.height) || btn.offsetHeight;
+        if (wasHiddenPage) btn.classList.add('ann-hidden-page');
+        const style = `left:${(left / pageRect.width) * 100}%;top:${(top / pageRect.height) * 100}%;` +
+                      `width:${(width / pageRect.width) * 100}%;height:${(height / pageRect.height) * 100}%;`;
+
+        // 通常時（closed・visible・大ID側）はdataset.idを再利用し、押下時（open・hidden・小ID側）は
+        // 初回のみ発行してdatasetにキャッシュする（付箋のstickyOpenIdと同じ方式）
+        const closedId = parseInt(btn.dataset.id, 10);
+        if (!btn.dataset.daimonPressedId) btn.dataset.daimonPressedId = String(++state.annIdCounter);
+        const openId = parseInt(btn.dataset.daimonPressedId, 10);
+
+        let sd = {};
+        try { sd = JSON.parse(btn.dataset.savedData || '{}'); } catch (_) {}
+
+        domDaimonButtons.push({
+          pageNum: parseInt(btn.dataset.page, 10) || 1,
+          closedId,
+          openId,
+          style,
+          savedData: sd,
+          groupId: `daimon-${did}`,
+          members,
+        });
       });
 
       if (unsupportedTypes.size > 0) {
@@ -424,7 +489,7 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
       const passthroughAnnotations = [...state.libroUnknownAnnotations, ...daimonRawAnnots, ...networkRawAnnots];
 
       try {
-        const zip = await buildLibroBookExport(state.libroBook, domAnnotations, passthroughAnnotations, domStickyGroups);
+        const zip = await buildLibroBookExport(state.libroBook, domAnnotations, passthroughAnnotations, domStickyGroups, domDaimonButtons);
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(zipBlob);
         const a = document.createElement('a');
