@@ -40,14 +40,17 @@ import { state } from './state.js';
     }
 
     /**
-     * ZIP（book）の読み込み状態に応じてサイドバー（オーサリング）全体の
-     * 活性/非活性を切り替える。未読み込み時は inert 属性でマウス・キーボード
-     * 操作を無効化し、CSS（.side.authoring[inert]）でグレーアウト表示する。
+     * ZIP（book）の読み込み状態に応じて、オーサリングパネル
+     * （#accAuthoring .panel-stack）内の各アノテーション追加ボタンの
+     * 活性/非活性を切り替える。未読み込み時は is_disabled クラスにより
+     * グレーアウト表示＋クリック無効（pointer-events: none）となる。
+     * ※ #accStickyOps 側の is_disabled は選択状態連動
+     *   （updateStickyOpsPanel）が管理するため、ここでは触らない。
      */
-    export function updateAuthoringSideState() {
-      const aside = document.querySelector('.side.authoring');
-      if (!aside) return;
-      aside.toggleAttribute('inert', !state.currentBookId);
+    export function updateAuthoringPanelState() {
+      const items = document.querySelectorAll('#accAuthoring .panel-stack > li');
+      const disabled = !state.currentBookId;
+      items.forEach(li => li.classList.toggle('is_disabled', disabled));
     }
 
 

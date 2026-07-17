@@ -7,7 +7,7 @@ import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePa
 import { loadLibroBookPages, updateAnnotationVisibility, updateTocButtonState } from './page-view.js';
 import { updateLibroBookBtnStates } from './index-outline.js';
 import { mediaBlobs, state } from './state.js';
-import { hideLoader, showLoader, showToast, updateAuthoringSideState, updateStatus } from './ui-common.js';
+import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateStatus } from './ui-common.js';
 
         /**
          * アノテーション配列からDOMを再構築する共通処理。
@@ -208,7 +208,7 @@ import { hideLoader, showLoader, showToast, updateAuthoringSideState, updateStat
         // 独自ZIP形式にはbook folder名が無いため、ファイル名をbook識別子として使う
         const bookId = file.name;
         state.currentBookId = bookId;
-        updateAuthoringSideState();
+        updateAuthoringPanelState();
         restoreAnnotationsFromArray(arr);
         const mediaCount = Object.keys(mediaBlobs).length;
         showToast(`ZIPから復元しました（メディア: ${mediaCount}件）`);
@@ -269,7 +269,7 @@ import { hideLoader, showLoader, showToast, updateAuthoringSideState, updateStat
       // 元zipファイル名にフォールバックする
       const bookId = baseDir || fallbackName;
       state.currentBookId = bookId;
-      updateAuthoringSideState();
+      updateAuthoringPanelState();
 
       const unencryptedNote = unencryptedAssetPaths.size > 0
         ? `、未暗号化ファイル${unencryptedAssetPaths.size}件を検出（保存時に暗号化します）`

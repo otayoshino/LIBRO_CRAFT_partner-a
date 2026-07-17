@@ -113,7 +113,7 @@
     <!-- =======================
          サイドバー（オーサリング）
     ======================= -->
-    <aside class="side authoring" inert>
+    <aside class="side authoring">
       <div class="inner">
 
         <!-- モード切替 -->
@@ -132,42 +132,42 @@
         <div class="panel">
           <ul class="panel-stack">
             <!-- 付箋 -->
-            <li onclick="activateAnnotationMode('sticky')" data-tip="付箋を追加" data-ann-type="sticky">
+            <li class="is_disabled" onclick="activateAnnotationMode('sticky')" data-tip="付箋を追加" data-ann-type="sticky">
               <div>
                 <svg width="18" height="18"><use href="icons/sprite.svg#icon-sticky"></use></svg>
               </div>
               <p>付箋</p>
             </li>
             <!-- 音声再生 -->
-            <li onclick="activateAnnotationMode('audio')" data-tip="音声再生ボタンを追加" data-ann-type="audio">
+            <li class="is_disabled" onclick="activateAnnotationMode('audio')" data-tip="音声再生ボタンを追加" data-ann-type="audio">
               <div>
                 <svg width="21" height="18"><use href="icons/sprite.svg#icon-audio"></use></svg>
               </div>
               <p>音声再生</p>
             </li>
             <!-- 動画再生 -->
-            <li onclick="activateAnnotationMode('video')" data-tip="動画再生ボタンを追加" data-ann-type="video">
+            <li class="is_disabled" onclick="activateAnnotationMode('video')" data-tip="動画再生ボタンを追加" data-ann-type="video">
               <div>
                 <svg width="21" height="18"><use href="icons/sprite.svg#icon-video"></use></svg>
               </div>
               <p>動画再生</p>
             </li>
             <!-- Plusファイル -->
-            <li onclick="activateAnnotationMode('plusfile')" data-tip="Plusファイルを追加" data-ann-type="plusfile">
+            <li class="is_disabled" onclick="activateAnnotationMode('plusfile')" data-tip="Plusファイルを追加" data-ann-type="plusfile">
               <div>
                 <svg width="15" height="18"><use href="icons/sprite.svg#icon-file"></use></svg>
               </div>
               <p>Plusファイル</p>
             </li>
             <!-- ページリンク -->
-            <li onclick="activateAnnotationMode('pagelink')" data-tip="ページリンクを追加" data-ann-type="pagelink">
+            <li class="is_disabled" onclick="activateAnnotationMode('pagelink')" data-tip="ページリンクを追加" data-ann-type="pagelink">
               <div>
                 <svg width="20" height="18"><use href="icons/sprite.svg#icon-pagelink"></use></svg>
               </div>
               <p>ページリンク</p>
             </li>
             <!-- 外部リンク -->
-            <li onclick="activateAnnotationMode('externallink')" data-tip="外部リンクを追加" data-ann-type="externallink">
+            <li class="is_disabled" onclick="activateAnnotationMode('externallink')" data-tip="外部リンクを追加" data-ann-type="externallink">
               <div>
                 <svg width="20" height="18"><use href="icons/sprite.svg#icon-externallink"></use></svg>
               </div>

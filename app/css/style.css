@@ -308,12 +308,6 @@
       padding: 16px;
     }
 
-    /* ZIP（book）未読み込み時：サイドバー全体をグレーアウト表示する
-       （操作不可自体は inert 属性が担う） */
-    .side.authoring[inert] {
-      opacity: 0.4;
-    }
-
     /* モード切替ボタン */
     .side .mode-btn {
       display: flex;
