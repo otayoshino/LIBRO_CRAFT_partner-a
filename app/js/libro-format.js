@@ -1126,10 +1126,12 @@ async function rasterizeMarkerPng(type, pxWidth, pxHeight, annDisplayType, annCo
     // 白いアイコンを60%サイズで中央配置
     const pathData = (cfg.iconSvg || '').match(/d="([^"]+)"/)?.[1];
     if (pathData) {
+      // viewBoxの長辺をアイコン表示サイズ（短辺の60%）に合わせ、中央配置する
+      const [vbX, vbY, vbW, vbH] = (cfg.iconViewBox || '0 0 24 24').split(/\s+/).map(Number);
       const iconSize = Math.min(w, h) * 0.6;
-      const scale = iconSize / 24; // アイコンは24x24 viewBox基準
+      const scale = iconSize / Math.max(vbW || 24, vbH || 24);
       ctx.save();
-      ctx.translate((w - iconSize) / 2, (h - iconSize) / 2);
+      ctx.translate((w - vbW * scale) / 2 - vbX * scale, (h - vbH * scale) / 2 - vbY * scale);
       ctx.scale(scale, scale);
       ctx.fillStyle = '#ffffff';
       ctx.fill(new Path2D(pathData));
@@ -1146,10 +1148,12 @@ async function rasterizeMarkerPng(type, pxWidth, pxHeight, annDisplayType, annCo
 
   const pathData = (cfg.iconSvg || '').match(/d="([^"]+)"/)?.[1];
   if (pathData) {
+    // viewBoxの長辺をアイコン表示サイズ（短辺の60%）に合わせ、中央配置する
+    const [vbX, vbY, vbW, vbH] = (cfg.iconViewBox || '0 0 24 24').split(/\s+/).map(Number);
     const iconSize = Math.min(w, h) * 0.6;
-    const scale = iconSize / 24; // アイコンは24x24 viewBox基準
+    const scale = iconSize / Math.max(vbW || 24, vbH || 24);
     ctx.save();
-    ctx.translate((w - iconSize) / 2, (h - iconSize) / 2);
+    ctx.translate((w - vbW * scale) / 2 - vbX * scale, (h - vbH * scale) / 2 - vbY * scale);
     ctx.scale(scale, scale);
     ctx.fillStyle = '#ffffff';
     ctx.fill(new Path2D(pathData));

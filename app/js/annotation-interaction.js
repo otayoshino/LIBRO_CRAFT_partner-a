@@ -294,7 +294,7 @@ import { pushUndo } from './undo-redo.js';
               snap.background ? `background:${snap.background}` : '',
             ].filter(Boolean).join('; ') + ';';
             const cfg = ANNOTATION_TYPE_CONFIG[snap.type];
-            if (cfg) el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>`;
+            if (cfg) el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${cfg.iconViewBox || '0 0 24 24'}">${cfg.iconSvg}</svg>`;
             makeResizable(el, { lockAspectRatio: true, minSize: 14 });
           } else if (isImage) {
             el.style.cssText = [

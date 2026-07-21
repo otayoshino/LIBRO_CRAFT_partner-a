@@ -103,7 +103,7 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
                   renderAnnObjectContent(el, obj.type, displayType, label);
                 } else if (el.classList.contains('ann-icon-obj')) {
                   const cfg = ANNOTATION_TYPE_CONFIG[obj.type];
-                  el.innerHTML = cfg ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>` : '';
+                  el.innerHTML = cfg ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${cfg.iconViewBox || '0 0 24 24'}">${cfg.iconSvg}</svg>` : '';
                 } else if (el.classList.contains('ann-image-obj')) {
                   let sd = {};
                   try { sd = JSON.parse(obj.savedData || '{}'); } catch (_) {}

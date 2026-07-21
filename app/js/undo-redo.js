@@ -103,7 +103,7 @@ import { showToast, updateStatus } from './ui-common.js';
                   const sd  = JSON.parse(snap.savedData || '{}');
                   const cfg = ANNOTATION_TYPE_CONFIG?.[snap.type];
                   if (el.classList.contains('ann-icon-obj')) {
-                    el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg?.iconSvg || ''}</svg>`;
+                    el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${cfg?.iconViewBox || '0 0 24 24'}">${cfg?.iconSvg || ''}</svg>`;
                   } else if (el.classList.contains('ann-image-obj')) {
                     renderAnnImageContent(el, sd);
                   } else if (el.classList.contains('ann-object')) {

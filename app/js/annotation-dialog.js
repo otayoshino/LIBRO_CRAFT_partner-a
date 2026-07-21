@@ -689,7 +689,7 @@ import { pushUndo } from './undo-redo.js';
             <div class="disp-type-top">
               <input type="radio" name="annDisplayTypeRadio" value="icon"${dispType === 'icon' ? ' checked' : ''}>
               <div class="disp-type-preview disp-type-preview--icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">${cfg.iconSvg}</svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="${cfg.iconViewBox || '0 0 24 24'}">${cfg.iconSvg}</svg>
               </div>
             </div>
             <span class="disp-type-label">アイコン</span>
@@ -1545,7 +1545,7 @@ import { pushUndo } from './undo-redo.js';
             existingEl.style.width  = iconSize + 'px';
             existingEl.style.height = iconSize + 'px';
             existingEl.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
-            existingEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>`;
+            existingEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${cfg.iconViewBox || '0 0 24 24'}">${cfg.iconSvg}</svg>`;
           } else if (displayType === 'page-color') {
             // 紙面カラー型：ラベルなしの透明ホットスポット（編集モードのみ種別アイコンを中央表示）
             existingEl.className = 'ann-object dt-page-color';
@@ -1588,7 +1588,7 @@ import { pushUndo } from './undo-redo.js';
             const iconBg = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
             ann.className = 'ann-icon-obj';
             ann.style.cssText = `left:${x}px; top:${y}px; width:48px; height:48px; background:${iconBg};`;
-            ann.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${cfg.iconSvg}</svg>`;
+            ann.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${cfg.iconViewBox || '0 0 24 24'}">${cfg.iconSvg}</svg>`;
           } else if (displayType === 'page-color') {
             // 紙面カラー型：ラベルなしの透明ホットスポット（編集モードのみ種別アイコンを中央表示）
             ann.className = 'ann-object dt-page-color';
