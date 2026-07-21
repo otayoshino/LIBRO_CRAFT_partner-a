@@ -925,11 +925,15 @@ import { pushUndo } from './undo-redo.js';
           { value: '0', label: 'ページ内' },
           { value: '1', label: '別タブ' },
         ]);
-        [fileDt, fileDd, modeDt, modeDd].forEach(el => form.appendChild(el));
+        // 「表示方法」は内部ファイル・J-streamどちらでも使う共通項目のため、
+        // toggleVideoSrcFields の表示切替対象から外し常時表示にする。
+        // J-stream選択時に「J-stream入力欄→表示方法」の順で表示させるため、
+        // ここでは modeDt/modeDd を追加せず、J-stream欄(jsFields)の後にまとめて追加する。
+        [fileDt, fileDd].forEach(el => form.appendChild(el));
 
         // --- J-stream用フィールド(annVideoSrc: '2')---
-        // 入力値(ディレクトリ・企業ID・難読化ID、各平文)は書き出し時に
-        // toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)") へ変換される(libro-format.js)。
+        // 入力値(ディレクトリ・企業ID・難読化ID、各平文)と「表示方法」ラジオの値は書き出し時に
+        // toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)",表示モード) へ変換される(libro-format.js)。
         // 引数構成が想定外でこの形式に変換できなかったLIBRO由来リンクは annVideoFn/annVideoArg の
         // 生文字列を hidden input で素通しし、書き出し時も無変更で書き戻す。
         const isLegacyLink = savedData.annJstreamDir === undefined && !!savedData.annVideoArg;
@@ -976,15 +980,13 @@ import { pushUndo } from './undo-redo.js';
           vidInput.value = savedData.annJstreamVideoId || '';
           vidInput.placeholder = 'Jストリーム難読化ID';
           [dirInput, corpInput, vidInput].forEach(inp => jsDd.appendChild(inp));
-          jsDd.insertAdjacentHTML('beforeend',
-            '<p class="field-note">※各値は平文で入力します。書き出し時に toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)") へ変換されます。</p>');
           jsFields = [jsDd];
         }
-        jsFields.forEach(el => form.appendChild(el));
+        [...jsFields, modeDt, modeDd].forEach(el => form.appendChild(el));
 
         const toggleVideoSrcFields = (val) => {
           const showFile = val !== '2';
-          [fileDt, fileDd, modeDt, modeDd].forEach(el => { el.style.display = showFile ? '' : 'none'; });
+          [fileDt, fileDd].forEach(el => { el.style.display = showFile ? '' : 'none'; });
           jsFields.forEach(el => { el.style.display = showFile ? 'none' : ''; });
         };
         toggleVideoSrcFields(videoSrc);

@@ -147,24 +147,27 @@ function splitLibroCallArgs(argsStr) {
 
 
 /**
- * toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)") の引数文字列（丸括弧内）を
- * J-stream指定の平文3値 {dir, corpId, videoId} へ変換する。
- * toMovieBNR、引数が3個でない場合、第2・第3引数がbase64として復号できない場合は
+ * toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)"[,表示モード]) の引数文字列（丸括弧内）を
+ * J-stream指定の平文値 {dir, corpId, videoId, showMode} へ変換する。
+ * 第4引数（表示モード）は toMovieBNR と同じ「数値・引用符なし」形式。省略時（引数3個）は '0' 扱いにする
+ * （表示モード追加前にエクスポートされた既存toMovieとの後方互換）。
+ * toMovieBNR、引数が3個・4個以外の場合、第2・第3引数がbase64として復号できない場合は
  * null を返す（呼び出し側で内部ファイル指定または生文字列保持へフォールバックする）。
  * @param {string} fn   - 関数名（'toMovie' / 'toMovieBNR'）
  * @param {string} args - 丸括弧内の生文字列
- * @returns {{dir:string, corpId:string, videoId:string}|null}
+ * @returns {{dir:string, corpId:string, videoId:string, showMode:string}|null}
  */
 function parseJstreamArgs(fn, args) {
   if (fn !== 'toMovie') return null;
   const parts = splitLibroCallArgs(args);
-  if (parts.length !== 3) return null;
+  if (parts.length !== 3 && parts.length !== 4) return null;
   try {
     const corpId  = atob(parts[1]);
     const videoId = atob(parts[2]);
     // 再エンコードで元と一致しない場合はbase64でないとみなし、生文字列保持へフォールバック
     if (btoa(corpId) !== parts[1] || btoa(videoId) !== parts[2]) return null;
-    return { dir: parts[0], corpId, videoId };
+    const showMode = parts.length === 4 ? (parts[3] || '0') : '0';
+    return { dir: parts[0], corpId, videoId, showMode };
   } catch (_) {
     return null;
   }
@@ -172,8 +175,9 @@ function parseJstreamArgs(fn, args) {
 
 
 /**
- * savedData のJ-stream指定（annJstreamDir / annJstreamCorpId / annJstreamVideoId、各平文）を
- * toMovie の引数文字列（丸括弧内）へ変換する。企業ID・難読化IDはbase64エンコードする。
+ * savedData のJ-stream指定（annJstreamDir / annJstreamCorpId / annJstreamVideoId、各平文）と
+ * annShowMode（表示モード）を toMovie の引数文字列（丸括弧内）へ変換する。
+ * 企業ID・難読化IDはbase64エンコードする。表示モードは toMovieBNR と同じ「数値・引用符なし」形式。
  * @param {object} sd - アノテーションのsavedData（JSON.parse済み）
  * @returns {string}
  */
@@ -181,7 +185,8 @@ function buildJstreamArgs(sd) {
   const dir     = (sd.annJstreamDir     || '').trim();
   const corpId  = (sd.annJstreamCorpId  || '').trim();
   const videoId = (sd.annJstreamVideoId || '').trim();
-  return `"${dir}","${btoa(corpId)}","${btoa(videoId)}"`;
+  const showMode = sd.annShowMode || '0';
+  return `"${dir}","${btoa(corpId)}","${btoa(videoId)}",${showMode}`;
 }
 
 
@@ -570,7 +575,7 @@ function convertPageAnnotations(pageJson, pageNum) {
         });
       } else if (call?.fn === 'toMovie' || call?.fn === 'toMovieBNR') {
         // toMovieBNR("ファイル名",表示モード) は内部ファイル指定（annVideoSrc:'0'）へ、
-        // toMovie 3引数（第2・第3引数がbase64）はJ-stream指定（annVideoSrc:'2'、平文3フィールド）へ変換する。
+        // toMovie 3〜4引数（第2・第3引数がbase64）はJ-stream指定（annVideoSrc:'2'、平文3フィールド＋表示モード）へ変換する。
         // どちらの形式にも当てはまらない引数構成は丸括弧内の生文字列のまま保持し
         // （annVideoFn/annVideoArg）、書き出し時も無変更で書き戻す。
         const bnrParts = call.fn === 'toMovieBNR' ? splitLibroCallArgs(call.args) : null;
@@ -581,7 +586,8 @@ function convertPageAnnotations(pageJson, pageNum) {
                       annFile: bnrParts[0], annShowMode: bnrParts[1] || '0' };
         } else if (jstream !== null) {
           vidData = { annDisplayType: 'marker', annVideoSrc: '2',
-                      annJstreamDir: jstream.dir, annJstreamCorpId: jstream.corpId, annJstreamVideoId: jstream.videoId };
+                      annJstreamDir: jstream.dir, annJstreamCorpId: jstream.corpId, annJstreamVideoId: jstream.videoId,
+                      annShowMode: jstream.showMode };
         } else {
           vidData = { annDisplayType: 'marker', annVideoSrc: '2', annVideoFn: call.fn, annVideoArg: call.args };
         }
