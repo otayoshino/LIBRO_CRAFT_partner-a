@@ -954,12 +954,31 @@ import { pushUndo } from './undo-redo.js';
           jsDd.appendChild(argHidden);
           jsFields = [jsDt, jsDd];
         } else {
-          const dirDd  = _buildTextDD('annJstreamDir', savedData.annJstreamDir || '', 'Jストリームディレクトリ');
-          const corpDd = _buildTextDD('annJstreamCorpId', savedData.annJstreamCorpId || '', '企業ID');
-          const vidDd  = _buildTextDD('annJstreamVideoId', savedData.annJstreamVideoId || '', 'Jストリーム難読化ID');
-          vidDd.querySelector('input').insertAdjacentHTML('afterend',
+          // annFile欄と同じ「1グループ=1dd」の配置に合わせ、3つの入力欄を1つのddにまとめる。
+          // dtラベルは置かず、各inputのplaceholderに項目名称を表示する。
+          const jsDd = document.createElement('dd');
+          const dirInput = document.createElement('input');
+          dirInput.type = 'text';
+          dirInput.className = 'd-input';
+          dirInput.id = 'annJstreamDir';
+          dirInput.value = savedData.annJstreamDir || '';
+          dirInput.placeholder = 'Jストリームディレクトリ';
+          const corpInput = document.createElement('input');
+          corpInput.type = 'text';
+          corpInput.className = 'd-input';
+          corpInput.id = 'annJstreamCorpId';
+          corpInput.value = savedData.annJstreamCorpId || '';
+          corpInput.placeholder = '企業ID';
+          const vidInput = document.createElement('input');
+          vidInput.type = 'text';
+          vidInput.className = 'd-input';
+          vidInput.id = 'annJstreamVideoId';
+          vidInput.value = savedData.annJstreamVideoId || '';
+          vidInput.placeholder = 'Jストリーム難読化ID';
+          [dirInput, corpInput, vidInput].forEach(inp => jsDd.appendChild(inp));
+          jsDd.insertAdjacentHTML('beforeend',
             '<p class="field-note">※各値は平文で入力します。書き出し時に toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)") へ変換されます。</p>');
-          jsFields = [dirDd, corpDd, vidDd];
+          jsFields = [jsDd];
         }
         jsFields.forEach(el => form.appendChild(el));
 

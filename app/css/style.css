@@ -1058,6 +1058,29 @@
       width: auto;
     }
 
+    /* クイック作成ポップアップの種別固有フォームも同じレイアウトに揃える
+       (#dialogFormSpecific と同一構造の #qcFormSpecific 向けの複製ルール) */
+    #qcFormSpecific {
+      display: block;
+    }
+
+    #qcFormSpecific dt {
+      width: auto;
+      display: block;
+      align-items: unset;
+      padding-right: 0;
+      margin-top: 10px;
+      margin-bottom: 4px;
+    }
+
+    #qcFormSpecific dt:first-child {
+      margin-top: 0;
+    }
+
+    #qcFormSpecific dd {
+      width: auto;
+    }
+
     /* サイドバー内 input/select は .dialog-contents なしで適用 */
     .side-detail-form .d-input {
       width: 100%;
