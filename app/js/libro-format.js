@@ -147,6 +147,45 @@ function splitLibroCallArgs(argsStr) {
 
 
 /**
+ * toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)") の引数文字列（丸括弧内）を
+ * J-stream指定の平文3値 {dir, corpId, videoId} へ変換する。
+ * toMovieBNR、引数が3個でない場合、第2・第3引数がbase64として復号できない場合は
+ * null を返す（呼び出し側で内部ファイル指定または生文字列保持へフォールバックする）。
+ * @param {string} fn   - 関数名（'toMovie' / 'toMovieBNR'）
+ * @param {string} args - 丸括弧内の生文字列
+ * @returns {{dir:string, corpId:string, videoId:string}|null}
+ */
+function parseJstreamArgs(fn, args) {
+  if (fn !== 'toMovie') return null;
+  const parts = splitLibroCallArgs(args);
+  if (parts.length !== 3) return null;
+  try {
+    const corpId  = atob(parts[1]);
+    const videoId = atob(parts[2]);
+    // 再エンコードで元と一致しない場合はbase64でないとみなし、生文字列保持へフォールバック
+    if (btoa(corpId) !== parts[1] || btoa(videoId) !== parts[2]) return null;
+    return { dir: parts[0], corpId, videoId };
+  } catch (_) {
+    return null;
+  }
+}
+
+
+/**
+ * savedData のJ-stream指定（annJstreamDir / annJstreamCorpId / annJstreamVideoId、各平文）を
+ * toMovie の引数文字列（丸括弧内）へ変換する。企業ID・難読化IDはbase64エンコードする。
+ * @param {object} sd - アノテーションのsavedData（JSON.parse済み）
+ * @returns {string}
+ */
+function buildJstreamArgs(sd) {
+  const dir     = (sd.annJstreamDir     || '').trim();
+  const corpId  = (sd.annJstreamCorpId  || '').trim();
+  const videoId = (sd.annJstreamVideoId || '').trim();
+  return `"${dir}","${btoa(corpId)}","${btoa(videoId)}"`;
+}
+
+
+/**
  * actions[] 内の全targetsを1つの配列にまとめる（Hide/Show問わず全て平坦化する）。
  * @param {Array<Object>} actions
  * @returns {Array<number>}
@@ -530,13 +569,29 @@ function convertPageAnnotations(pageJson, pageNum) {
           _iconFilename: a.filename,
         });
       } else if (call?.fn === 'toMovie' || call?.fn === 'toMovieBNR') {
+        // toMovieBNR("ファイル名",表示モード) は内部ファイル指定（annVideoSrc:'0'）へ、
+        // toMovie 3引数（第2・第3引数がbase64）はJ-stream指定（annVideoSrc:'2'、平文3フィールド）へ変換する。
+        // どちらの形式にも当てはまらない引数構成は丸括弧内の生文字列のまま保持し
+        // （annVideoFn/annVideoArg）、書き出し時も無変更で書き戻す。
+        const bnrParts = call.fn === 'toMovieBNR' ? splitLibroCallArgs(call.args) : null;
+        const jstream = parseJstreamArgs(call.fn, call.args);
+        let vidData;
+        if (bnrParts && bnrParts.length === 2) {
+          vidData = { annDisplayType: 'marker', annVideoSrc: '0',
+                      annFile: bnrParts[0], annShowMode: bnrParts[1] || '0' };
+        } else if (jstream !== null) {
+          vidData = { annDisplayType: 'marker', annVideoSrc: '2',
+                      annJstreamDir: jstream.dir, annJstreamCorpId: jstream.corpId, annJstreamVideoId: jstream.videoId };
+        } else {
+          vidData = { annDisplayType: 'marker', annVideoSrc: '2', annVideoFn: call.fn, annVideoArg: call.args };
+        }
         known.push({
           className: 'ann-object',
           type: 'video',
           id: a._id,
           page: pageNum,
           style: style + `background:${ANNOTATION_TYPE_CONFIG.video.color};`,
-          savedData: JSON.stringify({ annDisplayType: 'marker', annVideoSrc: '2', annVideoFn: call.fn, annVideoArg: call.args }),
+          savedData: JSON.stringify(vidData),
           _iconFilename: a.filename,
         });
       } else {
@@ -1434,11 +1489,20 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
     actions = [{ action: 'Launch', filename: `sounds/${libroSoundFilename(sd.annFile, sd.annPlayMode)}` }];
   } else if (domData.type === 'plusfile') {
     actions = [{ action: 'URI', uri: `toAppendix("${(sd.annFile || '').trim()}",${sd.annShowMode || '0'})` }];
-  } else if (domData.type === 'video' && sd.annVideoSrc === '2') {
-    // LIBRO由来のtoMovie/toMovieBNRリンクのみ対応（引数の意味は未解析のため生文字列をそのまま書き戻す）。
-    // 内部ファイル/外部タグ指定（annVideoSrc: '0'/'1'）はLIBRO側に対応actionが無いため未対応のまま。
-    const fn = sd.annVideoFn === 'toMovieBNR' ? 'toMovieBNR' : 'toMovie';
-    actions = [{ action: 'URI', uri: `${fn}(${sd.annVideoArg || ''})` }];
+  } else if (domData.type === 'video' && (sd.annVideoSrc === '0' || sd.annVideoSrc === '2')) {
+    // 内部ファイル（annVideoSrc:'0'）は toMovieBNR("ファイル名",表示モード) へ、
+    // J-stream指定（annVideoSrc:'2'）は toMovie("dir","base64(企業ID)","base64(難読化ID)") へ変換する。
+    // 引数構成が想定外で変換できなかったLIBRO由来リンク（annVideoArg保持分）は生文字列を
+    // そのまま書き戻す（新形式のsavedDataにannVideoArgは入らないため一意に判別できる）。
+    // 外部タグ指定（annVideoSrc: '1'）はLIBRO側に対応actionが無いため未対応のまま。
+    if (sd.annVideoSrc === '0') {
+      actions = [{ action: 'URI', uri: `toMovieBNR("${(sd.annFile || '').trim()}",${sd.annShowMode || '0'})` }];
+    } else if (sd.annVideoArg) {
+      const fn = sd.annVideoFn === 'toMovieBNR' ? 'toMovieBNR' : 'toMovie';
+      actions = [{ action: 'URI', uri: `${fn}(${sd.annVideoArg})` }];
+    } else {
+      actions = [{ action: 'URI', uri: `toMovie(${buildJstreamArgs(sd)})` }];
+    }
   } else {
     return null; // LIBROに対応するactionが無い種別
   }

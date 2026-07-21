@@ -282,8 +282,8 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
     /**
      * LIBRO bookとして読み込んだ内容を、LIBRO bookフォルダ形式のZIPとして書き出す。
      * ページリンク・外部リンク・音声再生・Plusファイル・付箋（Hide/Show）に対応する。
-     * 動画はLIBRO由来のtoMovie/toMovieBNRリンク（annVideoSrc: '2'）のみ対応し、
-     * 内部ファイル/外部タグ指定はLIBRO側に対応actionが無いため未対応のまま。
+     * 動画は内部ファイル（annVideoSrc: '0'→toMovieBNR）とJ-stream指定（'2'→toMovie）に対応し、
+     * 外部タグ指定（'1'）はLIBRO側に対応actionが無いため未対応のまま。
      * LIBRO由来の大問ボタンは編集非対応のため、削除されていない限り生データを無変更のまま書き戻す
      * （位置編集した場合は反映されない）。それ以外の種別（答/証明ボタン、新規作成の大問ボタン等）
      * が存在する場合はトーストで警告し、書き出し対象から除外する。
@@ -319,12 +319,13 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
           newDaimonButtons.push(el);
           return;
         }
-        // 動画はLIBRO由来のtoMovie/toMovieBNRリンク（annVideoSrc: '2'）のみ書き出し可能
+        // 動画は内部ファイル（annVideoSrc: '0'→toMovieBNR）とJ-stream指定（'2'→toMovie）のみ書き出し可能
         let isSupported = supportedTypes.has(type);
         if (type === 'video') {
           let vsd = {};
           try { vsd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
-          isSupported = vsd.annVideoSrc === '2';
+          const vsrc = vsd.annVideoSrc || '0';
+          isSupported = vsrc === '0' || vsrc === '2';
         }
         if (!isSupported) {
           if (type) unsupportedTypes.add(ANNOTATION_TYPE_CONFIG[type]?.label || type);

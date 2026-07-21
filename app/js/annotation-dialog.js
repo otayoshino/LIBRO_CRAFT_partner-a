@@ -902,16 +902,23 @@ import { pushUndo } from './undo-redo.js';
         const srcDD = _buildRadioDD('annVideoSrc', 'annVideoSrcRadio', videoSrc, [
           { value: '0', label: '内部ファイル' },
           { value: '1', label: '外部動画をタグで追加' },
-          { value: '2', label: 'LIBROリンク' },
+          { value: '2', label: 'J-stream' },
         ]);
+        // 「外部動画をタグで追加」は非表示化(機能・データは残す)。
+        // 既存アノテーションが '1' の場合のみ、選択中ラジオが見えるよう表示する。
+        if (videoSrc !== '1') {
+          srcDD.querySelector('input[name="annVideoSrcRadio"][value="1"]')
+            .closest('label').style.display = 'none';
+        }
         form.appendChild(srcDD);
 
-        // --- 内部ファイル/外部タグ用フィールド（annVideoSrc: '0'/'1'） ---
+        // --- 内部ファイル/外部タグ用フィールド(annVideoSrc: '0'/'1') ---
+        // MP4ドロップゾーンは廃止済み(ファイル名のテキスト入力のみ)。
+        // 内部ファイルは書き出し時に toMovieBNR("ファイル名",表示モード) へ変換される(libro-format.js)。
         const fileDt = _buildTextDt('ファイル名');
         const fileDd = _buildTextDD('annFile', savedData.annFile || '', 'ファイル名を入力');
         fileDd.querySelector('input').insertAdjacentHTML('afterend',
           '<p class="field-note">※ファイル名の拡張子「.mp4」は除く</p>');
-        _appendDropZone(fileDd, 'annFile', 'video');
         const showMode = savedData.annShowMode || '0';
         const modeDt = _buildRadioDt('表示方法');
         const modeDd = _buildRadioDD('annShowMode', 'annShowModeRadio', showMode, [
@@ -920,24 +927,46 @@ import { pushUndo } from './undo-redo.js';
         ]);
         [fileDt, fileDd, modeDt, modeDd].forEach(el => form.appendChild(el));
 
-        // --- LIBROリンク用フィールド（annVideoSrc: '2'）---
-        // toMovie/toMovieBNRの引数の意味は未解析のため、丸括弧内の生文字列をそのまま編集させる。
-        const fn = savedData.annVideoFn === 'toMovieBNR' ? 'toMovieBNR' : 'toMovie';
-        const fnDt = _buildRadioDt('LIBRO関数');
-        const fnDd = _buildRadioDD('annVideoFn', 'annVideoFnRadio', fn, [
-          { value: 'toMovie', label: 'toMovie' },
-          { value: 'toMovieBNR', label: 'toMovieBNR' },
-        ]);
-        const argDt = _buildTextDt('引数（生データ）');
-        const argDd = _buildTextDD('annVideoArg', savedData.annVideoArg || '', '"xxxx","yyyy"');
-        argDd.querySelector('input').insertAdjacentHTML('afterend',
-          '<p class="field-note">※LIBRO側の関数呼び出しの丸括弧内をそのまま編集します（引数の意味は未解析）。</p>');
-        [fnDt, fnDd, argDt, argDd].forEach(el => form.appendChild(el));
+        // --- J-stream用フィールド(annVideoSrc: '2')---
+        // 入力値(ディレクトリ・企業ID・難読化ID、各平文)は書き出し時に
+        // toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)") へ変換される(libro-format.js)。
+        // 引数構成が想定外でこの形式に変換できなかったLIBRO由来リンクは annVideoFn/annVideoArg の
+        // 生文字列を hidden input で素通しし、書き出し時も無変更で書き戻す。
+        const isLegacyLink = savedData.annJstreamDir === undefined && !!savedData.annVideoArg;
+        let jsFields;
+        if (isLegacyLink) {
+          const jsDt = _buildTextDt('J-stream指定');
+          const jsDd = document.createElement('dd');
+          const fnName = savedData.annVideoFn === 'toMovieBNR' ? 'toMovieBNR' : 'toMovie';
+          const note = document.createElement('p');
+          note.className = 'field-note';
+          note.textContent = `※LIBRO由来のリンク ${fnName}(${savedData.annVideoArg}) をそのまま保持します(編集不可)。`;
+          jsDd.appendChild(note);
+          const fnHidden = document.createElement('input');
+          fnHidden.type = 'hidden';
+          fnHidden.id = 'annVideoFn';
+          fnHidden.value = savedData.annVideoFn || 'toMovie';
+          jsDd.appendChild(fnHidden);
+          const argHidden = document.createElement('input');
+          argHidden.type = 'hidden';
+          argHidden.id = 'annVideoArg';
+          argHidden.value = savedData.annVideoArg || '';
+          jsDd.appendChild(argHidden);
+          jsFields = [jsDt, jsDd];
+        } else {
+          const dirDd  = _buildTextDD('annJstreamDir', savedData.annJstreamDir || '', 'Jストリームディレクトリ');
+          const corpDd = _buildTextDD('annJstreamCorpId', savedData.annJstreamCorpId || '', '企業ID');
+          const vidDd  = _buildTextDD('annJstreamVideoId', savedData.annJstreamVideoId || '', 'Jストリーム難読化ID');
+          vidDd.querySelector('input').insertAdjacentHTML('afterend',
+            '<p class="field-note">※各値は平文で入力します。書き出し時に toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)") へ変換されます。</p>');
+          jsFields = [dirDd, corpDd, vidDd];
+        }
+        jsFields.forEach(el => form.appendChild(el));
 
         const toggleVideoSrcFields = (val) => {
           const showFile = val !== '2';
           [fileDt, fileDd, modeDt, modeDd].forEach(el => { el.style.display = showFile ? '' : 'none'; });
-          [fnDt, fnDd, argDt, argDd].forEach(el => { el.style.display = showFile ? 'none' : ''; });
+          jsFields.forEach(el => { el.style.display = showFile ? 'none' : ''; });
         };
         toggleVideoSrcFields(videoSrc);
         srcDD.querySelectorAll('input[name="annVideoSrcRadio"]').forEach(r => {
@@ -1007,8 +1036,8 @@ import { pushUndo } from './undo-redo.js';
      * ファイルドロップゾーンを dd 要素に追加するヘルパー。
      * ドロップで受け取ったファイルをBlobURLに変換してmediaBlobsへ格納し、
      * inputId のフィールドに拡張子なしのファイル名をセットする。
-     * 音声（mediaType: 'audio'）のみ、ゾーンのクリックでファイル選択ダイアログからも
-     * 指定できる（動画は別途改修予定のためD&Dのみの従来挙動を維持する）。
+     * 現在は音声（mediaType: 'audio'）のみが使用する（動画のドロップゾーンは廃止済み）。
+     * ゾーンのクリックでファイル選択ダイアログからも指定できる。
      * @param {HTMLElement} ddEl      - 追加先の dd 要素
      * @param {string}      inputId   - ファイル名を反映する input の id
      * @param {string}      mediaType - 'audio' または 'video'
