@@ -899,17 +899,17 @@ import { pushUndo } from './undo-redo.js';
       } else if (type === 'video') {
         // 内部ファイル(annVideoSrc:'0')はLIBRO+実機でtoMovieBNRの動作検証が未完了
         // （TypeError再発が報告され原因未確定）のため、新規作成不可に無効化した(2026-07-21)。
-        // コード・データ構造は削除せず「外部動画をタグで追加」と同じ非表示化パターンに
-        // 揃えている。既存の内部ファイル指定アノテーションは編集・削除のみ可能。
-        // 新規動画アノテーションのデフォルトはJ-streamにする。
+        // 新規作成できる動画はJ-stream固定のため、ラジオ選択肢からJ-streamを削除し、
+        // ラベルに「動画ファイル（J-stream）」と明記した。新規作成時（annVideoSrc未設定、
+        // ='2'）はラジオ行自体を非表示にする。既存の内部ファイル・外部タグ指定
+        // アノテーションは編集・削除のみ可能（この場合のみラジオ行を表示する）。
         // 経緯: docs/plans/2026-07-21_feat_動画内部ファイルのvideo-in書き出し対応.md
         //       docs/plans/2026-07-21_fix_動画内部ファイル機能の無効化.md
         const videoSrc = savedData.annVideoSrc || '2';
-        form.appendChild(_buildRadioDt('動画ファイル'));
+        form.appendChild(_buildRadioDt('動画ファイル（J-stream）'));
         const srcDD = _buildRadioDD('annVideoSrc', 'annVideoSrcRadio', videoSrc, [
           { value: '0', label: '内部ファイル' },
           { value: '1', label: '外部動画をタグで追加' },
-          { value: '2', label: 'J-stream' },
         ]);
         // 「内部ファイル」「外部動画をタグで追加」は非表示化(機能・データは残す)。
         // 既存アノテーションがその値の場合のみ、選択中ラジオが見えるよう表示する。
@@ -919,7 +919,11 @@ import { pushUndo } from './undo-redo.js';
               .closest('label').style.display = 'none';
           }
         });
-        form.appendChild(srcDD);
+        // 動画は現在J-stream固定のため、ラジオ行自体は既存の内部ファイル・外部タグ
+        // データを編集する場合のみ表示する（新規作成時は出さない）。
+        if (videoSrc === '0' || videoSrc === '1') {
+          form.appendChild(srcDD);
+        }
 
         // --- 内部ファイル/外部タグ用フィールド(annVideoSrc: '0'/'1') ---
         // 内部ファイルは書き出し時に toMovieBNR("ファイル名",1) へ変換され、動画本体は
