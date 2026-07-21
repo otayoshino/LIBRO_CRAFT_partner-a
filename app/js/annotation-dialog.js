@@ -897,28 +897,41 @@ import { pushUndo } from './undo-redo.js';
         ]));
 
       } else if (type === 'video') {
-        const videoSrc = savedData.annVideoSrc || '0';
+        // 内部ファイル(annVideoSrc:'0')はLIBRO+実機でtoMovieBNRの動作検証が未完了
+        // （TypeError再発が報告され原因未確定）のため、新規作成不可に無効化した(2026-07-21)。
+        // コード・データ構造は削除せず「外部動画をタグで追加」と同じ非表示化パターンに
+        // 揃えている。既存の内部ファイル指定アノテーションは編集・削除のみ可能。
+        // 新規動画アノテーションのデフォルトはJ-streamにする。
+        // 経緯: docs/plans/2026-07-21_feat_動画内部ファイルのvideo-in書き出し対応.md
+        //       docs/plans/2026-07-21_fix_動画内部ファイル機能の無効化.md
+        const videoSrc = savedData.annVideoSrc || '2';
         form.appendChild(_buildRadioDt('動画ファイル'));
         const srcDD = _buildRadioDD('annVideoSrc', 'annVideoSrcRadio', videoSrc, [
           { value: '0', label: '内部ファイル' },
           { value: '1', label: '外部動画をタグで追加' },
           { value: '2', label: 'J-stream' },
         ]);
-        // 「外部動画をタグで追加」は非表示化(機能・データは残す)。
-        // 既存アノテーションが '1' の場合のみ、選択中ラジオが見えるよう表示する。
-        if (videoSrc !== '1') {
-          srcDD.querySelector('input[name="annVideoSrcRadio"][value="1"]')
-            .closest('label').style.display = 'none';
-        }
+        // 「内部ファイル」「外部動画をタグで追加」は非表示化(機能・データは残す)。
+        // 既存アノテーションがその値の場合のみ、選択中ラジオが見えるよう表示する。
+        ['0', '1'].forEach(hiddenVal => {
+          if (videoSrc !== hiddenVal) {
+            srcDD.querySelector(`input[name="annVideoSrcRadio"][value="${hiddenVal}"]`)
+              .closest('label').style.display = 'none';
+          }
+        });
         form.appendChild(srcDD);
 
         // --- 内部ファイル/外部タグ用フィールド(annVideoSrc: '0'/'1') ---
-        // MP4ドロップゾーンは廃止済み(ファイル名のテキスト入力のみ)。
-        // 内部ファイルは書き出し時に toMovieBNR("ファイル名",表示モード) へ変換される(libro-format.js)。
+        // 内部ファイルは書き出し時に toMovieBNR("ファイル名",1) へ変換され、動画本体は
+        // video/in/<ファイル名>.mp4 としてzipへ格納される(libro-format.js)。無効化済みのため
+        // このフィールド群は既存の内部ファイル指定アノテーションを編集する場合のみ表示される。
         const fileDt = _buildTextDt('ファイル名');
         const fileDd = _buildTextDD('annFile', savedData.annFile || '', 'ファイル名を入力');
         fileDd.querySelector('input').insertAdjacentHTML('afterend',
-          '<p class="field-note">※ファイル名の拡張子「.mp4」は除く</p>');
+          '<p class="field-note">※ファイル名の拡張子「.mp4」は除く</p>' +
+          '<p class="field-note">※LIBRO+上では常に別タブで再生されます（「表示方法」の選択はCRAFT内プレビューにのみ適用されます）</p>' +
+          '<p class="field-note">※現在この方式は新規作成できません（既存設定の編集のみ可能）</p>');
+        _appendDropZone(fileDd, 'annFile', 'video', existingEl);
         const showMode = savedData.annShowMode || '0';
         const modeDt = _buildRadioDt('表示方法');
         const modeDd = _buildRadioDD('annShowMode', 'annShowModeRadio', showMode, [
@@ -1057,7 +1070,7 @@ import { pushUndo } from './undo-redo.js';
      * ファイルドロップゾーンを dd 要素に追加するヘルパー。
      * ドロップで受け取ったファイルをBlobURLに変換してmediaBlobsへ格納し、
      * inputId のフィールドに拡張子なしのファイル名をセットする。
-     * 現在は音声（mediaType: 'audio'）のみが使用する（動画のドロップゾーンは廃止済み）。
+     * 音声（mediaType: 'audio'、MP3）と動画（mediaType: 'video'、MP4）が使用する。
      * ゾーンのクリックでファイル選択ダイアログからも指定できる。
      * @param {HTMLElement} ddEl      - 追加先の dd 要素
      * @param {string}      inputId   - ファイル名を反映する input の id
@@ -1067,24 +1080,25 @@ import { pushUndo } from './undo-redo.js';
     function _appendDropZone(ddEl, inputId, mediaType, existingEl = null) {
       const isAudio = mediaType === 'audio';
       const extHint = isAudio ? 'MP3' : 'MP4';
+      const extRe   = isAudio ? /\.mp3$/i : /\.mp4$/i;
+      const accept  = isAudio ? '.mp3,audio/mpeg' : '.mp4,video/mp4';
       const zone = document.createElement('div');
       zone.className = 'file-drop-zone';
       zone.innerHTML = `
-        <p>ここに ${extHint} ファイルをドロップ${isAudio ? '、またはクリックして選択' : ''}</p>
+        <p>ここに ${extHint} ファイルをドロップ、またはクリックして選択</p>
         <p class="drop-status"></p>
       `;
-      if (isAudio) zone.style.cursor = 'pointer';
+      zone.style.cursor = 'pointer';
       const statusEl = zone.querySelector('.drop-status');
 
       // ドロップ／ファイル選択の共通処理：BlobURL化してmediaBlobsへ格納し、ファイル名をセット
       const handleFile = (file) => {
         if (!file) return;
 
-        // 音声のみ：annFileは拡張子なし前提で、再生時に .mp3 を補ってmediaBlobsを引くため、
-        // MP3以外のファイルは設定できても再生できない。ここで弾く。
-        // （動画は別途改修予定のため従来どおりチェックしない）
-        if (isAudio && !/\.mp3$/i.test(file.name)) {
-          statusEl.textContent = '✕ MP3ファイルを指定してください';
+        // annFileは拡張子なし前提で、再生時に .mp3 / .mp4 を補ってmediaBlobsを引くため、
+        // 想定拡張子以外のファイルは設定できても再生できない。ここで弾く。
+        if (!extRe.test(file.name)) {
+          statusEl.textContent = `✕ ${extHint}ファイルを指定してください`;
           statusEl.className = 'drop-status is-error';
           return;
         }
@@ -1092,9 +1106,9 @@ import { pushUndo } from './undo-redo.js';
         const fileInput = ddEl.querySelector(`#${inputId}`);
         const baseName = file.name.replace(/\.[^/.]+$/, '');
 
-        // 音声のみ：同名ファイルが既に別アノテーションで使用中の場合は上書き前に警告する
+        // 同名ファイルが既に別アノテーションで使用中の場合は上書き前に警告する
         // （「自分自身の差し替え」＝現在このダイアログが編集中のファイル名と同じ場合は警告不要）
-        if (isAudio && mediaBlobs[file.name]) {
+        if (mediaBlobs[file.name]) {
           let savedAnnFile = '';
           if (existingEl) {
             try {
@@ -1144,21 +1158,19 @@ import { pushUndo } from './undo-redo.js';
         handleFile(e.dataTransfer.files[0]);
       });
 
-      // 音声のみ：クリックでファイル選択ダイアログを開く（_appendIconImageDropZone と同パターン）
+      // クリックでファイル選択ダイアログを開く（_appendIconImageDropZone と同パターン）
       // ※ fileInput はファイル名テキスト欄を指す既存の変数名のため、filePicker と命名して区別する
-      if (isAudio) {
-        const filePicker = document.createElement('input');
-        filePicker.type = 'file';
-        filePicker.accept = '.mp3,audio/mpeg';
-        filePicker.style.display = 'none';
-        zone.appendChild(filePicker);
+      const filePicker = document.createElement('input');
+      filePicker.type = 'file';
+      filePicker.accept = accept;
+      filePicker.style.display = 'none';
+      zone.appendChild(filePicker);
 
-        zone.addEventListener('click', () => filePicker.click());
-        filePicker.addEventListener('change', () => {
-          handleFile(filePicker.files[0]);
-          filePicker.value = '';
-        });
-      }
+      zone.addEventListener('click', () => filePicker.click());
+      filePicker.addEventListener('change', () => {
+        handleFile(filePicker.files[0]);
+        filePicker.value = '';
+      });
 
       ddEl.appendChild(zone);
     }
