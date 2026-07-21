@@ -5,7 +5,7 @@ import { generatePressedVariant, renderButtonVisual } from './buttons.js';
 import { mediaBlobs, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
 import { closeDialog, saveDialog } from './storage.js';
-import { updateStatus } from './ui-common.js';
+import { showToast, updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
 
 
@@ -18,11 +18,34 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
+     * 内部ファイル指定(annVideoSrc:'0')の動画アノテーションかどうかを判定する。
+     * 新規作成不可に無効化済み(2026-07-21_fix_動画内部ファイル機能の無効化.md)であり、
+     * 既存データの編集も同様にブロックする対象を判定するために使う。
+     * @param {HTMLElement|null} existingEl - 判定対象要素（新規作成時は null）
+     * @returns {boolean}
+     */
+    function _isLegacyInternalFileVideo(existingEl) {
+      if (!existingEl || existingEl.dataset.type !== 'video') return false;
+      try {
+        return JSON.parse(existingEl.dataset.savedData || '{}').annVideoSrc === '0';
+      } catch (_) {
+        return false;
+      }
+    }
+
+
+    /**
      * 既存のアノテーションオブジェクトをダブルクリックしたときに表示する編集ポップアップ。
      * quick-popup と同じ構造を使い、確定時に confirmAnnotation(type, el) を呼んで更新する。
      * @param {HTMLElement} el - 編集対象の ann-object / ann-icon-obj 要素
      */
     export function openEditPopup(el) {
+      // 内部ファイル指定の動画は編集不可(閲覧可否によらず一律禁止)。削除は引き続き可能。
+      if (_isLegacyInternalFileVideo(el)) {
+        showToast('内部ファイル指定の動画は編集できません（削除して再作成してください）');
+        return;
+      }
+
       // 既存ポップアップを削除
       const existing = document.getElementById('quickCreatePopup');
       if (existing) existing.remove();
@@ -1385,6 +1408,13 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement|null} existingEl - 再設定対象要素（新規作成時は null）
      */
     export function openAnnotationSettingsDialog(type, existingEl = null) {
+      // 内部ファイル指定の動画は編集不可(閲覧可否によらず一律禁止)。削除は引き続き可能。
+      // サイドバーは前回表示分の中身が残らないよう空状態に戻す（選択状態自体は変更しない）。
+      if (_isLegacyInternalFileVideo(existingEl)) {
+        showToast('内部ファイル指定の動画は編集できません（削除して再作成してください）');
+        closeDialog();
+        return;
+      }
       state.lastDetailType = type;  // 最後に表示した種別を履歴保持
       // デルタ計算の基準値をリセット（新たな選択に備える）
       applyLiveUpdate._prevX = undefined;
