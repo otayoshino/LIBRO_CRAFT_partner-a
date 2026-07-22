@@ -10,6 +10,7 @@ import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
 import { closeDialog, handleZipFile, loadAnnotationsFromZip, saveAnnotationsAsLibroBook, saveDialog } from './storage.js';
 import { toggleAcc, toggleNav, updateStatus } from './ui-common.js';
 import { redo, undo } from './undo-redo.js';
+import { applyDaimonMenuLabel, closeSettingsModal, openSettingsModal } from './settings.js';
 
 
     /* キーボードイベント（Esc / Delete / Space / Cmd+C / Cmd+V / Cmd+X） */
@@ -18,6 +19,12 @@ import { redo, undo } from './undo-redo.js';
       // （矢印ページ移動・Delete削除・Ctrl+Z等）を全て抑止し、Escapeで閉じるのみ受け付ける
       if (document.getElementById('indexEditorOverlay')?.classList.contains('is-open')) {
         if (e.key === 'Escape') closeIndexEditor(false);
+        return;
+      }
+
+      // 環境設定モーダル表示中も紙面向けショートカットを全て抑止し、Escapeで閉じるのみ受け付ける
+      if (document.getElementById('settingsOverlay')?.classList.contains('is-open')) {
+        if (e.key === 'Escape') closeSettingsModal(false);
         return;
       }
 
@@ -303,6 +310,9 @@ import { redo, undo } from './undo-redo.js';
     });
 
 
+    // 環境設定（大問ボタン作成メニューのラベル）を初期state値で反映する
+    applyDaimonMenuLabel();
+
     /* ============================
        初期表示・リサイズ対応
     ============================ */
@@ -392,5 +402,7 @@ Object.assign(window, {
   onPageMouseUp,
   openIndexEditor,
   closeIndexEditor,
-  addIndexRow
+  addIndexRow,
+  openSettingsModal,
+  closeSettingsModal
 });

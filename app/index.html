@@ -28,6 +28,13 @@
     <!-- ナビ内コントロール -->
     <div class="nav-inner">
 
+      <!-- 環境設定ブロック -->
+      <div class="blk settings-group">
+        <button class="nav-btn" data-tip="環境設定" onclick="openSettingsModal()">
+          <svg width="18" height="18"><use href="icons/sprite.svg#icon-settings"></use></svg>
+        </button>
+      </div>
+
       <!-- ページ操作ブロック -->
       <div class="blk page-nav">
         <button class="nav-btn disabled" id="tocBtn" data-tip="目次" onclick="goTocPage()">
@@ -193,7 +200,7 @@
               <div>
                 <svg width="20" height="18"><use href="icons/sprite.svg#icon-daimon"></use></svg>
               </div>
-              <p class="size_s">大問ボタン</p>
+              <p class="size_s" id="daimonMenuLabel">大問ボタン</p>
             </li>
             <!-- 付箋グループ切替 -->
             <li class="is_disabled" onclick="toggleStickyGroup()" data-tip="付箋のグループ化／解除を切替">
@@ -390,6 +397,42 @@
         <span class="spacer"></span>
         <button type="button" onclick="closeIndexEditor(false)">キャンセル</button>
         <button type="button" class="ok" onclick="closeIndexEditor(true)">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 環境設定モーダル -->
+  <div id="settingsOverlay">
+    <div class="settings-modal">
+      <p class="settings-modal-title">環境設定</p>
+      <div class="dialog-contents">
+        <dl>
+          <dt>付箋のデフォルトカラー</dt>
+          <dd>
+            <div class="d-select-wrap">
+              <select class="d-select" id="settingsStickyColorSelect">
+                <option value="3">紙色</option>
+                <option value="0">青</option>
+                <option value="1">緑</option>
+                <option value="2">黄</option>
+              </select>
+            </div>
+          </dd>
+          <dt>大問ボタンアイコンのデフォルト</dt>
+          <dd>
+            <div class="d-select-wrap">
+              <select class="d-select" id="settingsDaimonLabelSelect">
+                <option value="大問">大問</option>
+                <option value="ALL">ALL</option>
+                <option value="解答">解答</option>
+              </select>
+            </div>
+          </dd>
+        </dl>
+      </div>
+      <div class="settings-modal-actions">
+        <button type="button" onclick="closeSettingsModal(false)">キャンセル</button>
+        <button type="button" class="ok" onclick="closeSettingsModal(true)">OK</button>
       </div>
     </div>
   </div>

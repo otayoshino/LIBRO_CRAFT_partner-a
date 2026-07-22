@@ -113,7 +113,7 @@ import { updateStatus } from './ui-common.js';
       if (state.bookPages) renderPage(state.currentPage);
 
       // 前ページ・最初ページのボタン活性制御
-      const navBtns = document.querySelectorAll('.nav-btn');
+      const navBtns = document.querySelectorAll('.blk.page-nav .nav-btn');
       const firstBtn = navBtns[0];
       const prevBtn  = navBtns[1];
       const nextBtn  = navBtns[2];

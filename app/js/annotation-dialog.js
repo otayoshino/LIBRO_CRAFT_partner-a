@@ -18,6 +18,18 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
+     * 環境設定「付箋のデフォルトカラー」変更時に、連続作成用に保持している
+     * 付箋の前回設定（lastNewAnnData.sticky）の色も新しいデフォルト色へ揃える。
+     * これを行わないと、既に付箋を1つ以上作成したあとに設定を変更しても
+     * lastNewAnnData 側の色が優先され、新しいデフォルト色が反映されない。
+     * @param {string} colorIdx - STICKY_COLOR_MAPのインデックス文字列
+     */
+    export function syncStickyDefaultColor(colorIdx) {
+      if (lastNewAnnData.sticky) lastNewAnnData.sticky.annColor = String(colorIdx);
+    }
+
+
+    /**
      * 内部ファイル指定(annVideoSrc:'0')の動画アノテーションかどうかを判定する。
      * 新規作成不可に無効化済み(2026-07-21_fix_動画内部ファイル機能の無効化.md)であり、
      * 既存データの編集も同様にブロックする対象を判定するために使う。
@@ -432,7 +444,9 @@ import { pushUndo } from './undo-redo.js';
         o.textContent = c.label;
         colSel.appendChild(o);
       });
-      colSel.value = isLibroToggle ? 'existing' : (savedData.annColor || '0');
+      // 新規作成時（existingElなし）のみ、フォールバック先を環境設定のデフォルト色にする
+      const stickyColorFallback = existingEl ? '0' : (state.settingsStickyDefaultColor ?? '0');
+      colSel.value = isLibroToggle ? 'existing' : (savedData.annColor || stickyColorFallback);
       colWrap.appendChild(colSel);
       colDd.appendChild(colWrap);
       form.appendChild(colDt);
@@ -1521,7 +1535,9 @@ import { pushUndo } from './undo-redo.js';
         const isLibroToggleNote = existingEl?.dataset.libroToggle === '1';
         const colorSelection    = savedData.annColor;
         const keepsOriginalImage = isLibroToggleNote && (colorSelection === undefined || colorSelection === 'existing');
-        const colorIdx = parseInt(colorSelection || '0', 10);
+        // 新規作成時（isUpdate=false）のみ、フォールバック先を環境設定のデフォルト色にする
+        const colorFallback = isUpdate ? '0' : (state.settingsStickyDefaultColor ?? '0');
+        const colorIdx = parseInt(colorSelection || colorFallback, 10);
         const color    = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
 
         if (isUpdate) {

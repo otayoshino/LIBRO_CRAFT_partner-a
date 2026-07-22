@@ -7,8 +7,12 @@
     export const MAX_ICON_IMAGE_DIMENSION  = 4096; // px（一辺の上限）
 
 
-    /** 付箋背景色マップ（savedData.annColor 選択肢インデックスに対応） */
-    export const STICKY_COLOR_MAP = ['#4488cc', '#5ac46e', '#f7e04b'];
+    /**
+     * 付箋背景色マップ（savedData.annColor 選択肢インデックスに対応）。
+     * 既存インデックス0-2（青/緑/黄）はLIBRO書き出し・読み込みとの後方互換のため変更せず、
+     * 環境設定「付箋のデフォルトカラー」の紙色オプション用にインデックス3を末尾追加している。
+     */
+    export const STICKY_COLOR_MAP = ['#4488cc', '#5ac46e', '#f7e04b', '#ffffff'];
 
 
     /** アノテーション種別ごとの設定 */
@@ -111,11 +115,12 @@
     ];
 
 
-    /** 付箋の色一覧 */
+    /** 付箋の色一覧（STICKY_COLOR_MAPと同順・同インデックス） */
     export const STICKY_COLORS = [
       { label: '青',   value: '#4488cc' },
       { label: '緑',   value: '#5ac46e' },
       { label: '黄',   value: '#f7e04b' },
+      { label: '紙色', value: '#ffffff' },
     ];
 
 
