@@ -1474,7 +1474,7 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, g
  * （convertPageAnnotationsの逆変換）。対応する既存マーカーPNGがzip内に無い場合は
  * 新規マーカーPNGを生成する。画像アイコン型（annDisplayType:'image'）は、
  * id由来の元ファイル名と一致すれば無変更のまま維持し、一致しなければ
- * mediaBlobs内の画像バイトをPbve2000暗号化して書き込む（ラスタライズ生成は行わない）。
+ * mediaBlobs内の画像バイトを平文のまま書き込む（ラスタライズ生成は行わない）。
  * @param {{id:number, type:string, style:string, savedData:string}} domData
  * @param {number} pageWidth
  * @param {number} pageHeight
@@ -1521,13 +1521,18 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
     // 画像アイコン型：id由来の元ファイル名（annots/0000.png形式）と一致する場合は
     // LIBROインポート時のまま無変更＝zip内の既存ファイルをそのまま維持する。
     // 一致しない場合はCRAFT上でアップロード・差し替えされた画像のため、
-    // 生バイトを取得してPbve2000暗号化した上で書き込む（既存ファイルがあっても上書きする）。
+    // 生バイトを取得して書き込む（既存ファイルがあっても上書きする）。
+    // annots/*.pngは仕様上「平文（暗号化対象外）」であり、LIBRO+は平文PNGとして描画するため、
+    // ここで暗号化してはならない（暗号化するとLIBRO+上でアイコンだけが表示されなくなる。
+    // クリック・機能はp####.jsonのrect/actionsで動くため一見正常に見える）。
+    // mediaBlobsの画像は取り込み時に復号済み／アップロード原本のためいずれも平文だが、
+    // 想定外データへの安全側フォールバックとして暗号化済みなら復号してから書き込む。
     const expectedOrigBaseName = `${String(domData.id).padStart(4, '0')}.png`;
     if (sd.annIconImage !== expectedOrigBaseName) {
       const blobUrl = mediaBlobs[sd.annIconImage];
       if (blobUrl) {
         const buf = new Uint8Array(await (await fetch(blobUrl)).arrayBuffer());
-        newPngBytes = isPbve2000Encoded(buf) ? buf : encodePbve2000(buf);
+        newPngBytes = isPbve2000Encoded(buf) ? decodePbve2000(buf) : buf;
       }
     }
   } else if (!zip.file(baseDir + filename)) {

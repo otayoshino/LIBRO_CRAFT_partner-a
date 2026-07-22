@@ -233,7 +233,7 @@ LIBRO由来の大問ボタン（`dataset.libroToggle==='1'`）は、位置・サ
 | plusfile | `URI`＋`toAppendix(folder,mode)` | `annDisplayType:'marker'`, `annFile:folder`, `annShowMode:mode` | `{URI, uri:'toAppendix("'+annFile+'",'+annShowMode+')'}` | 実装済み |
 | video（LIBROリンクのみ） | `URI`＋`toMovie(...)`/`toMovieBNR(...)` | `annDisplayType:'marker'`, `annVideoSrc:'2'`, `annVideoFn`, `annVideoArg`（生文字列） | `{URI, uri:annVideoFn+'('+annVideoArg+')'}` | 実装済み（`annVideoSrc`が`'0'`/`'1'`＝内部ファイル/外部タグ指定の場合はLIBRO側に対応actionが無いため書き出し非対応） |
 
-いずれも画像アイコン型（`annDisplayType:'image'`）の場合、元画像（`annots/xxxx.png`）が無変更なら既存zipエントリをそのまま維持し、差し替え時のみ再暗号化して上書きする（[libro_image_display_type_feature.md](../.claude/skills/libro-integration/SKILL.md)相当のロジック）。
+いずれも画像アイコン型（`annDisplayType:'image'`）の場合、元画像（`annots/xxxx.png`）が無変更なら既存zipエントリをそのまま維持し、差し替え時のみ平文PNGのまま上書きする（`annots/*.png`は暗号化対象外。[libro_image_display_type_feature.md](../.claude/skills/libro-integration/SKILL.md)相当のロジック）。
 
 ### 3-2. Hide/Show系（付箋・大問ボタン）
 
