@@ -173,7 +173,7 @@ DOM上は`.ann-object`（マーカー/紙面カラー型）または`.ann-image-
 | 共通 | `annIconImage` / `annImageScale` / `annImageNaturalW` / `annImageNaturalH` | 画像アイコン型：表示画像ファイル名（`mediaBlobs`キー）・表示比率(%)・アップロード時の原寸サイズ |
 | pagelink | `annTarget` | リンク先ページ番号 |
 | plusfile | `annFile` | ディレクトリ名 |
-| plusfile | `annShowMode` | ページ内／別タブ |
+| plusfile | `annShowMode` | `'0'`＝ページ内（LIBRO+ではモーダル表示）／`'1'`＝別タブ／`'2'`＝フローティング |
 | externallink | `annUrl` | リンク先URL |
 | audio | `annFile` | 音声ファイル名（拡張子なし） |
 | audio | `annPlayMode` | コントローラー表示有無 |

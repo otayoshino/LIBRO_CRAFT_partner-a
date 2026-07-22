@@ -920,11 +920,15 @@ import { pushUndo } from './undo-redo.js';
         form.appendChild(dd);
 
       } else if (type === 'plusfile') {
+        // 表示方法は toAppendix("ディレクトリ名",表示モード) の第2引数として書き出される。
+        // '0'＝ページ内（LIBRO+ではモーダル表示のためCRAFTプレビューでも移動不可）、
+        // '1'＝別タブ、'2'＝フローティング（移動可）。
         const showMode = savedData.annShowMode || '0';
         form.appendChild(_buildRadioDt('表示方法'));
         form.appendChild(_buildRadioDD('annShowMode', 'annShowModeRadio', showMode, [
           { value: '0', label: 'ページ内' },
           { value: '1', label: '別タブ' },
+          { value: '2', label: 'フローティング' },
         ]));
         form.appendChild(_buildTextDt('ディレクトリ名'));
         form.appendChild(_buildTextDD('annFile', savedData.annFile || '', ''));

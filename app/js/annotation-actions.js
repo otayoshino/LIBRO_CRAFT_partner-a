@@ -37,7 +37,11 @@ import { showToast, updateStatus } from './ui-common.js';
             window.open(url, '_blank', 'noopener');
             updateStatus();
           } else {
-            // ページ内ポップアップ（iframe）で表示
+            // ページ内（'0'）／フローティング（'2'）はどちらもiframeポップアップで表示する。
+            // ただしLIBRO+側では「ページ内」はモーダル表示でウィンドウを動かせないため、
+            // CRAFTのプレビューでもタイトルバードラッグ移動を無効にする。
+            // 移動できるのは「フローティング」を選択した場合のみ。
+            const isFloating = showMode === '2';
             const existing = document.getElementById('plusfilePopup');
             if (existing) existing.remove();
             const popup = document.createElement('div');
@@ -55,24 +59,31 @@ import { showToast, updateStatus } from './ui-common.js';
             popup.style.top  = Math.max(8, (window.innerHeight - 520) / 2) + 'px';
             // 閉じるボタン
             document.getElementById('plusfileClose').onclick = () => popup.remove();
-            // タイトルバードラッグ移動
-            popup.querySelector('.plusfile-title').addEventListener('mousedown', (e) => {
-              if (e.target.id === 'plusfileClose') return;
-              e.preventDefault();
-              const sx = e.clientX, sy = e.clientY;
-              const ol = parseInt(popup.style.left, 10) || 0;
-              const ot = parseInt(popup.style.top,  10) || 0;
-              const onMove = (ev) => {
-                popup.style.left = Math.max(0, Math.min(ol + ev.clientX - sx, window.innerWidth  - 760)) + 'px';
-                popup.style.top  = Math.max(0, Math.min(ot + ev.clientY - sy, window.innerHeight - 520)) + 'px';
-              };
-              const onUp = () => {
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('mouseup',   onUp);
-              };
-              document.addEventListener('mousemove', onMove);
-              document.addEventListener('mouseup',   onUp);
-            });
+            const titleBar = popup.querySelector('.plusfile-title');
+            if (isFloating) {
+              // タイトルバードラッグ移動(フローティング時のみ)
+              titleBar.addEventListener('mousedown', (e) => {
+                if (e.target.id === 'plusfileClose') return;
+                e.preventDefault();
+                const sx = e.clientX, sy = e.clientY;
+                const ol = parseInt(popup.style.left, 10) || 0;
+                const ot = parseInt(popup.style.top,  10) || 0;
+                const onMove = (ev) => {
+                  popup.style.left = Math.max(0, Math.min(ol + ev.clientX - sx, window.innerWidth  - 760)) + 'px';
+                  popup.style.top  = Math.max(0, Math.min(ot + ev.clientY - sy, window.innerHeight - 520)) + 'px';
+                };
+                const onUp = () => {
+                  document.removeEventListener('mousemove', onMove);
+                  document.removeEventListener('mouseup',   onUp);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup',   onUp);
+              });
+            } else {
+              // モーダル表示：ドラッグできないため move カーソルも出さない
+              // （CSSの `#plusfilePopup .plusfile-title { cursor: move; }` をインラインで上書き）
+              titleBar.style.cursor = 'default';
+            }
             updateStatus();
           }
           break;
