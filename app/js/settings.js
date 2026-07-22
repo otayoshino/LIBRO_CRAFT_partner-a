@@ -50,3 +50,34 @@ export function applyDaimonMenuLabel() {
   const el = document.getElementById('daimonMenuLabel');
   if (el) el.textContent = `${state.settingsDaimonLabel}ボタン`;
 }
+
+
+/**
+ * 環境設定モーダルのサイドタブを切り替える。
+ * タブ（.settings-tab[data-settings-tab]）と内容ペイン（.settings-pane[data-settings-pane]）を
+ * 同じキー文字列で対応付けており、タブを増やす場合はHTML側に対を追加するだけでよい。
+ * @param {string} tabKey - data-settings-tab / data-settings-pane の値
+ */
+function switchSettingsTab(tabKey) {
+  document.querySelectorAll('#settingsOverlay .settings-tab').forEach(tab => {
+    tab.classList.toggle('is-active', tab.dataset.settingsTab === tabKey);
+  });
+  document.querySelectorAll('#settingsOverlay .settings-pane').forEach(pane => {
+    pane.classList.toggle('is-active', pane.dataset.settingsPane === tabKey);
+  });
+}
+
+
+/**
+ * サイドタブのクリックハンドラを設定する（初期化時に1度だけ呼ぶ）。
+ * タブコンテナへのイベント委譲にしてあるため、将来タブを追加しても配線の変更は不要。
+ */
+export function initSettingsTabs() {
+  const tabs = document.getElementById('settingsTabs');
+  if (!tabs) return;
+  tabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('.settings-tab');
+    if (!btn || !btn.dataset.settingsTab) return;
+    switchSettingsTab(btn.dataset.settingsTab);
+  });
+}

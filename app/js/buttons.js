@@ -15,11 +15,11 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
-     * 大問/答/証明ボタンの見た目を savedData（プリセット・拡大率・画像素材）から確定する。
+     * 大問/答/証明ボタンの見た目を savedData（プリセット・拡大率・画像素材・表示文言）から確定する。
      * ボタン生成時・編集確定時・アノテーション復元時のいずれからも共通で呼び出す。
      * @param {HTMLElement} el       - daimon-btn/kotae-btn/shomei-btn 要素
      * @param {string}      type     - 'daimon' | 'kotae' | 'shomei'
-     * @param {object}      savedData - { btnPreset, btnScale, btnImageFile }
+     * @param {object}      savedData - { btnPreset, btnScale, btnImageFile, btnLabel }
      */
     export function renderButtonVisual(el, type, savedData = {}) {
       const defaults = BTN_TYPE_DEFAULTS[type] || BTN_TYPE_DEFAULTS.daimon;
@@ -52,7 +52,9 @@ import { pushUndo } from './undo-redo.js';
         const preset = BTN_COLOR_OPTIONS[Number.isInteger(presetIdx) ? presetIdx : defaults.presetIdx]
                       || BTN_COLOR_OPTIONS[defaults.presetIdx];
         el.style.background = preset.value;
-        el.textContent = defaults.label;
+        // btnLabel（大問ボタンのみ、環境設定で選んだ文言を作成時に保存したもの）があればそれを使う。
+        // 未設定（本改修前のデータ・答/証明ボタン）は種別ごとの既定文言にフォールバックする。
+        el.textContent = (savedData.btnLabel || '').trim() || defaults.label;
       }
     }
 
@@ -208,10 +210,13 @@ import { pushUndo } from './undo-redo.js';
       el.dataset.type     = 'daimon';
       el.dataset.id       = ++state.annIdCounter;
       el.dataset.daimonId = did;
-      el.dataset.savedData = JSON.stringify({ btnPreset: '0', btnScale: '1' });
+      // 環境設定「大問ボタンアイコンのデフォルト」の文言を作成時点の値でボタンごとに保持する。
+      // （設定を後から変えても既に作成済みのボタンは変わらない仕様）
+      const daimonSavedData = { btnPreset: '0', btnScale: '1', btnLabel: state.settingsDaimonLabel || '大問' };
+      el.dataset.savedData = JSON.stringify(daimonSavedData);
       el.style.left       = minLeft + 'px';
       el.style.top        = Math.max(0, minTop - 36) + 'px';
-      renderButtonVisual(el, 'daimon', { btnPreset: '0', btnScale: '1' });
+      renderButtonVisual(el, 'daimon', daimonSavedData);
 
       addDaimonClickHandler(el);
       makeDraggable(el);

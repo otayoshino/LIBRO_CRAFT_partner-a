@@ -117,7 +117,9 @@ import { pushUndo } from './undo-redo.js';
           const preset = document.getElementById('btnPreset')?.value;
           const scale  = document.getElementById('btnScale')?.value;
           const image  = document.getElementById('btnImageFile')?.value;
-          renderButtonVisual(el, type, { btnPreset: preset, btnScale: scale, btnImageFile: image });
+          // btnLabel を渡さないと、プリセット等を触った瞬間にプレビューのテキストが既定文言へ戻る
+          const label  = document.getElementById('btnLabel')?.value;
+          renderButtonVisual(el, type, { btnPreset: preset, btnScale: scale, btnImageFile: image, btnLabel: label });
         };
         ['btnPreset', 'btnScale', 'btnImageFile'].forEach(id => {
           const fieldEl = document.getElementById(id);
@@ -643,6 +645,18 @@ import { pushUndo } from './undo-redo.js';
       if (BUTTON_TYPES.has(type)) {
         // --- 大問/答/証明ボタン固有：プリセット・拡大率・画像素材 ---
         const defaultPresetIdx = { daimon: '0', kotae: '1', shomei: '2' }[type] || '0';
+
+        // 表示文言（大問ボタンのみ。環境設定で選んだ文言を作成時に保持したもの）。
+        // confirmAnnotation はフォーム内の input[id] を総なめして savedData を作り直すため、
+        // hidden input として載せておかないと編集確定のたびに btnLabel が脱落して
+        // 既定文言（「大問」）に戻ってしまう。UI上は編集させないため hidden とする。
+        if (type === 'daimon') {
+          const hiddenLabel = document.createElement('input');
+          hiddenLabel.type  = 'hidden';
+          hiddenLabel.id    = 'btnLabel';
+          hiddenLabel.value = savedData.btnLabel || '';
+          form.appendChild(hiddenLabel);
+        }
 
         // プリセットスタイル
         const presetDt = document.createElement('dt');

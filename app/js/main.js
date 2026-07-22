@@ -10,7 +10,7 @@ import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
 import { closeDialog, handleZipFile, loadAnnotationsFromZip, saveAnnotationsAsLibroBook, saveDialog } from './storage.js';
 import { toggleAcc, toggleNav, updateStatus } from './ui-common.js';
 import { redo, undo } from './undo-redo.js';
-import { applyDaimonMenuLabel, closeSettingsModal, openSettingsModal } from './settings.js';
+import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, openSettingsModal } from './settings.js';
 
 
     /* キーボードイベント（Esc / Delete / Space / Cmd+C / Cmd+V / Cmd+X） */
@@ -312,6 +312,8 @@ import { applyDaimonMenuLabel, closeSettingsModal, openSettingsModal } from './s
 
     // 環境設定（大問ボタン作成メニューのラベル）を初期state値で反映する
     applyDaimonMenuLabel();
+    // 環境設定モーダルのサイドタブを配線する
+    initSettingsTabs();
 
     /* ============================
        初期表示・リサイズ対応

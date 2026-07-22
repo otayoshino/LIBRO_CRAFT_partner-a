@@ -1269,10 +1269,12 @@ async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
 
 
 /**
- * 大問ボタン（プリセットモード）の通常時PNGを、CRAFT上の見た目（プリセット背景色＋白文字ラベル「大問」）
- * どおりにラスタライズする。カスタム画像モード（btnImageFileあり）はこの関数を使わず、
+ * 大問ボタン（プリセットモード）の通常時PNGを、CRAFT上の見た目（プリセット背景色＋白文字ラベル）
+ * どおりにラスタライズする。文言は savedData.btnLabel（環境設定で選んだ「大問」「ALL」「解答」を
+ * ボタン作成時に保持したもの）を使い、未設定の既存データは従来どおり「大問」にフォールバックする。
+ * カスタム画像モード（btnImageFileあり）はこの関数を使わず、
  * 呼び出し側でmediaBlobsの画像バイトをそのまま使用する。
- * @param {{btnPreset?:string}} savedData
+ * @param {{btnPreset?:string, btnLabel?:string}} savedData
  * @param {number} pxWidth
  * @param {number} pxHeight
  * @returns {Promise<Uint8Array>}
@@ -1295,7 +1297,8 @@ async function rasterizeDaimonNormalPng(savedData, pxWidth, pxHeight) {
   ctx.font = `bold ${Math.round(h * 0.45)}px 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('大問', w / 2, h / 2 + 1);
+  const labelText = (savedData?.btnLabel || '').trim() || '大問';
+  ctx.fillText(labelText, w / 2, h / 2 + 1);
 
   const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
   return new Uint8Array(await blob.arrayBuffer());
