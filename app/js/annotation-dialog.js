@@ -1,7 +1,7 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, ICON_DEFAULT_SIZE_PX, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
 import { deactivateAnnotationMode, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
-import { generatePressedVariant, renderButtonVisual } from './buttons.js';
+import { applyDaimonImageAspect, generatePressedVariant, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { mediaBlobs, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
 import { closeDialog, saveDialog } from './storage.js';
@@ -550,7 +550,7 @@ import { pushUndo } from './undo-redo.js';
           // W/H入力はペアリングで同値になるが、選択の切り替え直後など片方しか値がない場合にも
           // 正方形を崩さないよう、有効な方の値で両辺を揃える。
           const ICON_MIN = 14;
-          const size = Math.max(ICON_MIN, w > 0 ? w : (h > 0 ? h : ICON_DEFAULT_SIZE_PX));
+          const size = Math.max(ICON_MIN, w > 0 ? w : (h > 0 ? h : getIconDefaultSizePx()));
           target.style.width  = size + 'px';
           target.style.height = size + 'px';
           target.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
@@ -1648,10 +1648,24 @@ import { pushUndo } from './undo-redo.js';
           prevClassName: existingEl.className,
           prevInnerHTML: existingEl.innerHTML,
         });
+        // 画像素材が差し替わったかを判定するため、savedData を上書きする前に旧値を読む
+        let prevBtnSd = {};
+        try { prevBtnSd = JSON.parse(existingEl.dataset.savedData || '{}'); } catch (_) {}
+        const prevBtnImage = (prevBtnSd.btnImageFile || '').trim();
+        const nextBtnImage = (savedData.btnImageFile || '').trim();
+
         if (savedData.annPosX !== undefined) existingEl.style.left = parseInt(savedData.annPosX, 10) + 'px';
         if (savedData.annPosY !== undefined) existingEl.style.top  = parseInt(savedData.annPosY, 10) + 'px';
         renderButtonVisual(existingEl, type, savedData);
         existingEl.dataset.savedData = JSON.stringify(savedData);
+        // renderButtonVisual() は el.textContent = '' で子要素を全削除するため、
+        // 追加済みのリサイズハンドルも消える。ここで必ず再付与する
+        // （プリセット⇔カスタム画像の切替で縦横比ロックの有無も切り替わる）。
+        makeDaimonResizable(existingEl);
+        // 画像素材を新しく設定／差し替えたときだけ、幅を保ったまま高さを画像本来の縦横比へ合わせる。
+        // 画像が変わっていない場合（ラベル・色だけ変更した場合など）は、ユーザーが手動リサイズした
+        // 矩形を勝手に戻さないよう何もしない。
+        if (nextBtnImage && nextBtnImage !== prevBtnImage) applyDaimonImageAspect(existingEl);
         updateStatus();
 
       } else {
@@ -1680,7 +1694,8 @@ import { pushUndo } from './undo-redo.js';
           if (displayType === 'icon') {
             // アイコン型に変更または絶対アイコン型のまま更新
             // 1:1比率を強制：short辺に揃える（非アイコン型から切り替え時に縦横が異なる場合がある）
-            const iconSize = Math.min(existingEl.offsetWidth || ICON_DEFAULT_SIZE_PX, existingEl.offsetHeight || ICON_DEFAULT_SIZE_PX);
+            const iconDefault = getIconDefaultSizePx();
+            const iconSize = Math.min(existingEl.offsetWidth || iconDefault, existingEl.offsetHeight || iconDefault);
             existingEl.className = 'ann-icon-obj';
             existingEl.style.width  = iconSize + 'px';
             existingEl.style.height = iconSize + 'px';
@@ -1727,8 +1742,10 @@ import { pushUndo } from './undo-redo.js';
             // アイコン型：円形ボタン
             const iconBg = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
             ann.className = 'ann-icon-obj';
-            // 種別によらず同一の既定サイズ・1:1で作成する（ICON_DEFAULT_SIZE_PX を唯一の基準にする）
-            ann.style.cssText = `left:${x}px; top:${y}px; width:${ICON_DEFAULT_SIZE_PX}px; height:${ICON_DEFAULT_SIZE_PX}px; background:${iconBg};`;
+            // 種別によらず同一の既定サイズ・1:1で作成する
+            // （getIconDefaultSizePx() を唯一の基準にする。ドラッグで描いた矩形の寸法は使わない）
+            const iconSize = getIconDefaultSizePx();
+            ann.style.cssText = `left:${x}px; top:${y}px; width:${iconSize}px; height:${iconSize}px; background:${iconBg};`;
             ann.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${cfg.iconViewBox || '0 0 24 24'}">${cfg.iconSvg}</svg>`;
           } else if (displayType === 'page-color') {
             // 紙面カラー型：ラベルなしの透明ホットスポット（編集モードのみ種別アイコンを中央表示）

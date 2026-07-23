@@ -156,7 +156,46 @@
     export const DAIMON_DEFAULT_MIN_WIDTH_PX = 24;
 
     /**
-     * アイコン表示形式（.ann-icon-obj）の新規作成時の既定サイズ（px・正方形）。
-     * 種別によらず共通。1:1 を保証するため width/height の双方にこの値を使う。
+     * アイコン表示形式（.ann-icon-obj）の新規作成時の既定サイズの基準値。
+     * LIBRO実データ（sample_books/8a24127cb94d4a158ae43954184af569/p0023.json の
+     * annots/6606.png、rect [4486, 688, 192, 192]、ページ画像 4960×7015px）に合わせる。
+     *
+     * 同ページの音声ボタン（annots/6600.png、rect [659, 682, 1161, 192]）は
+     * 「1161×192の完全透明PNG」＝テキスト帯を覆うクリック領域であって
+     * アイコンの見た目のサイズではないため、既定サイズの基準には採らない。
+     * ただしその帯の高さ（192）は正方形アイコンの一辺（192）と一致しており、
+     * どちらの解釈でも 192 に収束する。
+     *
+     * ページ画像の縦横比に依存しないよう「ページ幅に対する比率」で保持し、
+     * 実px への変換は getIconDefaultSizePx() が #pageLeft.offsetWidth を基準に行う
+     * （DAIMON_DEFAULT_REF_RECT と同じ方式）。
+     */
+    export const ICON_DEFAULT_REF_RECT = { pageWidth: 4960, size: 192 };
+
+    /** アイコン既定サイズのページ幅比（192 / 4960 ≒ 0.0387） */
+    export const ICON_DEFAULT_SIZE_RATIO = ICON_DEFAULT_REF_RECT.size / ICON_DEFAULT_REF_RECT.pageWidth;
+
+    /** アイコン既定サイズの下限（極小ページ表示時にクリック不能になるのを防ぐ） */
+    export const ICON_DEFAULT_MIN_SIZE_PX = 20;
+
+    /**
+     * ページ基準サイズ（#pageLeft.offsetWidth）が取得できない場合のフォールバック値（px）。
+     * book未読込時など。従来の固定既定値と同値。
      */
     export const ICON_DEFAULT_SIZE_PX = 48;
+
+    /**
+     * アイコン表示形式（.ann-icon-obj）の新規作成時の既定サイズを、現在のページ基準サイズ
+     * （#pageLeft の offsetWidth）に対する px 値として算出する。offsetWidth はCSS transform
+     * （ズーム）の影響を受けない基準サイズであり、アノテーションの style.left/top/width/height と
+     * 同じ座標系になる。種別によらず共通で、1:1 を保証するため width/height の双方にこの値を使う。
+     * @returns {number} 既定サイズ（px・小数を含む）
+     */
+    export function getIconDefaultSizePx() {
+      const page = document.getElementById('pageLeft');
+      const baseWidth = page?.offsetWidth || 0;
+      if (!baseWidth) return ICON_DEFAULT_SIZE_PX;
+      // 整数pxに丸めず小数のまま返す（getDaimonDefaultSizePx と同じ理由：
+      // 書き出しrectを実データ寸法へ近づけるため。読み手はいずれも parseFloat）。
+      return Math.max(ICON_DEFAULT_MIN_SIZE_PX, baseWidth * ICON_DEFAULT_SIZE_RATIO);
+    }

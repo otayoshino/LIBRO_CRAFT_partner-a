@@ -1,6 +1,6 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { confirmAnnotation, openAnnotationSettingsDialog, openQuickCreateDialog } from './annotation-dialog.js';
-import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, renderButtonVisual } from './buttons.js';
+import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { selectedStickySet, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
@@ -282,6 +282,7 @@ import { pushUndo } from './undo-redo.js';
           }
           addDaimonClickHandler(btn);
           makeDraggable(btn);
+          makeDaimonResizable(btn);
           btn.dataset.page = state.currentPage;
           page.appendChild(btn);
           btn.classList.add('is-selected');
@@ -787,6 +788,8 @@ import { pushUndo } from './undo-redo.js';
       } else if (el.classList.contains('daimon-btn')) {
         addDaimonClickHandler(el);
         makeDraggable(el);
+        // LIBRO由来（dataset.libroToggle==='1'）と .is-sized なしは makeDaimonResizable 側で除外される
+        makeDaimonResizable(el);
       } else if (el.classList.contains('kotae-btn')) {
         addKotaeClickHandler(el);
       } else if (el.classList.contains('shomei-btn')) {

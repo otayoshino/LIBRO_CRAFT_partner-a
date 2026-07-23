@@ -1,7 +1,7 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { applyLiveUpdate, openAnnotationSettingsDialog } from './annotation-dialog.js';
 import { scheduleAutoSave } from './autosave.js';
-import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, renderButtonVisual } from './buttons.js';
+import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, UNDO_MAX, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { deselectAllObjects, getSelectedObjects, makeDraggable, makeResizable, reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { updateAnnotationVisibility } from './page-view.js';
@@ -86,6 +86,8 @@ import { showToast, updateStatus } from './ui-common.js';
                 let daimonSd = {};
                 try { daimonSd = JSON.parse(snap.savedData || '{}'); } catch (_) {}
                 renderButtonVisual(el, 'daimon', daimonSd);
+                // renderButtonVisual の後に呼ぶ（dataset.btnHasImage の確定後・子要素クリア後）
+                makeDaimonResizable(el);
               } else if (el.classList.contains('kotae-btn')) {
                 addKotaeClickHandler(el);
                 let kotaeSd = {};

@@ -2361,6 +2361,12 @@
       border-radius: 12%;
       container-type: size;
     }
+    /* リサイズハンドル（.resize-handle）は要素の外側（-4px）に配置されるため、
+       上の overflow: hidden のままではクリップされて掴めない。選択中のみ visible に戻す
+       （.ann-image-obj.is-selected と同じ方針）。ラベルは通常サイズなら溢れない。 */
+    .daimon-btn.is-sized.is-selected {
+      overflow: visible;
+    }
     /* ラベル文字はボタン自身の高さの45%（書き出しPNG rasterizeDaimonNormalPng と同じ係数）に追従させる。
        コンテナクエリ単位は「自分自身」のコンテナには解決せず、祖先コンテナ（無ければビューポート）
        基準になるため、.is-sized 自身ではなく子要素の .btn-label に指定しなければならない。 */

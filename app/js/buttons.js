@@ -1,5 +1,5 @@
 import { openEditPopup } from './annotation-dialog.js';
-import { makeDraggable } from './annotation-interaction.js';
+import { makeDraggable, makeResizable } from './annotation-interaction.js';
 import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, DAIMON_DEFAULT_ASPECT, DAIMON_DEFAULT_MIN_WIDTH_PX, DAIMON_DEFAULT_WIDTH_RATIO } from './config.js';
 import { mediaBlobs, selectedStickySet, state } from './state.js';
 import { showToast, updateStatus } from './ui-common.js';
@@ -28,6 +28,72 @@ import { pushUndo } from './undo-redo.js';
       const width  = Math.max(DAIMON_DEFAULT_MIN_WIDTH_PX, baseWidth * DAIMON_DEFAULT_WIDTH_RATIO);
       const height = Math.max(1, width / DAIMON_DEFAULT_ASPECT);
       return { width, height };
+    }
+
+    /**
+     * 大問ボタンにリサイズハンドルを付与する。対象は「CRAFTで新規作成した大問ボタン」のみ。
+     *
+     * 除外条件：
+     *  - .daimon-btn 以外（答/証明ボタン・アノテーション）
+     *  - LIBRO由来（dataset.libroToggle === '1'）：生データを無変更のまま書き戻す passthrough 対象で、
+     *    CRAFT側からのサイズ変更は書き出しに反映されないため、ハンドル自体を出さない
+     *  - .is-sized なし：本改修以前に作成されCSS固定サイズのままの大問ボタン（現行仕様を維持する）
+     *
+     * カスタム画像モード（dataset.btnHasImage === '1'）は .btn-face が object-fit: fill で
+     * 引き伸ばされるため、縦横比を維持してリサイズする（コーナー4点のみ）。
+     * プリセットモードはラベル文字サイズが高さ（45cqh）に追従するので自由リサイズでよい。
+     *
+     * renderButtonVisual() は el.textContent = '' で子要素（＝ハンドル）を全削除するため、
+     * renderButtonVisual() を呼んだ後に必ずこの関数を呼ぶこと。
+     * @param {HTMLElement} el - 大問ボタン要素
+     */
+    export function makeDaimonResizable(el) {
+      if (!el?.classList?.contains('daimon-btn')) return;
+      if (el.dataset.libroToggle === '1') return;
+      if (!el.classList.contains('is-sized')) return;
+      const hasImage = el.dataset.btnHasImage === '1';
+      makeResizable(el, hasImage ? { lockAspectRatio: true, minSize: 14 } : { minSize: 14 });
+    }
+
+    /**
+     * 画像素材を設定した大問ボタンの高さを、幅を保ったまま画像本来の縦横比に合わせる。
+     *
+     * 大問ボタンは既定サイズ（LIBRO実データ 194×116、縦横比約1.67）で生成されるため、
+     * 何もしないと .btn-face の object-fit: fill によって画像がその比率へ引き伸ばされる。
+     * 幅基準で高さを合わせることで、画像アイコン型アノテーション（.ann-image-obj、
+     * 画像本来の縦横サイズをそのまま採用する）と同じ考え方に揃える。
+     *
+     * 矩形の縦横比が画像の縦横比と一致した状態になるため、makeDaimonResizable() の
+     * 縦横比ロック（開始時の矩形から比率を取る）もそのまま正しい比率で働く。
+     *
+     * 画像のデコード完了前は naturalWidth/naturalHeight が 0 のため、未完了なら load を待つ。
+     * width/height 属性を持たないSVG等で自然サイズが取得できない場合は、比率を変えない
+     * （既定の矩形のまま fill 表示になる）。
+     *
+     * left/top は変更しないため、高さの変化は下方向にのみ及ぶ。
+     * @param {HTMLElement} el - 大問ボタン要素
+     */
+    export function applyDaimonImageAspect(el) {
+      if (!el?.classList?.contains('daimon-btn')) return;
+      if (el.dataset.libroToggle === '1') return;
+      if (!el.classList.contains('is-sized')) return;
+      if (el.dataset.btnHasImage !== '1') return;
+      const img = el.querySelector('.btn-face');
+      if (!img) return;
+
+      const apply = () => {
+        const nw = img.naturalWidth;
+        const nh = img.naturalHeight;
+        if (!nw || !nh) return;
+        const width = parseFloat(el.style.width) || el.offsetWidth;
+        if (!width) return;
+        el.style.height = (width * (nh / nw)) + 'px';
+        // 矩形の縦横比が変わったので、縦横比ロックの基準を取り直すためハンドルを付け直す
+        makeDaimonResizable(el);
+      };
+
+      if (img.complete && img.naturalWidth) apply();
+      else img.addEventListener('load', apply, { once: true });
     }
 
     /**
@@ -253,6 +319,8 @@ import { pushUndo } from './undo-redo.js';
 
       addDaimonClickHandler(el);
       makeDraggable(el);
+      // renderButtonVisual() で dataset.btnHasImage が確定した後に呼ぶ（縦横比ロックの判定に使うため）
+      makeDaimonResizable(el);
       el.dataset.page = state.currentPage;
       page.appendChild(el);
       // 大問ボタン作成を Undo スタックに積む
