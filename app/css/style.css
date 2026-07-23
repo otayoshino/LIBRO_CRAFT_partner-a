@@ -2337,13 +2337,39 @@
       user-select: none;
     }
 
-    /* LIBRO由来の大問ボタン（.daimon-btn.libro-toggle）：実物のPNG（annots由来）を
-       元のページ座標系の矩形にそのままフィットさせる（ネイティブの「自然サイズ表示」とは異なる）。
+    /* LIBRO由来の大問ボタン（.daimon-btn.libro-toggle）／ページ座標系サイズを持つ新規大問ボタン
+       （.daimon-btn.is-sized）：実物のPNG・アップロード画像を、元のページ座標系の矩形に
+       そのままフィットさせる（ネイティブの「自然サイズ表示」とは異なる）。
        サイズはJS側でインラインstyleにより明示的に指定されるため、height:autoは打ち消される。 */
-    .daimon-btn.libro-toggle .btn-face {
+    .daimon-btn.libro-toggle .btn-face,
+    .daimon-btn.is-sized .btn-face {
       width: 100%;
       height: 100%;
       object-fit: fill;
+    }
+
+    /* ページ座標系のサイズ（インラインstyleのwidth/height）を持つ大問ボタン。
+       CSSの min-width / padding / 固定font-size はインラインwidthより優先されてしまうため打ち消す。
+       文字サイズは自身の高さ基準（コンテナクエリ単位 cqh）で追従させることで、
+       ズーム・フィット変更・書き出しPNG（高さの45%でラベル描画）と見た目を揃える。 */
+    .daimon-btn.is-sized {
+      min-width: 0;
+      padding: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      line-height: 1;
+      border-radius: 12%;
+      container-type: size;
+    }
+    /* ラベル文字はボタン自身の高さの45%（書き出しPNG rasterizeDaimonNormalPng と同じ係数）に追従させる。
+       コンテナクエリ単位は「自分自身」のコンテナには解決せず、祖先コンテナ（無ければビューポート）
+       基準になるため、.is-sized 自身ではなく子要素の .btn-label に指定しなければならない。 */
+    .daimon-btn.is-sized .btn-label {
+      font-size: 45cqh;
+    }
+    /* コンテナクエリ単位が使えない環境向けのフォールバック（継承される12pxだと極端にはみ出すため縮小） */
+    @supports not (container-type: size) {
+      .daimon-btn.is-sized .btn-label { font-size: 8px; }
     }
 
     /* ページの描画モードカーソル */

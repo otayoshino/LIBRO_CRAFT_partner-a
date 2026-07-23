@@ -1,6 +1,6 @@
 import { openEditPopup } from './annotation-dialog.js';
 import { makeDraggable } from './annotation-interaction.js';
-import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR } from './config.js';
+import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, DAIMON_DEFAULT_ASPECT, DAIMON_DEFAULT_MIN_WIDTH_PX, DAIMON_DEFAULT_WIDTH_RATIO } from './config.js';
 import { mediaBlobs, selectedStickySet, state } from './state.js';
 import { showToast, updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
@@ -13,6 +13,22 @@ import { pushUndo } from './undo-redo.js';
       shomei: { label: '証明', presetIdx: 2 },
     };
 
+    /**
+     * 新規大問ボタンの既定サイズを、現在のページ基準サイズ（#pageLeft の offsetWidth）に対する
+     * px 値として算出する。offsetWidth はCSS transform（ズーム）の影響を受けない基準サイズであり、
+     * アノテーションの style.left/top/width/height と同じ座標系になる。
+     * @returns {{width:number, height:number}} 既定サイズ（px・整数）
+     */
+    export function getDaimonDefaultSizePx() {
+      const page = document.getElementById('pageLeft');
+      const baseWidth = page?.offsetWidth || 0;
+      // 整数pxに丸めると、ページ表示が小さいとき（例：幅696pxで 27×16px）に書き出しrectが
+      // 194×116 ではなく 192×114 になる。小数pxのまま保持して実データとの一致精度を上げる
+      // （scaleAnnotations / copySelectedObjects / 書き出しはいずれも parseFloat で読むため小数で問題ない）。
+      const width  = Math.max(DAIMON_DEFAULT_MIN_WIDTH_PX, baseWidth * DAIMON_DEFAULT_WIDTH_RATIO);
+      const height = Math.max(1, width / DAIMON_DEFAULT_ASPECT);
+      return { width, height };
+    }
 
     /**
      * 大問/答/証明ボタンの見た目を savedData（プリセット・拡大率・画像素材・表示文言）から確定する。
@@ -52,9 +68,19 @@ import { pushUndo } from './undo-redo.js';
         const preset = BTN_COLOR_OPTIONS[Number.isInteger(presetIdx) ? presetIdx : defaults.presetIdx]
                       || BTN_COLOR_OPTIONS[defaults.presetIdx];
         el.style.background = preset.value;
+        // ラベルは子要素（.btn-label）に入れる。ページ座標系サイズのボタン（.is-sized）の
+        // 文字サイズをボタン自身の高さへ追従させるにはコンテナクエリ単位を使うが、
+        // コンテナクエリ単位は「自分自身」のコンテナには解決しない（祖先コンテナ、
+        // 無ければビューポート基準になる）ため、子要素側に font-size を指定する必要がある。
+        // 先に textContent を空にすることで、画像モードから戻った際の <img class="btn-face"> も除去する
+        // （従来の el.textContent = ラベル 代入と同じ副作用を維持する）。
+        el.textContent = '';
+        const labelEl = document.createElement('span');
+        labelEl.className = 'btn-label';
         // btnLabel（大問ボタンのみ、環境設定で選んだ文言を作成時に保存したもの）があればそれを使う。
         // 未設定（本改修前のデータ・答/証明ボタン）は種別ごとの既定文言にフォールバックする。
-        el.textContent = (savedData.btnLabel || '').trim() || defaults.label;
+        labelEl.textContent = (savedData.btnLabel || '').trim() || defaults.label;
+        el.appendChild(labelEl);
       }
     }
 
@@ -205,8 +231,12 @@ import { pushUndo } from './undo-redo.js';
       const minTop  = Math.min(...posEls.map(n => parseFloat(n.style.top)  || 0));
 
       const page = document.getElementById('pageLeft');
+      // 既定サイズはLIBRO実データ（194×116 / ページ4960px幅）基準のページ相対値。
+      // is-sized クラスは「ページ座標系のサイズをインラインstyleで持つ大問ボタン」の目印で、
+      // CSSの固定サイズ打ち消し・フィット変更時の追従・保存復元時のサイズ復元の判定に使う。
+      const { width: defW, height: defH } = getDaimonDefaultSizePx();
       const el = document.createElement('div');
-      el.className        = 'daimon-btn';
+      el.className        = 'daimon-btn is-sized';
       el.dataset.type     = 'daimon';
       el.dataset.id       = ++state.annIdCounter;
       el.dataset.daimonId = did;
@@ -215,7 +245,10 @@ import { pushUndo } from './undo-redo.js';
       const daimonSavedData = { btnPreset: '0', btnScale: '1', btnLabel: state.settingsDaimonLabel || '大問' };
       el.dataset.savedData = JSON.stringify(daimonSavedData);
       el.style.left       = minLeft + 'px';
-      el.style.top        = Math.max(0, minTop - 36) + 'px';
+      // 紐付けたオブジェクト群の上に、ボタン高さ＋わずかな余白の分だけ持ち上げて配置する
+      el.style.top        = Math.max(0, minTop - (defH + 4)) + 'px';
+      el.style.width      = defW + 'px';
+      el.style.height     = defH + 'px';
       renderButtonVisual(el, 'daimon', daimonSavedData);
 
       addDaimonClickHandler(el);

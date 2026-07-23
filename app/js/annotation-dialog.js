@@ -1,5 +1,5 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, ICON_DEFAULT_SIZE_PX, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
 import { deactivateAnnotationMode, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
 import { generatePressedVariant, renderButtonVisual } from './buttons.js';
 import { mediaBlobs, state } from './state.js';
@@ -459,7 +459,11 @@ import { pushUndo } from './undo-redo.js';
       // アイコン型・画像アイコン型：W/H入力時に縦横比を維持して反対軸を自動更新（applyLiveUpdateより先に登録して先行実行させる）
       const _selectedIconObj = document.querySelector('.ann-icon-obj.is-selected, .ann-image-obj.is-selected');
       if (_selectedIconObj) {
-        const _initAspect = _selectedIconObj.offsetWidth / (_selectedIconObj.offsetHeight || 1);
+        // アイコン型（.ann-icon-obj）は常に 1:1。画像アイコン型（.ann-image-obj）は元画像の
+        // 縦横比をそのまま維持するため実測値を使う。
+        const _initAspect = _selectedIconObj.classList.contains('ann-icon-obj')
+          ? 1
+          : (_selectedIconObj.offsetWidth / (_selectedIconObj.offsetHeight || 1));
         const _wEl = document.getElementById('annWidth');
         const _hEl = document.getElementById('annHeight');
         if (_wEl && _hEl) {
@@ -542,10 +546,13 @@ import { pushUndo } from './undo-redo.js';
           if (h > 0) target.style.height = h + 'px';
           target.style.background = color;
         } else if (target.classList.contains('ann-icon-obj')) {
-          // アイコン型：縦横比維持でサイズ変更、背景グラデーション色も適用
+          // アイコン型：常に 1:1（正方形）でサイズ変更し、背景グラデーション色も適用する。
+          // W/H入力はペアリングで同値になるが、選択の切り替え直後など片方しか値がない場合にも
+          // 正方形を崩さないよう、有効な方の値で両辺を揃える。
           const ICON_MIN = 14;
-          if (w > 0) target.style.width  = Math.max(ICON_MIN, w) + 'px';
-          if (h > 0) target.style.height = Math.max(ICON_MIN, h) + 'px';
+          const size = Math.max(ICON_MIN, w > 0 ? w : (h > 0 ? h : ICON_DEFAULT_SIZE_PX));
+          target.style.width  = size + 'px';
+          target.style.height = size + 'px';
           target.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
         } else if (target.classList.contains('ann-image-obj')) {
           // 画像アイコン型：サイズのみ変更（背景色は適用しない、元画像をそのまま表示するため）
@@ -585,19 +592,14 @@ import { pushUndo } from './undo-redo.js';
             if (dh !== 0) target.style.height = Math.max(10, (parseFloat(target.style.height) || 0) + dh) + 'px';
             target.style.background = color;
           } else if (target.classList.contains('ann-icon-obj')) {
-            // アイコン型：縦横比を維持してサイズをデルタ分変更、背景グラデーション色も適用
+            // アイコン型：常に 1:1（正方形）を保ったままサイズをデルタ分変更し、背景色も適用する
             const ICON_MIN = 14;
             const curW = parseFloat(target.style.width)  || target.offsetWidth;
             const curH = parseFloat(target.style.height) || target.offsetHeight;
-            const aspect = curW / (curH || 1);
-            if (dw !== 0) {
-              const newW = Math.max(ICON_MIN, curW + dw);
-              target.style.width  = newW + 'px';
-              target.style.height = Math.max(ICON_MIN, Math.round(newW / aspect)) + 'px';
-            } else if (dh !== 0) {
-              const newH = Math.max(ICON_MIN, curH + dh);
-              target.style.height = newH + 'px';
-              target.style.width  = Math.max(ICON_MIN, Math.round(newH * aspect)) + 'px';
+            if (dw !== 0 || dh !== 0) {
+              const size = Math.max(ICON_MIN, dw !== 0 ? curW + dw : curH + dh);
+              target.style.width  = size + 'px';
+              target.style.height = size + 'px';
             }
             target.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
           } else if (target.classList.contains('ann-image-obj')) {
@@ -1678,7 +1680,7 @@ import { pushUndo } from './undo-redo.js';
           if (displayType === 'icon') {
             // アイコン型に変更または絶対アイコン型のまま更新
             // 1:1比率を強制：short辺に揃える（非アイコン型から切り替え時に縦横が異なる場合がある）
-            const iconSize = Math.min(existingEl.offsetWidth || 48, existingEl.offsetHeight || 48);
+            const iconSize = Math.min(existingEl.offsetWidth || ICON_DEFAULT_SIZE_PX, existingEl.offsetHeight || ICON_DEFAULT_SIZE_PX);
             existingEl.className = 'ann-icon-obj';
             existingEl.style.width  = iconSize + 'px';
             existingEl.style.height = iconSize + 'px';
@@ -1725,7 +1727,8 @@ import { pushUndo } from './undo-redo.js';
             // アイコン型：円形ボタン
             const iconBg = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
             ann.className = 'ann-icon-obj';
-            ann.style.cssText = `left:${x}px; top:${y}px; width:48px; height:48px; background:${iconBg};`;
+            // 種別によらず同一の既定サイズ・1:1で作成する（ICON_DEFAULT_SIZE_PX を唯一の基準にする）
+            ann.style.cssText = `left:${x}px; top:${y}px; width:${ICON_DEFAULT_SIZE_PX}px; height:${ICON_DEFAULT_SIZE_PX}px; background:${iconBg};`;
             ann.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${cfg.iconViewBox || '0 0 24 24'}">${cfg.iconSvg}</svg>`;
           } else if (displayType === 'page-color') {
             // 紙面カラー型：ラベルなしの透明ホットスポット（編集モードのみ種別アイコンを中央表示）

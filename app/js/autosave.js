@@ -65,6 +65,9 @@ import { showToast } from './ui-common.js';
           shomeiOrigBg: el.dataset.shomeiOrigBg,
           shomeiOutline: el.dataset.shomeiOutline,
           fuhyoji: el.dataset.fuhyoji,
+          // LIBRO由来の大問ボタン（.daimon-btn.libro-toggle）を復元後も passthrough 書き出し
+          // 対象として識別できるようにする
+          libroToggle: el.dataset.libroToggle,
         };
       });
     }

@@ -29,10 +29,16 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
                 el.dataset.id = obj.id;
                 if (obj.page) el.dataset.page = obj.page;
                 // --- 座標・サイズの復元（複数フォーマットに対応） ---
-                // ボタン系クラスはCSSでサイズが定義されているため、位置（left/top）のみ復元する
-                const isBtnClass = el.classList.contains('daimon-btn') ||
+                // ボタン系クラスはCSSでサイズが定義されているため、位置（left/top）のみ復元する。
+                // ただしページ座標系のサイズをインラインstyleで持つ大問ボタン
+                // （.is-sized＝LIBRO実データ基準で新規作成したもの／.libro-toggle＝LIBRO由来）は、
+                // 幅・高さも復元しないとCSS既定サイズへ潰れてしまうため除外する。
+                const isSizedDaimon = el.classList.contains('daimon-btn') &&
+                                      (el.classList.contains('is-sized') || el.classList.contains('libro-toggle'));
+                const isBtnClass = !isSizedDaimon &&
+                                  (el.classList.contains('daimon-btn') ||
                                    el.classList.contains('kotae-btn')  ||
-                                   el.classList.contains('shomei-btn');
+                                   el.classList.contains('shomei-btn'));
                 // 優先順位: (1) % 形式  (2) xRatio/yRatio/wRatio/hRatio  (3) px 形式
                 if (obj.style) {
                   const leftPctMatch   = obj.style.match(/left:\s*([\d.]+)%/);
@@ -92,6 +98,20 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
                 if (obj.shomeiOrigBg) el.dataset.shomeiOrigBg = obj.shomeiOrigBg;
                 if (obj.shomeiOutline) el.dataset.shomeiOutline = obj.shomeiOutline;
                 if (obj.fuhyoji) el.dataset.fuhyoji = obj.fuhyoji;
+                // LIBRO由来フラグ（大問ボタンの書き出し passthrough 判定に必要）
+                if (obj.libroToggle) el.dataset.libroToggle = obj.libroToggle;
+                // アイコン型（.ann-icon-obj）は常に 1:1 を保証する。
+                // width% はページ幅基準・height% はページ高さ基準で個別に復元されるため、
+                // 保存時と復元時でページの縦横比が異なると正方形が崩れうる。
+                if (el.classList.contains('ann-icon-obj')) {
+                  const iw = parseFloat(el.style.width);
+                  const ih = parseFloat(el.style.height);
+                  if (iw > 0 && ih > 0 && Math.abs(iw - ih) > 0.5) {
+                    const size = Math.min(iw, ih);
+                    el.style.width  = size + 'px';
+                    el.style.height = size + 'px';
+                  }
+                }
                 // 内容再構築
                 if (el.classList.contains('ann-object')) {
                   let label = '';

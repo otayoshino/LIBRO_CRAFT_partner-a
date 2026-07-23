@@ -134,3 +134,29 @@
 
     /** 大問ボタン（プリセットモード）の押下状態の背景色。LIBRO実データ（annots/0920.png）実測色に合わせる */
     export const DAIMON_PRESSED_COLOR = '#666666';
+
+    /**
+     * 新規作成する大問ボタンの既定サイズの基準値。
+     * LIBRO実データ（sample_books/8a24127cb94d4a158ae43954184af569/p0004.json の
+     * ID920/921 ペア、rect [309, 666, 194, 116]、ページ画像 4960×7015px）に合わせる。
+     * 全sample_books走査でも 194×116 が最多出現（52件）で、大問ボタンの標準寸法とみなせる。
+     *
+     * ページ画像の縦横比に依存しないよう「ページ幅に対する比率」＋「ボタン自身の縦横比」で保持し、
+     * 実px への変換は buttons.js の getDaimonDefaultSizePx() が #pageLeft.offsetWidth を基準に行う。
+     */
+    export const DAIMON_DEFAULT_REF_RECT = { pageWidth: 4960, width: 194, height: 116 };
+
+    /** 大問ボタン既定幅のページ幅比（194 / 4960 ≒ 0.0391） */
+    export const DAIMON_DEFAULT_WIDTH_RATIO = DAIMON_DEFAULT_REF_RECT.width / DAIMON_DEFAULT_REF_RECT.pageWidth;
+
+    /** 大問ボタン既定の縦横比 W:H（194 / 116 ≒ 1.6724） */
+    export const DAIMON_DEFAULT_ASPECT = DAIMON_DEFAULT_REF_RECT.width / DAIMON_DEFAULT_REF_RECT.height;
+
+    /** 大問ボタン既定幅の下限（極小ページ表示時にクリック不能になるのを防ぐ） */
+    export const DAIMON_DEFAULT_MIN_WIDTH_PX = 24;
+
+    /**
+     * アイコン表示形式（.ann-icon-obj）の新規作成時の既定サイズ（px・正方形）。
+     * 種別によらず共通。1:1 を保証するため width/height の双方にこの値を使う。
+     */
+    export const ICON_DEFAULT_SIZE_PX = 48;

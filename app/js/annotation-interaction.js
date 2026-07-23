@@ -1,6 +1,6 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { confirmAnnotation, openAnnotationSettingsDialog, openQuickCreateDialog } from './annotation-dialog.js';
-import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler } from './buttons.js';
+import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { selectedStickySet, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
@@ -107,6 +107,7 @@ import { pushUndo } from './undo-redo.js';
           height:     parseFloat(el.style.height) || el.offsetHeight,
           background: el.style.background || '',
           groupId:    el.dataset.groupId,
+          daimonId:   el.dataset.daimonId,
         };
         // 証明ボタン：shomeiId と紐付き付箋のスナップショットを保存
         if (el.classList.contains('shomei-btn') && el.dataset.shomeiId) {
@@ -261,6 +262,33 @@ import { pushUndo } from './undo-redo.js';
           return;
         }
 
+        // 大問ボタン：クラス・ページ座標系サイズ・savedData を保ったまま複製する。
+        // daimonId は複製元と同じにする（Alt+ドラッグ複製と同じ挙動。同一の付箋グループを
+        // 開閉する2つ目のボタンになる）。
+        if (snap.className?.includes('daimon-btn')) {
+          const btn = document.createElement('div');
+          btn.dataset.id        = ++state.annIdCounter;
+          btn.dataset.type      = 'daimon';
+          if (snap.daimonId) btn.dataset.daimonId = snap.daimonId;
+          btn.dataset.savedData = snap.savedData || '{}';
+          // LIBRO由来（.libro-toggle）は複製すると同一idの生データを二重に書き戻すことになるため、
+          // 複製結果は新規大問ボタン（.is-sized）として扱う
+          btn.className         = 'daimon-btn is-sized';
+          btn.style.cssText     = `left:${newLeft}px; top:${newTop}px; width:${snap.width}px; height:${snap.height}px;`;
+          try {
+            renderButtonVisual(btn, 'daimon', JSON.parse(snap.savedData || '{}'));
+          } catch (_) {
+            renderButtonVisual(btn, 'daimon', {});
+          }
+          addDaimonClickHandler(btn);
+          makeDraggable(btn);
+          btn.dataset.page = state.currentPage;
+          page.appendChild(btn);
+          btn.classList.add('is-selected');
+          pasted.push(btn);
+          return;
+        }
+
         const el = document.createElement('div');
         el.dataset.id        = ++state.annIdCounter;
         el.dataset.type      = snap.type;
@@ -286,11 +314,13 @@ import { pushUndo } from './undo-redo.js';
           const isImage = snap.className.includes('ann-image-obj');
           el.className = isIcon ? 'ann-icon-obj' : isImage ? 'ann-image-obj' : 'ann-object';
           if (isIcon) {
+            // アイコン型は常に 1:1。コピー元が万一非正方形でも短辺に揃えて正方形を保証する
+            const iconSize = Math.max(14, Math.min(snap.width, snap.height));
             el.style.cssText = [
               `left:${newLeft}px`,
               `top:${newTop}px`,
-              `width:${snap.width}px`,
-              `height:${snap.height}px`,
+              `width:${iconSize}px`,
+              `height:${iconSize}px`,
               snap.background ? `background:${snap.background}` : '',
             ].filter(Boolean).join('; ') + ';';
             const cfg = ANNOTATION_TYPE_CONFIG[snap.type];
