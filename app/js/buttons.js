@@ -17,7 +17,7 @@ import { pushUndo } from './undo-redo.js';
      * 新規大問ボタンの既定サイズを、現在のページ基準サイズ（#pageLeft の offsetWidth）に対する
      * px 値として算出する。offsetWidth はCSS transform（ズーム）の影響を受けない基準サイズであり、
      * アノテーションの style.left/top/width/height と同じ座標系になる。
-     * @returns {{width:number, height:number}} 既定サイズ（px・整数）
+     * @returns {{width:number, height:number}} 既定サイズ（px・小数を含む）
      */
     export function getDaimonDefaultSizePx() {
       const page = document.getElementById('pageLeft');

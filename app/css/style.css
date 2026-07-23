@@ -2349,9 +2349,9 @@
     }
 
     /* ページ座標系のサイズ（インラインstyleのwidth/height）を持つ大問ボタン。
-       CSSの min-width / padding / 固定font-size はインラインwidthより優先されてしまうため打ち消す。
-       文字サイズは自身の高さ基準（コンテナクエリ単位 cqh）で追従させることで、
-       ズーム・フィット変更・書き出しPNG（高さの45%でラベル描画）と見た目を揃える。 */
+       CSSの min-width はインラインwidthより優先されてしまうため、padding とあわせて打ち消す。
+       文字サイズはこのルールでは指定せず、直下の .btn-label 側でボタン高さに追従させる
+       （理由はそちらのコメント参照）。container-type はそのための問い合わせコンテナ宣言。 */
     .daimon-btn.is-sized {
       min-width: 0;
       padding: 0;
