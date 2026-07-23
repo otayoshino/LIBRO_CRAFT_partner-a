@@ -198,6 +198,26 @@ function buildJstreamArgs(sd) {
 
 
 /**
+ * 動画アノテーションの入力方式（annVideoSrc）を解決する。
+ * '0'＝内部ファイル／'1'＝外部タグ／'2'＝J-stream。
+ *
+ * 2026-07-21〜2026-07-23のUI不具合により、CRAFT上で新規作成したJ-stream動画の
+ * savedDataには annVideoSrc キー自体が入っていない（hidden inputがフォームに
+ * 追加されていなかったため。annotation-dialog.js側は修正済み）。この欠落データを
+ * '0'（内部ファイル）と誤判定すると書き出し時にアノテーションごと消えるため、
+ * J-stream入力欄のいずれかが存在すれば '2' とみなす。
+ * どれも無い場合のみ従来どおり '0' へフォールバックする。
+ * @param {object} sd - アノテーションのsavedData（JSON.parse済み）
+ * @returns {'0'|'1'|'2'}
+ */
+export function resolveVideoSrc(sd) {
+  if (sd.annVideoSrc === '0' || sd.annVideoSrc === '1' || sd.annVideoSrc === '2') return sd.annVideoSrc;
+  if (sd.annJstreamDir !== undefined || sd.annJstreamCorpId !== undefined || sd.annJstreamVideoId !== undefined) return '2';
+  return '0';
+}
+
+
+/**
  * actions[] 内の全targetsを1つの配列にまとめる（Hide/Show問わず全て平坦化する）。
  * @param {Array<Object>} actions
  * @returns {Array<number>}
@@ -1496,6 +1516,9 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
   let sd = {};
   try { sd = JSON.parse(domData.savedData || '{}'); } catch (_) {}
 
+  // 動画の入力方式（annVideoSrc欠落データの補正込み）。動画以外の種別では使わない。
+  const videoSrc = domData.type === 'video' ? resolveVideoSrc(sd) : null;
+
   let actions;
   if (domData.type === 'pagelink') {
     actions = [{ action: 'GoTo', page: Number(sd.annTarget) || 1 }, { action: 'FitPage' }];
@@ -1505,14 +1528,14 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
     actions = [{ action: 'Launch', filename: `sounds/${libroSoundFilename(sd.annFile, sd.annPlayMode)}` }];
   } else if (domData.type === 'plusfile') {
     actions = [{ action: 'URI', uri: `toAppendix("${(sd.annFile || '').trim()}",${sd.annShowMode || '0'})` }];
-  } else if (domData.type === 'video' && (sd.annVideoSrc === '0' || sd.annVideoSrc === '2')) {
+  } else if (domData.type === 'video' && (videoSrc === '0' || videoSrc === '2')) {
     // 内部ファイル（annVideoSrc:'0'）は toMovieBNR("ファイル名",表示モード) へ、
     // J-stream指定（annVideoSrc:'2'）は toMovie("dir","base64(企業ID)","base64(難読化ID)")（3引数固定）
     // へ変換する。J-streamに表示モード引数は付けない（付けるとLIBRO+上でアイコン・機能ごと消失する）。
     // 引数構成が想定外で変換できなかったLIBRO由来リンク（annVideoArg保持分）は生文字列を
     // そのまま書き戻す（新形式のsavedDataにannVideoArgは入らないため一意に判別できる）。
     // 外部タグ指定（annVideoSrc: '1'）はLIBRO側に対応actionが無いため未対応のまま。
-    if (sd.annVideoSrc === '0') {
+    if (videoSrc === '0') {
       actions = [{ action: 'URI', uri: `toMovieBNR("${(sd.annFile || '').trim()}",${sd.annShowMode || '0'})` }];
     } else if (sd.annVideoArg) {
       const fn = sd.annVideoFn === 'toMovieBNR' ? 'toMovieBNR' : 'toMovie';

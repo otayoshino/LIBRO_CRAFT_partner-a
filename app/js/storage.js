@@ -3,7 +3,7 @@ import { checkAndPromptRestoreForBook } from './autosave.js';
 import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
-import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, styleToRect } from './libro-format.js';
+import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, resolveVideoSrc, styleToRect } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility, updateTocButtonState } from './page-view.js';
 import { updateLibroBookBtnStates } from './index-outline.js';
 import { mediaBlobs, state } from './state.js';
@@ -319,12 +319,16 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
           newDaimonButtons.push(el);
           return;
         }
-        // 動画は内部ファイル（annVideoSrc: '0'→toMovieBNR）とJ-stream指定（'2'→toMovie）のみ書き出し可能
+        // 動画は内部ファイル（annVideoSrc: '0'→toMovieBNR）とJ-stream指定（'2'→toMovie）のみ書き出し可能。
+        // annVideoSrcが欠落したデータ（2026-07-21〜2026-07-23のUI不具合で作成された新規J-stream動画・
+        // その自動保存復元分）の判定は resolveVideoSrc() 側で補正する。書き出し側
+        // （convertAnnotationToLibroAnnot）と同じ関数を使い、判定のズレによる
+        // 「警告も出ずに書き出しから消える」状態が再発しないようにする。
         let isSupported = supportedTypes.has(type);
         if (type === 'video') {
           let vsd = {};
           try { vsd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
-          const vsrc = vsd.annVideoSrc || '0';
+          const vsrc = resolveVideoSrc(vsd);
           isSupported = vsrc === '0' || vsrc === '2';
         }
         if (!isSupported) {

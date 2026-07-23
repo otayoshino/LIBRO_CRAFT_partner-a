@@ -976,9 +976,13 @@ import { pushUndo } from './undo-redo.js';
         });
         // 動画は現在J-stream固定のため、ラジオ行自体は既存の内部ファイル・外部タグ
         // データを編集する場合のみ表示する（新規作成時は出さない）。
-        if (videoSrc === '0' || videoSrc === '1') {
-          form.appendChild(srcDD);
-        }
+        // ただしDOMからは外さず display:none で隠すだけにすること。srcDD内のhidden input
+        // （#annVideoSrc）がform配下に無いと、confirmAnnotationのフォーム走査
+        // （input[id]を舐めてsavedDataを組み立てる処理）でannVideoSrc自体がsavedDataから
+        // 欠落し、書き出し時にconvertAnnotationToLibroAnnotの種別判定を通らず
+        // アノテーションごとサイレントに消える（2026-07-23確認）。
+        if (videoSrc !== '0' && videoSrc !== '1') srcDD.style.display = 'none';
+        form.appendChild(srcDD);
 
         // --- 内部ファイル/外部タグ用フィールド(annVideoSrc: '0'/'1') ---
         // 内部ファイルは書き出し時に toMovieBNR("ファイル名",1) へ変換され、動画本体は
