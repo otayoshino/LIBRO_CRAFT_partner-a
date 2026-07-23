@@ -231,7 +231,7 @@ LIBRO由来の大問ボタン（`dataset.libroToggle==='1'`）は、位置・サ
 | externallink | `URI`（`toMovie`等の既知パターンに一致しない場合） | `annDisplayType:'marker'`, `annUrl: uri文字列` | `{URI, uri:annUrl}` | 実装済み |
 | audio | `Launch` | `annDisplayType:'marker'`, `annFile: ファイル名(拡張子除去)`, `annPlayMode:'0'` | `{Launch, filename:"sounds/"+annFile+".mp3"}` | 実装済み |
 | plusfile | `URI`＋`toAppendix(folder,mode)` | `annDisplayType:'marker'`, `annFile:folder`, `annShowMode:mode` | `{URI, uri:'toAppendix("'+annFile+'",'+annShowMode+')'}` | 実装済み |
-| video（LIBROリンクのみ） | `URI`＋`toMovie(...)`/`toMovieBNR(...)` | `annDisplayType:'marker'`, `annVideoSrc:'2'`, `annVideoFn`, `annVideoArg`（生文字列） | `{URI, uri:annVideoFn+'('+annVideoArg+')'}` | 実装済み（`annVideoSrc`が`'0'`/`'1'`＝内部ファイル/外部タグ指定の場合はLIBRO側に対応actionが無いため書き出し非対応） |
+| video | `URI`＋`toMovie(...)`/`toMovieBNR(...)` | `toMovie`3引数＝J-stream指定（`annVideoSrc:'2'`＋`annJstreamDir`/`annJstreamCorpId`/`annJstreamVideoId`、企業ID・難読化IDはbase64復号して平文保持）、`toMovieBNR`2引数＝内部ファイル指定（`annVideoSrc:'0'`＋`annFile`/`annShowMode`）、いずれにも当てはまらない引数構成は生文字列保持（`annVideoFn`/`annVideoArg`） | J-streamは`{URI, uri:'toMovie("dir","base64(企業ID)","base64(難読化ID)")'}`（**3引数固定。表示モードは書き出さない**）、内部ファイルは`{URI, uri:'toMovieBNR("ファイル名",表示モード)'}` | 実装済み（外部タグ指定`annVideoSrc:'1'`はLIBRO側に対応actionが無いため書き出し非対応） |
 
 いずれも画像アイコン型（`annDisplayType:'image'`）の場合、元画像（`annots/xxxx.png`）が無変更なら既存zipエントリをそのまま維持し、差し替え時のみ平文PNGのまま上書きする（`annots/*.png`は暗号化対象外。[libro_image_display_type_feature.md](../.claude/skills/libro-integration/SKILL.md)相当のロジック）。
 

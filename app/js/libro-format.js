@@ -147,10 +147,13 @@ function splitLibroCallArgs(argsStr) {
 
 
 /**
- * toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)"[,表示モード]) の引数文字列（丸括弧内）を
+ * toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)") の引数文字列（丸括弧内）を
  * J-stream指定の平文値 {dir, corpId, videoId, showMode} へ変換する。
- * 第4引数（表示モード）は toMovieBNR と同じ「数値・引用符なし」形式。省略時（引数3個）は '0' 扱いにする
- * （表示モード追加前にエクスポートされた既存toMovieとの後方互換）。
+ *
+ * 実データ仕様の引数は3個。4引数形式（第4引数＝表示モード）は、CRAFTが一時期
+ * 誤って書き出していた形式（LIBRO+側で annot ごと消失する。buildJstreamArgs 参照）であり、
+ * 該当期間に書き出されたbookを取り込めるよう読み込みのみ受け付ける（書き出しは常に3引数）。
+ * 第4引数が無い場合、showMode は '0' 扱いとする。
  * toMovieBNR、引数が3個・4個以外の場合、第2・第3引数がbase64として復号できない場合は
  * null を返す（呼び出し側で内部ファイル指定または生文字列保持へフォールバックする）。
  * @param {string} fn   - 関数名（'toMovie' / 'toMovieBNR'）
@@ -175,9 +178,14 @@ function parseJstreamArgs(fn, args) {
 
 
 /**
- * savedData のJ-stream指定（annJstreamDir / annJstreamCorpId / annJstreamVideoId、各平文）と
- * annShowMode（表示モード）を toMovie の引数文字列（丸括弧内）へ変換する。
- * 企業ID・難読化IDはbase64エンコードする。表示モードは toMovieBNR と同じ「数値・引用符なし」形式。
+ * savedData のJ-stream指定（annJstreamDir / annJstreamCorpId / annJstreamVideoId、各平文）を
+ * toMovie の引数文字列（丸括弧内）へ変換する。企業ID・難読化IDはbase64エンコードする。
+ *
+ * 引数は実データ仕様どおり「3個固定」とし、表示モード（annShowMode）は書き出さない。
+ * LIBRO+はURI文字列を関数呼び出しとして解釈し、既知の引数構成に一致しない annot は
+ * 描画段階で除外するため、第4引数を付けるとアイコン・クリック領域ごと消失する
+ * （2026-07-23 実機確認済み。annots/*.png は正しく出力されていても表示されない）。
+ * annShowMode は内部ファイル指定（toMovieBNR）と同様、CRAFT内プレビュー専用の設定として扱う。
  * @param {object} sd - アノテーションのsavedData（JSON.parse済み）
  * @returns {string}
  */
@@ -185,8 +193,7 @@ function buildJstreamArgs(sd) {
   const dir     = (sd.annJstreamDir     || '').trim();
   const corpId  = (sd.annJstreamCorpId  || '').trim();
   const videoId = (sd.annJstreamVideoId || '').trim();
-  const showMode = sd.annShowMode || '0';
-  return `"${dir}","${btoa(corpId)}","${btoa(videoId)}",${showMode}`;
+  return `"${dir}","${btoa(corpId)}","${btoa(videoId)}"`;
 }
 
 
@@ -1500,7 +1507,8 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
     actions = [{ action: 'URI', uri: `toAppendix("${(sd.annFile || '').trim()}",${sd.annShowMode || '0'})` }];
   } else if (domData.type === 'video' && (sd.annVideoSrc === '0' || sd.annVideoSrc === '2')) {
     // 内部ファイル（annVideoSrc:'0'）は toMovieBNR("ファイル名",表示モード) へ、
-    // J-stream指定（annVideoSrc:'2'）は toMovie("dir","base64(企業ID)","base64(難読化ID)") へ変換する。
+    // J-stream指定（annVideoSrc:'2'）は toMovie("dir","base64(企業ID)","base64(難読化ID)")（3引数固定）
+    // へ変換する。J-streamに表示モード引数は付けない（付けるとLIBRO+上でアイコン・機能ごと消失する）。
     // 引数構成が想定外で変換できなかったLIBRO由来リンク（annVideoArg保持分）は生文字列を
     // そのまま書き戻す（新形式のsavedDataにannVideoArgは入らないため一意に判別できる）。
     // 外部タグ指定（annVideoSrc: '1'）はLIBRO側に対応actionが無いため未対応のまま。

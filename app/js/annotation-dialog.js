@@ -1004,8 +1004,10 @@ import { pushUndo } from './undo-redo.js';
         [fileDt, fileDd].forEach(el => form.appendChild(el));
 
         // --- J-stream用フィールド(annVideoSrc: '2')---
-        // 入力値(ディレクトリ・企業ID・難読化ID、各平文)と「表示方法」ラジオの値は書き出し時に
-        // toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)",表示モード) へ変換される(libro-format.js)。
+        // 入力値(ディレクトリ・企業ID・難読化ID、各平文)は書き出し時に
+        // toMovie("ディレクトリ","base64(企業ID)","base64(難読化ID)") へ変換される(libro-format.js)。
+        // 「表示方法」ラジオはCRAFT内プレビュー専用で、LIBRO bookには書き出さない
+        // （第4引数を付けるとLIBRO+側でアノテーションごと消失する。2026-07-23実機確認済み）。
         // 引数構成が想定外でこの形式に変換できなかったLIBRO由来リンクは annVideoFn/annVideoArg の
         // 生文字列を hidden input で素通しし、書き出し時も無変更で書き戻す。
         const isLegacyLink = savedData.annJstreamDir === undefined && !!savedData.annVideoArg;
@@ -1052,6 +1054,8 @@ import { pushUndo } from './undo-redo.js';
           vidInput.value = savedData.annJstreamVideoId || '';
           vidInput.placeholder = 'Jストリーム難読化ID';
           [dirInput, corpInput, vidInput].forEach(inp => jsDd.appendChild(inp));
+          jsDd.insertAdjacentHTML('beforeend',
+            '<p class="field-note">※「表示方法」の選択はCRAFT内プレビューにのみ適用されます（LIBRO+上での表示はLIBRO+側の既定動作になります）</p>');
           jsFields = [jsDd];
         }
         [...jsFields, modeDt, modeDd].forEach(el => form.appendChild(el));
