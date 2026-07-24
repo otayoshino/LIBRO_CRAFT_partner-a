@@ -93,11 +93,14 @@ import { showToast, updateStatus } from './ui-common.js';
                 let kotaeSd = {};
                 try { kotaeSd = JSON.parse(snap.savedData || '{}'); } catch (_) {}
                 renderButtonVisual(el, 'kotae', kotaeSd);
+                // renderButtonVisual の後に呼ぶ（子要素クリア後・is-sizedなしは早期return）
+                makeDaimonResizable(el);
               } else if (el.classList.contains('shomei-btn')) {
                 addShomeiClickHandler(el);
                 let shomeiSd = {};
                 try { shomeiSd = JSON.parse(snap.savedData || '{}'); } catch (_) {}
                 renderButtonVisual(el, 'shomei', shomeiSd);
+                makeDaimonResizable(el);
               } else {
                 // ann-object / ann-icon-obj / ann-image-obj
                 // savedData からラベル・種別アイコン・画像を再構築

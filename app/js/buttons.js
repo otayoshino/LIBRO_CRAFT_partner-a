@@ -48,7 +48,9 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} el - 大問ボタン要素
      */
     export function makeDaimonResizable(el) {
-      if (!el?.classList?.contains('daimon-btn')) return;
+      if (!el?.classList?.contains('daimon-btn') &&
+          !el?.classList?.contains('kotae-btn') &&
+          !el?.classList?.contains('shomei-btn')) return;
       if (el.dataset.libroToggle === '1') return;
       if (!el.classList.contains('is-sized')) return;
       const hasImage = el.dataset.btnHasImage === '1';
@@ -74,7 +76,9 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} el - 大問ボタン要素
      */
     export function applyDaimonImageAspect(el) {
-      if (!el?.classList?.contains('daimon-btn')) return;
+      if (!el?.classList?.contains('daimon-btn') &&
+          !el?.classList?.contains('kotae-btn') &&
+          !el?.classList?.contains('shomei-btn')) return;
       if (el.dataset.libroToggle === '1') return;
       if (!el.classList.contains('is-sized')) return;
       if (el.dataset.btnHasImage !== '1') return;
@@ -438,18 +442,24 @@ import { pushUndo } from './undo-redo.js';
       const minTop  = Math.min(...stickies.map(n => parseFloat(n.style.top)  || 0));
 
       const page = document.getElementById('pageLeft');
+      // 既定サイズは大問ボタンと同じLIBRO実データ基準（194×116 / ページ4960px幅）のページ相対値。
+      const { width: defW, height: defH } = getDaimonDefaultSizePx();
       const el = document.createElement('div');
-      el.className        = 'kotae-btn';
+      el.className        = 'kotae-btn is-sized';
       el.dataset.type     = 'kotae';
       el.dataset.id       = ++state.annIdCounter;
       el.dataset.kotaeId  = kid;
       el.dataset.savedData = JSON.stringify({ btnPreset: '1', btnScale: '1' });
       el.style.left       = minLeft + 'px';
-      el.style.top        = Math.max(0, minTop - 36) + 'px';
+      el.style.top        = Math.max(0, minTop - (defH + 4)) + 'px';
+      el.style.width      = defW + 'px';
+      el.style.height     = defH + 'px';
       renderButtonVisual(el, 'kotae', { btnPreset: '1', btnScale: '1' });
 
       addKotaeClickHandler(el);
       makeDraggable(el);
+      // renderButtonVisual() で子要素（ハンドル）が消えるため、その後に呼ぶ
+      makeDaimonResizable(el);
       el.dataset.page = state.currentPage;
       page.appendChild(el);
       // 答ボタン作成を Undo スタックに積む
@@ -544,18 +554,24 @@ import { pushUndo } from './undo-redo.js';
       const minTop  = Math.min(...stickies.map(n => parseFloat(n.style.top)  || 0));
 
       const page = document.getElementById('pageLeft');
+      // 既定サイズは大問ボタンと同じLIBRO実データ基準（194×116 / ページ4960px幅）のページ相対値。
+      const { width: defW, height: defH } = getDaimonDefaultSizePx();
       const el = document.createElement('div');
-      el.className        = 'shomei-btn';
+      el.className        = 'shomei-btn is-sized';
       el.dataset.type     = 'shomei';
       el.dataset.id       = ++state.annIdCounter;
       el.dataset.shomeiId = sid;
       el.dataset.savedData = JSON.stringify({ btnPreset: '2', btnScale: '1' });
       el.style.left       = minLeft + 'px';
-      el.style.top        = Math.max(0, minTop - 36) + 'px';
+      el.style.top        = Math.max(0, minTop - (defH + 4)) + 'px';
+      el.style.width      = defW + 'px';
+      el.style.height     = defH + 'px';
       renderButtonVisual(el, 'shomei', { btnPreset: '2', btnScale: '1' });
 
       addShomeiClickHandler(el);
       makeDraggable(el);
+      // renderButtonVisual() で子要素（ハンドル）が消えるため、その後に呼ぶ
+      makeDaimonResizable(el);
       el.dataset.page = state.currentPage;
       page.appendChild(el);
       // 証明ボタン作成を Undo スタックに積む

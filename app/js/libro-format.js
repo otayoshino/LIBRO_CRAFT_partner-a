@@ -1298,7 +1298,7 @@ async function rasterizeStickyOpenPng(pxWidth, pxHeight) {
  * @param {number} pxHeight
  * @returns {Promise<Uint8Array>}
  */
-async function rasterizeDaimonNormalPng(savedData, pxWidth, pxHeight) {
+async function rasterizeDaimonNormalPng(savedData, pxWidth, pxHeight, fallbackLabel = '大問') {
   const w = Math.max(1, Math.min(1200, pxWidth));
   const h = Math.max(1, Math.min(1200, pxHeight));
 
@@ -1316,7 +1316,7 @@ async function rasterizeDaimonNormalPng(savedData, pxWidth, pxHeight) {
   ctx.font = `bold ${Math.round(h * 0.45)}px 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const labelText = (savedData?.btnLabel || '').trim() || '大問';
+  const labelText = (savedData?.btnLabel || '').trim() || fallbackLabel;
   ctx.fillText(labelText, w / 2, h / 2 + 1);
 
   const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -1363,7 +1363,10 @@ async function rasterizeDaimonPressedPng(pxWidth, pxHeight) {
  *   annotJsonsは [closed(通常), open(押下)] の順。newPngWritesの扱いはconvertStickyGroupToLibroAnnots参照。
  */
 async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeight) {
-  const { closedId, openId, style, savedData, groupId, members } = daimonData;
+  const { closedId, openId, style, savedData, groupId, members, btnType = 'daimon' } = daimonData;
+  // 再インポート用メタ種別と、ラベル未設定時のPNG焼き込み文言を種別ごとに決める。
+  const BTN_META_FALLBACK_LABEL = { daimon: '大問', kotae: '答', shomei: '証明' };
+  const fallbackLabel = BTN_META_FALLBACK_LABEL[btnType] || '大問';
   const rect = styleToRect(style, pageWidth, pageHeight);
   const closedFile = libroMarkerFilename(closedId);
   const openFile    = libroMarkerFilename(openId);
@@ -1380,7 +1383,7 @@ async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeigh
       { action: 'Hide', targets: [closedId] },
       { action: 'Show', targets: [openId] },
     ],
-    [CRAFT_META_KEY]: { type: 'daimon', role: 'closed', 'group-id': groupId },
+    [CRAFT_META_KEY]: { type: btnType, role: 'closed', 'group-id': groupId },
   };
   const openAnnot = {
     filename: openFile,
@@ -1392,7 +1395,7 @@ async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeigh
       { action: 'Hide', targets: [openId] },
       { action: 'Show', targets: [closedId] },
     ],
-    [CRAFT_META_KEY]: { type: 'daimon', role: 'open', 'group-id': groupId },
+    [CRAFT_META_KEY]: { type: btnType, role: 'open', 'group-id': groupId },
   };
 
   const newPngWrites = [];
@@ -1403,7 +1406,7 @@ async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeigh
     const buf = new Uint8Array(await (await fetch(mediaBlobs[imageFile])).arrayBuffer());
     newPngWrites.push({ annot: closedAnnot, bytes: buf });
   } else {
-    const normalBytes = await rasterizeDaimonNormalPng(savedData, rect[2], rect[3]);
+    const normalBytes = await rasterizeDaimonNormalPng(savedData, rect[2], rect[3], fallbackLabel);
     newPngWrites.push({ annot: closedAnnot, bytes: normalBytes });
   }
   const pressedBytes = await rasterizeDaimonPressedPng(rect[2], rect[3]);

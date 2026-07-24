@@ -33,9 +33,14 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
                 // ただしページ座標系のサイズをインラインstyleで持つ大問ボタン
                 // （.is-sized＝LIBRO実データ基準で新規作成したもの／.libro-toggle＝LIBRO由来）は、
                 // 幅・高さも復元しないとCSS既定サイズへ潰れてしまうため除外する。
-                const isSizedDaimon = el.classList.contains('daimon-btn') &&
-                                      (el.classList.contains('is-sized') || el.classList.contains('libro-toggle'));
-                const isBtnClass = !isSizedDaimon &&
+                // ページ座標系サイズをインラインstyleで持つボタン（.is-sized＝新規作成・
+                // .libro-toggle＝LIBRO由来）は、大問/答/証明いずれも幅・高さも復元する
+                // （復元しないとCSS既定サイズへ潰れるため）。
+                const isSizedBtn = (el.classList.contains('daimon-btn') ||
+                                    el.classList.contains('kotae-btn')  ||
+                                    el.classList.contains('shomei-btn')) &&
+                                   (el.classList.contains('is-sized') || el.classList.contains('libro-toggle'));
+                const isBtnClass = !isSizedBtn &&
                                   (el.classList.contains('daimon-btn') ||
                                    el.classList.contains('kotae-btn')  ||
                                    el.classList.contains('shomei-btn'));
@@ -329,6 +334,8 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
       // 新規作成の大問ボタン（LIBRO由来でない）は、紐付き付箋のID解決後にまとめて
       // Hide/Showペアへ変換するため、ここでは要素だけを保持しdomAnnotationsには含めない
       const newDaimonButtons = [];
+      // 答ボタン（kotae）は大問ボタンと同一構造のため、同じくID解決後にまとめて変換する
+      const newKotaeButtons = [];
       elements.forEach(el => {
         const type = el.dataset.type;
         if (type === 'daimon' && el.dataset.libroToggle === '1') {
@@ -337,6 +344,10 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
         }
         if (type === 'daimon') {
           newDaimonButtons.push(el);
+          return;
+        }
+        if (type === 'kotae') {
+          newKotaeButtons.push(el);
           return;
         }
         // 動画は内部ファイル（annVideoSrc: '0'→toMovieBNR）とJ-stream指定（'2'→toMovie）のみ書き出し可能。
@@ -373,6 +384,10 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
       // LIBROのHide/Showペア（既存付箋は画像そのまま再利用、新規付箋は色から新規PNGを生成）に変換する
       const groupBuckets = new Map();
       page.querySelectorAll('.sticky-note').forEach(el => {
+        // 証明ボタン（shomei）紐付き付箋は、shomeiボタン自体がLIBRO+書き出し未対応のため
+        // 「開閉するボタンの無い付箋」を出力しないよう、暫定的に書き出しから除外する
+        // （解答は露出するが破損はしない。shomei正式対応時に本除外を撤去する）。
+        if (el.dataset.shomeiId) return;
         const gid = el.dataset.groupId || `__solo-${el.dataset.id}`;
         if (!groupBuckets.has(gid)) groupBuckets.set(gid, []);
         groupBuckets.get(gid).push(el);
@@ -474,6 +489,51 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
           savedData: sd,
           groupId: `daimon-${did}`,
           members,
+        });
+      });
+
+      // 答ボタン（kotae）：大問ボタンと同一構造（マスター＋紐付き付箋のHide/Showペア）のため、
+      // btnType:'kotae' を付けて大問ボタンと同じ変換パイプライン（domDaimonButtons）に載せる。
+      // daimon固有のlibro-toggle passthrough・hasShomeiLink除外は存在しないので単純化している。
+      newKotaeButtons.forEach(btn => {
+        const kid = btn.dataset.kotaeId;
+        const linkedStickies = kid ? [...document.querySelectorAll(`.sticky-note[data-kotae-id="${kid}"]`)] : [];
+        const members = linkedStickies.map(el => stickyIdsByEl.get(el)).filter(Boolean);
+        if (members.length === 0) {
+          unsupportedTypes.add(ANNOTATION_TYPE_CONFIG.kotae?.label || 'kotae');
+          return;
+        }
+
+        const left = parseFloat(btn.style.left) || 0;
+        const top  = parseFloat(btn.style.top)  || 0;
+        // 大問ボタンと同様、紐付き付箋が別ページにある等でボタンが非表示ページ（実寸0）に
+        // なっている場合に備え、一時的に非表示クラスを外して実寸を取得する。
+        const wasHiddenPage = btn.classList.contains('ann-hidden-page');
+        if (wasHiddenPage) btn.classList.remove('ann-hidden-page');
+        const width  = parseFloat(btn.style.width)  || btn.offsetWidth;
+        const height = parseFloat(btn.style.height) || btn.offsetHeight;
+        if (wasHiddenPage) btn.classList.add('ann-hidden-page');
+        const style = `left:${(left / pageRect.width) * 100}%;top:${(top / pageRect.height) * 100}%;` +
+                      `width:${(width / pageRect.width) * 100}%;height:${(height / pageRect.height) * 100}%;`;
+
+        // 通常時（closed・visible・大ID側）はdataset.idを再利用、押下時（open・hidden・小ID側）は
+        // 初回のみ発行してdatasetにキャッシュ（大問ボタンのdaimonPressedIdと同じ方式）。
+        const closedId = parseInt(btn.dataset.id, 10);
+        if (!btn.dataset.kotaePressedId) btn.dataset.kotaePressedId = String(++state.annIdCounter);
+        const openId = parseInt(btn.dataset.kotaePressedId, 10);
+
+        let sd = {};
+        try { sd = JSON.parse(btn.dataset.savedData || '{}'); } catch (_) {}
+
+        domDaimonButtons.push({
+          pageNum: parseInt(btn.dataset.page, 10) || 1,
+          closedId,
+          openId,
+          style,
+          savedData: sd,
+          groupId: `kotae-${kid}`,
+          members,
+          btnType: 'kotae',
         });
       });
 

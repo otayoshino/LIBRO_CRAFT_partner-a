@@ -2342,17 +2342,21 @@
        そのままフィットさせる（ネイティブの「自然サイズ表示」とは異なる）。
        サイズはJS側でインラインstyleにより明示的に指定されるため、height:autoは打ち消される。 */
     .daimon-btn.libro-toggle .btn-face,
-    .daimon-btn.is-sized .btn-face {
+    .daimon-btn.is-sized .btn-face,
+    .kotae-btn.is-sized .btn-face,
+    .shomei-btn.is-sized .btn-face {
       width: 100%;
       height: 100%;
       object-fit: fill;
     }
 
-    /* ページ座標系のサイズ（インラインstyleのwidth/height）を持つ大問ボタン。
+    /* ページ座標系のサイズ（インラインstyleのwidth/height）を持つ大問/答/証明ボタン。
        CSSの min-width はインラインwidthより優先されてしまうため、padding とあわせて打ち消す。
        文字サイズはこのルールでは指定せず、直下の .btn-label 側でボタン高さに追従させる
        （理由はそちらのコメント参照）。container-type はそのための問い合わせコンテナ宣言。 */
-    .daimon-btn.is-sized {
+    .daimon-btn.is-sized,
+    .kotae-btn.is-sized,
+    .shomei-btn.is-sized {
       min-width: 0;
       padding: 0;
       overflow: hidden;
@@ -2364,18 +2368,24 @@
     /* リサイズハンドル（.resize-handle）は要素の外側（-4px）に配置されるため、
        上の overflow: hidden のままではクリップされて掴めない。選択中のみ visible に戻す
        （.ann-image-obj.is-selected と同じ方針）。ラベルは通常サイズなら溢れない。 */
-    .daimon-btn.is-sized.is-selected {
+    .daimon-btn.is-sized.is-selected,
+    .kotae-btn.is-sized.is-selected,
+    .shomei-btn.is-sized.is-selected {
       overflow: visible;
     }
     /* ラベル文字はボタン自身の高さの45%（書き出しPNG rasterizeDaimonNormalPng と同じ係数）に追従させる。
        コンテナクエリ単位は「自分自身」のコンテナには解決せず、祖先コンテナ（無ければビューポート）
        基準になるため、.is-sized 自身ではなく子要素の .btn-label に指定しなければならない。 */
-    .daimon-btn.is-sized .btn-label {
+    .daimon-btn.is-sized .btn-label,
+    .kotae-btn.is-sized .btn-label,
+    .shomei-btn.is-sized .btn-label {
       font-size: 45cqh;
     }
     /* コンテナクエリ単位が使えない環境向けのフォールバック（継承される12pxだと極端にはみ出すため縮小） */
     @supports not (container-type: size) {
-      .daimon-btn.is-sized .btn-label { font-size: 8px; }
+      .daimon-btn.is-sized .btn-label,
+      .kotae-btn.is-sized .btn-label,
+      .shomei-btn.is-sized .btn-label { font-size: 8px; }
     }
 
     /* ページの描画モードカーソル */

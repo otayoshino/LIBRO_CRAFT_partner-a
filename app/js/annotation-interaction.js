@@ -197,11 +197,18 @@ import { pushUndo } from './undo-redo.js';
           btn.dataset.id        = ++state.annIdCounter;
           btn.dataset.type      = 'shomei';
           btn.dataset.shomeiId  = newShomeiId;
-          btn.className         = 'shomei-btn';
-          btn.textContent       = '証明';
-          btn.style.cssText     = `left:${newLeft}px; top:${newTop}px;`;
+          btn.dataset.savedData = snap.savedData || JSON.stringify({ btnPreset: '2', btnScale: '1' });
+          // 複製元のページ座標系サイズを保つ（is-sizedとして扱う）
+          btn.className         = 'shomei-btn is-sized';
+          btn.style.cssText     = `left:${newLeft}px; top:${newTop}px; width:${snap.width}px; height:${snap.height}px;`;
+          try {
+            renderButtonVisual(btn, 'shomei', JSON.parse(btn.dataset.savedData || '{}'));
+          } catch (_) {
+            renderButtonVisual(btn, 'shomei', { btnPreset: '2', btnScale: '1' });
+          }
           addShomeiClickHandler(btn);
           makeDraggable(btn);
+          makeDaimonResizable(btn);
           btn.dataset.page = state.currentPage;
           page.appendChild(btn);
           btn.classList.add('is-selected');
@@ -233,11 +240,18 @@ import { pushUndo } from './undo-redo.js';
           btn.dataset.id       = ++state.annIdCounter;
           btn.dataset.type     = 'kotae';
           btn.dataset.kotaeId  = newKotaeId;
-          btn.className        = 'kotae-btn';
-          btn.textContent      = '答';
-          btn.style.cssText    = `left:${newLeft}px; top:${newTop}px;`;
+          btn.dataset.savedData = snap.savedData || JSON.stringify({ btnPreset: '1', btnScale: '1' });
+          // 複製元のページ座標系サイズを保つ（is-sizedとして扱う）
+          btn.className        = 'kotae-btn is-sized';
+          btn.style.cssText    = `left:${newLeft}px; top:${newTop}px; width:${snap.width}px; height:${snap.height}px;`;
+          try {
+            renderButtonVisual(btn, 'kotae', JSON.parse(btn.dataset.savedData || '{}'));
+          } catch (_) {
+            renderButtonVisual(btn, 'kotae', { btnPreset: '1', btnScale: '1' });
+          }
           addKotaeClickHandler(btn);
           makeDraggable(btn);
+          makeDaimonResizable(btn);
           btn.dataset.page = state.currentPage;
           page.appendChild(btn);
           btn.classList.add('is-selected');
@@ -792,8 +806,13 @@ import { pushUndo } from './undo-redo.js';
         makeDaimonResizable(el);
       } else if (el.classList.contains('kotae-btn')) {
         addKotaeClickHandler(el);
+        makeDraggable(el);
+        // LIBRO由来／.is-sized なしは makeDaimonResizable 側で除外される
+        makeDaimonResizable(el);
       } else if (el.classList.contains('shomei-btn')) {
         addShomeiClickHandler(el);
+        makeDraggable(el);
+        makeDaimonResizable(el);
       } else if (el.dataset.type) {
         addAnnClickHandler(el);
         makeDraggable(el);
