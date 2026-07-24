@@ -437,6 +437,9 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
             const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
             desc = { closedId, openId, closedMode: 'color', openMode: 'transparent', color, style };
           }
+          // 「開削除」設定（3-2-4/3-2-5節でクラス反映済み）をLIBRO書き出し側へ伝える。
+          // .libro-toggle付箋は常にこのクラスが付かないため、既存書き出し（reuseモード）は無変更。
+          desc.openLocked = el.classList.contains('sticky-open-locked');
           stickyIdsByEl.set(el, { closedId, openId });
           return desc;
         });

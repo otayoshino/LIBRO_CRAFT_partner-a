@@ -1457,11 +1457,15 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, g
     const closedAnnot = {
       filename: closedFile,
       rect,
-      actions: [
+      // 「開削除」：閉側は自己クリックでの「開く」動作を許可しないため actions を持たせない。
+      // 「閉じる」動作（開側のactions）には影響しない。
+      actions: m.openLocked ? [] : [
         { action: 'Hide', targets: closedIds },
         { action: 'Show', targets: openIds },
       ],
-      [CRAFT_META_KEY]: { type: 'sticky', role: 'closed', 'group-id': groupId },
+      [CRAFT_META_KEY]: m.openLocked
+        ? { type: 'sticky', role: 'closed', 'group-id': groupId, 'open-locked': true }
+        : { type: 'sticky', role: 'closed', 'group-id': groupId },
     };
     const openAnnot = {
       filename: openFile,
@@ -1475,7 +1479,9 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, g
     };
 
     if (m.closedMode === 'color') {
-      const closedBytes = await rasterizeStickyClosedPng(m.color, rect[2], rect[3]);
+      // 「開削除」：選択色に関わらず閉側を紙色（白）で塗る。
+      const closedColor = m.openLocked ? '#ffffff' : m.color;
+      const closedBytes = await rasterizeStickyClosedPng(closedColor, rect[2], rect[3]);
       newPngWrites.push({ annot: closedAnnot, bytes: closedBytes });
     }
     if (m.openMode === 'transparent') {

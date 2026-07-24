@@ -106,7 +106,8 @@ import { pushUndo } from './undo-redo.js';
 
       buildCommonFields(document.getElementById('qcFormCommon'), type, prevData, null, el);
 
-      if (type !== 'sticky') {
+      const isLibroToggleSticky = type === 'sticky' && el.dataset.libroToggle === '1';
+      if (!isLibroToggleSticky) {
         buildSpecificFields(document.getElementById('qcFormSpecific'), type, prevData, el);
         document.getElementById('qcSepWrap').style.display = '';
       }
@@ -240,10 +241,8 @@ import { pushUndo } from './undo-redo.js';
 
       buildCommonFields(document.getElementById('qcFormCommon'), type, prevData, null);
 
-      if (type !== 'sticky') {
-        buildSpecificFields(document.getElementById('qcFormSpecific'), type, prevData);
-        document.getElementById('qcSepWrap').style.display = '';
-      }
+      buildSpecificFields(document.getElementById('qcFormSpecific'), type, prevData);
+      document.getElementById('qcSepWrap').style.display = '';
 
       // ポップアップをビューポート内に収まる位置に配置
       const pw   = popup.offsetWidth  || 310;
@@ -644,7 +643,15 @@ import { pushUndo } from './undo-redo.js';
       const dispType = savedData.annDisplayType || 'icon';
 
       if (type === 'sticky') {
-        // 付箋固有：フィールドなし（内容入力は不要）
+        // LIBRO由来の既存付箋（.libro-toggle）は閉側画像が元データ由来のため、
+        // 開閉方式の変更（閉側の白画像再生成）を提供しない（既存付箋カラー選択と同じ制約）。
+        if (existingEl?.dataset.libroToggle === '1') return;
+        const openMode = savedData.annStickyOpenMode || '0';
+        form.appendChild(_buildRadioDt('開閉方式'));
+        form.appendChild(_buildRadioDD('annStickyOpenMode', 'annStickyOpenModeRadio', openMode, [
+          { value: '0', label: '通常開閉' },
+          { value: '1', label: '開削除' },
+        ]));
         return;
       }
 
@@ -1614,6 +1621,9 @@ import { pushUndo } from './undo-redo.js';
             labelSpan.textContent = savedData.annLabel;
           }
           existingEl.dataset.savedData = JSON.stringify(savedData);
+          // 「開削除」設定をクラスへ反映（CSS側の紙色固定・マウス無反応の適用条件、
+          // およびLIBRO書き出し時のopenLocked判定に使う）
+          existingEl.classList.toggle('sticky-open-locked', savedData.annStickyOpenMode === '1');
           updateStatus();
         } else {
           // 新規作成：連続作成用に設定を保存
@@ -1625,6 +1635,7 @@ import { pushUndo } from './undo-redo.js';
           note.dataset.type      = 'sticky';
           note.dataset.savedData = JSON.stringify(savedData);
           note.style.cssText = `left:${x}px; top:${y}px; width:${w}px; height:${h}px; background:${color};`;
+          note.classList.toggle('sticky-open-locked', savedData.annStickyOpenMode === '1');
 
           // クリックハンドラを設定（コピー時の再利用のため関数化）
           addStickyClickHandler(note);

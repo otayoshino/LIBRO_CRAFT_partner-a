@@ -1369,6 +1369,15 @@
       opacity: 1;
     }
 
+    /* 「開削除」設定の付箋が閉状態のとき：紙色固定・マウス非反応(閲覧モードのみ)。
+       「開く」動作(閉→開)だけを禁止する。開状態からの「閉じる」動作には影響しない。
+       背景色は付箋のインラインstyle.backgroundより優先させる必要があるためbackgroundのみ!important。 */
+    .is-view-mode .sticky-note.sticky-open-locked.state-visible {
+      background: #ffffff !important;
+      cursor: default;
+      pointer-events: none;
+    }
+
     /* 解答が見えている状態：透明 */
     .sticky-note.state-hidden {
       opacity: 0;
