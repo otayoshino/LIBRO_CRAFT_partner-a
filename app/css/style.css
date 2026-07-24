@@ -95,16 +95,13 @@
       letter-spacing: 0.1em;
     }
 
-    /* 開発版バージョン表記（控えめ表示・閲覧モードでは非表示） */
+    /* 開発版バージョン表記（控えめ表示・編集/閲覧モード両方で常時表示） */
     .nav .blk.sidebar .sidebar-ver {
       margin-left: 8px;
       font-size: 9px;
       font-weight: 400;
       letter-spacing: normal;
       opacity: 0.55;
-    }
-    .is-view-mode .nav .blk.sidebar .sidebar-ver {
-      display: none;
     }
 
     /* ナビ内のコントロール群ラッパー */
