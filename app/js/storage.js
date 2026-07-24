@@ -443,6 +443,25 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
         domStickyGroups.push({ pageNum, members: memberDescs, groupId: gid });
       });
 
+      // 【追加要件②】daimon配下の付箋を共有する答ボタンをdaimonのHide/Showターゲットへ
+      // 連動メンバーとして加えるため、daimonループより前に「書き出し対象となる答ボタン」の
+      // closed/open idを先に確定し、kotaeId→{closedId,openId} の対応表を作る。
+      // ここでのid確定は後段の newKotaeButtons ループと同じ dataset.kotaePressedId を用いるため
+      // idの二重発行は起きない（未設定時のみ発行し、後段は再利用する）。対象条件（付箋メンバー
+      // 1件以上）も後段ループと一致させ、書き出されない答ボタンは対応表に載せない。
+      const kotaeIdsByKotaeId = new Map();
+      newKotaeButtons.forEach(btn => {
+        const kid = btn.dataset.kotaeId;
+        if (!kid) return;
+        const linkedStickies = [...document.querySelectorAll(`.sticky-note[data-kotae-id="${kid}"]`)];
+        const members = linkedStickies.map(el => stickyIdsByEl.get(el)).filter(Boolean);
+        if (members.length === 0) return;
+        const closedId = parseInt(btn.dataset.id, 10);
+        if (!btn.dataset.kotaePressedId) btn.dataset.kotaePressedId = String(++state.annIdCounter);
+        const openId = parseInt(btn.dataset.kotaePressedId, 10);
+        kotaeIdsByKotaeId.set(kid, { closedId, openId });
+      });
+
       // 新規作成の大問ボタン：紐付く付箋（新規・LIBRO由来いずれも）のclosed/open idを
       // stickyIdsByElから解決し、LIBROのHide/Showペア（4アクション形式）へ変換できる形に集約する。
       // 証明ボタンに紐付いた大問ボタンは、証明ボタン自体が書き出し未対応のため
@@ -457,6 +476,14 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
           unsupportedTypes.add(ANNOTATION_TYPE_CONFIG.daimon?.label || 'daimon');
           return;
         }
+        // 【追加要件②】daimon配下の付箋を共有する答ボタンも連動メンバーとして加える。
+        // これによりdaimonのHide/Showターゲットに答ボタンのclosed/open idが含まれ、
+        // LIBRO+でdaimon押下時に付箋と同時に答ボタン画像も同期する（付箋共有で自動検出）。
+        const linkedKotaeIds = new Set(linkedStickies.map(s => s.dataset.kotaeId).filter(Boolean));
+        linkedKotaeIds.forEach(kid => {
+          const km = kotaeIdsByKotaeId.get(kid);
+          if (km) members.push(km);
+        });
 
         const left   = parseFloat(btn.style.left)   || 0;
         const top    = parseFloat(btn.style.top)    || 0;

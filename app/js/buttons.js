@@ -222,7 +222,9 @@ import { pushUndo } from './undo-redo.js';
         return;
       }
 
-      if (btn.dataset.type !== 'daimon') return;
+      // プリセットモードの押下背景（グレーソリッド）は大問ボタンに加え答ボタンでも切り替える。
+      // 証明ボタンは白塗り⇔赤枠の独自表現のため対象外。
+      if (btn.dataset.type !== 'daimon' && btn.dataset.type !== 'kotae') return;
       if (isPressed) {
         btn.style.background = DAIMON_PRESSED_COLOR;
       } else {
@@ -408,6 +410,14 @@ import { pushUndo } from './undo-redo.js';
           }
         });
         swapButtonPressedImage(btn, allVisible);
+        // 配下の付箋を共有する答ボタンの押下背景も連動させる（付箋共有で自動検出）。
+        // targets（daimon配下の付箋）が持つ kotaeId から対応する答ボタンを引き、
+        // daimonと同じ allVisible 状態で押下背景を切り替える。
+        const linkedKotaeIds = new Set(targets.map(t => t.dataset.kotaeId).filter(Boolean));
+        linkedKotaeIds.forEach(kid => {
+          const kbtn = document.querySelector(`.kotae-btn[data-kotae-id="${kid}"]`);
+          if (kbtn) swapButtonPressedImage(kbtn, allVisible);
+        });
         updateStatus();
       });
     }
