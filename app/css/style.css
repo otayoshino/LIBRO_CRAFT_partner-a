@@ -303,6 +303,26 @@
       overflow-y: auto;
       overflow-x: hidden;
       scrollbar-gutter: stable;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+    }
+    .side.authoring:hover {
+      scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+    }
+
+    /* Chrome / Edge / Safari 用：スクロールバーを細く、背景に馴染む半透明にする */
+    .side.authoring::-webkit-scrollbar {
+      width: 6px;
+    }
+    .side.authoring::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .side.authoring::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 3px;
+    }
+    .side.authoring:hover::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.35);
     }
 
     .side.authoring .inner {
