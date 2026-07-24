@@ -650,7 +650,7 @@ import { pushUndo } from './undo-redo.js';
         form.appendChild(_buildRadioDt('開閉方式'));
         form.appendChild(_buildRadioDD('annStickyOpenMode', 'annStickyOpenModeRadio', openMode, [
           { value: '0', label: '通常開閉' },
-          { value: '1', label: '開削除' },
+          { value: '1', label: '表示ボタン削除' },
         ]));
         return;
       }
