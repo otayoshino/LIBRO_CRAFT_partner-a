@@ -120,6 +120,10 @@ import { pushUndo } from './undo-redo.js';
           // btnLabel を渡さないと、プリセット等を触った瞬間にプレビューのテキストが既定文言へ戻る
           const label  = document.getElementById('btnLabel')?.value;
           renderButtonVisual(el, type, { btnPreset: preset, btnScale: scale, btnImageFile: image, btnLabel: label });
+          // renderButtonVisual() は el.textContent = '' で子要素（＝リサイズハンドル）を全削除するため、
+          // プレビューのたびに再付与する。これが無いと、編集ポップアップで値を変更したあと
+          // キャンセルした場合にハンドルが失われたまま復帰しない。
+          makeDaimonResizable(el);
         };
         ['btnPreset', 'btnScale', 'btnImageFile'].forEach(id => {
           const fieldEl = document.getElementById(id);
