@@ -1369,11 +1369,18 @@
       opacity: 1;
     }
 
-    /* 「開削除」設定の付箋が閉状態のとき：紙色固定・マウス非反応(閲覧モードのみ)。
-       「開く」動作(閉→開)だけを禁止する。開状態からの「閉じる」動作には影響しない。
+    /* 「開削除」設定の付箋：閉状態は編集・閲覧モード問わず紙色(白)固定で表示する
+       (作成者が編集モードでも設定を判別できるように)。
        背景色は付箋のインラインstyle.backgroundより優先させる必要があるためbackgroundのみ!important。 */
-    .is-view-mode .sticky-note.sticky-open-locked.state-visible {
+    .sticky-note.sticky-open-locked.state-visible {
       background: #ffffff !important;
+    }
+
+    /* 閲覧モードのみ：紙色固定であることを示す破線枠を表示し、マウス操作を無効化する。
+       「開く」動作(閉→開)だけを禁止する。開状態からの「閉じる」動作には影響しない。 */
+    .is-view-mode .sticky-note.sticky-open-locked.state-visible {
+      outline: dashed rgba(0,0,0,0.3);
+      outline-width: calc(1px * var(--zoom-inv-scale, 1));
       cursor: default;
       pointer-events: none;
     }
