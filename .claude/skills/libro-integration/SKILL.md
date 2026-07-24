@@ -10,7 +10,7 @@ description: LIBRO の book フォルダ形式（index.json / p####.json / 暗�
 ## 実装状況
 
 - **インポート**（`parseLibroBookZip`）：既知・未知を問わず全アノテーションを読み込み、既知種別は編集可能なDOMオブジェクトへ、未知アノテーション・大問ボタンのHide/Showペアは編集不可のpassthroughデータとして保持する。
-- **エクスポート**（`buildLibroBookExport` / `convertAnnotationToLibroAnnot`）：`pagelink`（`GoTo`+`FitPage`）・`externallink`（`URI`）・`audio`（`Launch`）・`plusfile`（`URI`の`toAppendix(...)`）の4種別、および`video`のうち内部ファイル指定（`annVideoSrc: '0'`→`toMovieBNR("ファイル名",表示モード)`）とJ-stream指定（`annVideoSrc: '2'`・`annJstreamDir`/`annJstreamCorpId`/`annJstreamVideoId`→`toMovie("dir","base64(企業ID)","base64(難読化ID)")`）はLIBRO actionへ変換して書き出せる。`video`の外部タグ指定（`annVideoSrc: '1'`）・`kotae` / `shomei`は変換ロジックが無く、新規作成分は書き出し時に失われる。
+- **エクスポート**（`buildLibroBookExport` / `convertAnnotationToLibroAnnot`）：`pagelink`（`GoTo`+`FitPage`）・`externallink`（`URI`）・`audio`（`Launch`）・`plusfile`（`URI`の`toAppendix(...)`）の4種別、および`video`のうち内部ファイル指定（`annVideoSrc: '0'`→`toMovieBNR("ファイル名",表示モード)`）とJ-stream指定（`annVideoSrc: '2'`・`annJstreamDir`/`annJstreamCorpId`/`annJstreamVideoId`/`annShowMode`→`toMovie("dir","企業ID","難読化ID",表示モード)`、企業ID・難読化IDは入力値をそのまま書き出し、表示モードは0=ページ内（モーダル）／1=別タブの数値）はLIBRO actionへ変換して書き出せる。`video`の外部タグ指定（`annVideoSrc: '1'`）・`kotae` / `shomei`は変換ロジックが無く、新規作成分は書き出し時に失われる。
 - **付箋グループ**（`convertStickyGroupToLibroAnnots`）：Hide/Showトグルペアとして書き出し対応済み。`libro-craft-meta`（独自メタデータ、`CRAFT_META_KEY`）に `role`/`group-id` を埋め込み再インポート時にグループ復元する。
 - **大問ボタン**（`daimon`）：位置編集・削除をしていない場合に限り、読込時の生データをそのまま書き戻すpassthrough方式で消失を防いでいる（位置編集した場合は反映されない既知の制約）。
 - **拡張トグルネットワーク**（色分けボタン・ステップボタン等、1:1トグルや大問ボタンの形状に収まらない、3要素以上が絡むHide/Show構造）：`.libro-network-slot`（`.libro-network-frame`を内部に持つ）として認識・再表示し、位置・サイズ編集のみ対応する（`convertPageAnnotations`内の余剰target判定→`expandNetworkClosure`によるBFS閉包検出、`renderNetworkGroups`で描画）。閲覧モードのクリック連動は各フレームが保持する元の`actions[]`をそのまま再生する汎用インタプリタ方式。選択・削除・Undo・編集ダイアログ・内容編集（フレーム追加削除・画像差し替え）・新規作成は未対応。書き出しは`state.libroNetworkPassthrough`から編集後のrectのみ上書きしたpassthroughで行う。
@@ -46,7 +46,7 @@ description: LIBRO の book フォルダ形式（index.json / p####.json / 暗�
 | 関数 | 用途 | 対応状況 |
 |---|---|---|
 | `toAppendix(フォルダ名, 表示モード)` | Plusファイル | `plusfile`としてインポート/エクスポート対応済み |
-| `toMovie(...)` / `toMovieBNR(...)` | 動画再生（`toMovie`＝J-stream 3引数（ディレクトリ, base64(企業ID), base64(難読化ID)）、`toMovieBNR`＝内部ファイル（ファイル名, 表示モード）） | `video`としてインポート/エクスポート対応済み。`toMovie`はJ-stream指定（`annVideoSrc: '2'`、平文3フィールド）、`toMovieBNR`は内部ファイル指定（`annVideoSrc: '0'`、`annFile`/`annShowMode`）として編集可能。引数構成が想定外の場合は生文字列のまま保持・無変更で書き戻す |
+| `toMovie(...)` / `toMovieBNR(...)` | 動画再生（`toMovie`＝J-stream 4引数（ディレクトリ, 企業ID, 難読化ID（いずれもエンコードせず値をそのまま扱う）, 表示モード（数値・引用符なし、0=ページ内（モーダル）／1=別タブ））、3引数（表示モード省略）も読み込みは可、`toMovieBNR`＝内部ファイル（ファイル名, 表示モード）） | `video`としてインポート/エクスポート対応済み。`toMovie`はJ-stream指定（`annVideoSrc: '2'`、3フィールド＋`annShowMode`）、`toMovieBNR`は内部ファイル指定（`annVideoSrc: '0'`、`annFile`/`annShowMode`）として編集可能。引数構成が想定外の場合は生文字列のまま保持・無変更で書き戻す |
 | `toFlashcard(...)` | フラッシュカード | LIBRO CRAFTでは作成不可な機能のため対象外（外部リンクとして保持されるのみ） |
 | `toListening(...)` | カラオケボタン（音声同期ハイライト） | 同上、対象外 |
 
