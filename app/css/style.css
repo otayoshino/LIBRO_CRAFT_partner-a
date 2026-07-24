@@ -1376,11 +1376,14 @@
       background: #ffffff !important;
     }
 
-    /* 閲覧モードのみ：紙色固定であることを示す破線枠を表示し、マウス操作を無効化する。
-       「開く」動作(閉→開)だけを禁止する。開状態からの「閉じる」動作には影響しない。 */
-    .is-view-mode .sticky-note.sticky-open-locked.state-visible {
+    /* 編集モード：破線枠で「開削除」設定であることを視認できるようにする。 */
+    body:not(.is-view-mode) .sticky-note.sticky-open-locked.state-visible {
       outline: dashed rgba(0,0,0,0.3);
       outline-width: calc(1px * var(--zoom-inv-scale, 1));
+    }
+
+    /* 閲覧モード：「開く」動作(閉→開)だけを禁止する。開状態からの「閉じる」動作には影響しない。 */
+    .is-view-mode .sticky-note.sticky-open-locked.state-visible {
       cursor: default;
       pointer-events: none;
     }
