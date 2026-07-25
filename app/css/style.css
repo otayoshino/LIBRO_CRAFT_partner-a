@@ -132,7 +132,8 @@
     .nav .blk.settings-group::after,
     .nav .blk.index-edit-group::after,
     .nav .blk.scale::after,
-    .nav .blk.fit-group::after {
+    .nav .blk.fit-group::after,
+    .nav .blk.detail-group::after {
       content: '';
       position: absolute;
       right: 0;
@@ -258,6 +259,61 @@
 
     .fit-btn:hover {
       background: rgba(255,255,255,0.2);
+    }
+
+    /* ============================
+       詳細設定・整列ブロック（header直接入力方式。旧ドロップダウン方式から変更）
+    ============================ */
+    .hdr-inline {
+      display: flex;
+      align-items: center;
+      height: 100%;
+    }
+
+    /* headerへ移植したフォームでは「位置」「変形」「塗り」ラベルと見出し（「付箋設定」等）を
+       非表示にする。ラベルの出力元（静的HTML／buildCommonFields／_renderGrayedPanelの3箇所）は
+       いずれも .side-detail-form dl dt にテキストを出力するため、CSSで一括非表示にする。
+       見出し（.side-detail-title）はnav高さ(38px)に収まらないため合わせて非表示にする（5-3節③）。
+       ダブルクリック編集ポップアップ（.quick-popup、hdr-inlineクラスを持たない）には
+       これらの非表示は適用されない。 */
+    .hdr-inline .side-detail-title {
+      display: none;
+    }
+    .hdr-inline .side-detail-form {
+      margin-bottom: 0;
+    }
+    .hdr-inline .side-detail-form dl {
+      flex-wrap: nowrap;
+      gap: 0 10px;
+    }
+    .hdr-inline .side-detail-form dl dt {
+      display: none;
+    }
+    .hdr-inline .side-detail-form dl dd {
+      width: auto;
+    }
+    .hdr-inline .side-detail-form .pos-field {
+      flex: none;
+    }
+    .hdr-inline .side-detail-form .pos-field .d-input-sm {
+      width: 46px !important;
+    }
+    .hdr-inline .side-detail-form .color-row {
+      padding-left: 0;
+    }
+    .hdr-inline .side-detail-form .d-select-wrap {
+      width: 84px;
+    }
+
+    /* 整列ブロック：縦2段（水平／垂直）を横1段にまとめてnav高さ(38px)に収める（5-3節④） */
+    .hdr-inline .align-panel {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0;
+    }
+    .hdr-inline .align-row {
+      margin-bottom: 0;
     }
 
     /* アクションブロック */
@@ -1321,6 +1377,11 @@
 
     /* オーサリングパネルを非表示 */
     .is-view-mode #authoringPanels { display: none; }
+
+    /* header移植分の詳細設定・整列ブロックも編集モード専用機能のため閲覧モードでは非表示にする
+       （移植前は #authoringPanels の一部として上記ルールで非表示になっていた） */
+    .is-view-mode .blk.detail-group,
+    .is-view-mode .blk.align-group { display: none; }
 
     /* 削除ボタンを非表示 */
     .is-view-mode .ann-delete-btn,

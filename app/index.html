@@ -91,6 +91,102 @@
         </button>
       </div>
 
+      <!-- 詳細設定ブロック（header直接入力方式。旧ドロップダウン方式から変更） -->
+      <div class="blk detail-group">
+        <div class="hdr-inline" id="accDetail">
+        <div id="sideDetailPanel">
+          <!-- デフォルト：グレーアウト展示の付箋フォーム -->
+          <div id="sideDetailEmpty">
+            <div class="side-detail-grayed">
+              <p class="side-detail-title">付箋設定</p>
+              <div class="side-detail-form">
+                <dl>
+                  <dt>位置</dt>
+                  <dd>
+                    <div class="pos-row">
+                      <span>X</span><div class="pos-field"><div class="spin-btns"><button class="spin-btn spin-up" disabled>▲</button><button class="spin-btn spin-down" disabled>▼</button></div><input class="d-input d-input-sm" type="number" disabled value="0"></div>
+                      <span>Y</span><div class="pos-field"><div class="spin-btns"><button class="spin-btn spin-up" disabled>▲</button><button class="spin-btn spin-down" disabled>▼</button></div><input class="d-input d-input-sm" type="number" disabled value="0"></div>
+                    </div>
+                  </dd>
+                  <dt>変形</dt>
+                  <dd>
+                    <div class="pos-row">
+                      <span>W</span><div class="pos-field"><div class="spin-btns"><button class="spin-btn spin-up" disabled>▲</button><button class="spin-btn spin-down" disabled>▼</button></div><input class="d-input d-input-sm" type="number" disabled value="0"></div>
+                      <span>H</span><div class="pos-field"><div class="spin-btns"><button class="spin-btn spin-up" disabled>▲</button><button class="spin-btn spin-down" disabled>▼</button></div><input class="d-input d-input-sm" type="number" disabled value="0"></div>
+                    </div>
+                  </dd>
+                  <dt>塗り</dt>
+                  <dd class="color-row">
+                    <div class="d-select-wrap">
+                      <select class="d-select" disabled><option>黄（標準）</option></select>
+                    </div>
+                  </dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+          <!-- アクティブ時 -->
+          <div id="sideDetailActive" style="display:none">
+            <p class="side-detail-title" id="dialogTitle"></p>
+            <!-- 共通セクション：位置・W・H・塗色（常時表示） -->
+            <div class="side-detail-form" id="sideDetailCommonWrap">
+              <dl id="dialogFormCommon"></dl>
+            </div>
+            <!-- セパレータ -->
+            <div class="detail-section-sep" id="detailSectionSep" style="display:none">
+              <span>種別設定</span>
+            </div>
+            <!-- 種別固有セクション（オブジェクト選択時のみ表示） -->
+            <div class="side-detail-form" id="sideDetailSpecificWrap" style="display:none">
+              <dl id="dialogFormSpecific"></dl>
+            </div>
+            <div class="side-detail-footer">
+              <!-- JS参照用に非表示で残す（削除するとquerySelectorがnullエラーになる） -->
+              <button class="dialog-btn delete-btn" style="display:none"></button>
+              <button class="dialog-btn cancel" style="display:none"></button>
+              <button class="dialog-btn ok"     style="display:none"></button>
+            </div>
+          </div>
+        </div><!-- /#sideDetailPanel -->
+        </div><!-- /#accDetail -->
+      </div><!-- /.blk.detail-group -->
+
+      <!-- 整列ブロック（header直接入力方式。旧ドロップダウン方式から変更） -->
+      <div class="blk align-group">
+        <div class="hdr-inline" id="accAlign">
+        <div id="alignPanel" class="align-panel is-disabled">
+          <div class="align-row">
+            <span class="align-row-label">水平</span>
+            <div class="align-btns">
+              <button class="align-btn" onclick="alignObjects('left')" title="水平左揃え">
+                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-left"></use></svg>
+              </button>
+              <button class="align-btn" onclick="alignObjects('centerH')" title="水平中央揃え">
+                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-centerH"></use></svg>
+              </button>
+              <button class="align-btn" onclick="alignObjects('right')" title="水平右揃え">
+                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-right"></use></svg>
+              </button>
+            </div>
+          </div>
+          <div class="align-row">
+            <span class="align-row-label">垂直</span>
+            <div class="align-btns">
+              <button class="align-btn" onclick="alignObjects('top')" title="垂直上揃え">
+                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-top"></use></svg>
+              </button>
+              <button class="align-btn" onclick="alignObjects('centerV')" title="垂直中央揃え">
+                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-centerV"></use></svg>
+              </button>
+              <button class="align-btn" onclick="alignObjects('bottom')" title="垂直下揃え">
+                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-bottom"></use></svg>
+              </button>
+            </div>
+          </div>
+        </div><!-- /#alignPanel -->
+        </div><!-- /#accAlign -->
+      </div><!-- /.blk.align-group -->
+
     </div><!-- /.nav-inner -->
 
     <!-- アクションブロック -->
@@ -241,110 +337,6 @@
           </ul>
         </div><!-- /.panel -->
         </div><!-- /#accStickyOps -->
-
-        <!-- 詳細設定パネル -->
-        <hr class="panel-sep">
-        <button class="panel-title is-accordion" onclick="toggleAcc('accDetail',this)">
-          <svg width="11" height="11"><use href="icons/sprite.svg#icon-edit"></use></svg>
-          詳細設定
-          <svg class="acc-chevron" width="12" height="12"><use href="icons/sprite.svg#icon-chevron-down"></use></svg>
-        </button>
-        <div class="acc-body" id="accDetail">
-        <div id="sideDetailPanel">
-          <!-- デフォルト：グレーアウト展示の付箋フォーム -->
-          <div id="sideDetailEmpty">
-            <div class="side-detail-grayed">
-              <p class="side-detail-title">付箋設定</p>
-              <div class="side-detail-form">
-                <dl>
-                  <dt>位置</dt>
-                  <dd>
-                    <div class="pos-row">
-                      <span>X</span><div class="pos-field"><div class="spin-btns"><button class="spin-btn spin-up" disabled>▲</button><button class="spin-btn spin-down" disabled>▼</button></div><input class="d-input d-input-sm" type="number" disabled value="0"></div>
-                      <span>Y</span><div class="pos-field"><div class="spin-btns"><button class="spin-btn spin-up" disabled>▲</button><button class="spin-btn spin-down" disabled>▼</button></div><input class="d-input d-input-sm" type="number" disabled value="0"></div>
-                    </div>
-                  </dd>
-                  <dt>変形</dt>
-                  <dd>
-                    <div class="pos-row">
-                      <span>W</span><div class="pos-field"><div class="spin-btns"><button class="spin-btn spin-up" disabled>▲</button><button class="spin-btn spin-down" disabled>▼</button></div><input class="d-input d-input-sm" type="number" disabled value="0"></div>
-                      <span>H</span><div class="pos-field"><div class="spin-btns"><button class="spin-btn spin-up" disabled>▲</button><button class="spin-btn spin-down" disabled>▼</button></div><input class="d-input d-input-sm" type="number" disabled value="0"></div>
-                    </div>
-                  </dd>
-                  <dt>塗り</dt>
-                  <dd class="color-row">
-                    <div class="d-select-wrap">
-                      <select class="d-select" disabled><option>黄（標準）</option></select>
-                    </div>
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-          <!-- アクティブ時 -->
-          <div id="sideDetailActive" style="display:none">
-            <p class="side-detail-title" id="dialogTitle"></p>
-            <!-- 共通セクション：位置・W・H・塗色（常時表示） -->
-            <div class="side-detail-form" id="sideDetailCommonWrap">
-              <dl id="dialogFormCommon"></dl>
-            </div>
-            <!-- セパレータ -->
-            <div class="detail-section-sep" id="detailSectionSep" style="display:none">
-              <span>種別設定</span>
-            </div>
-            <!-- 種別固有セクション（オブジェクト選択時のみ表示） -->
-            <div class="side-detail-form" id="sideDetailSpecificWrap" style="display:none">
-              <dl id="dialogFormSpecific"></dl>
-            </div>
-            <div class="side-detail-footer">
-              <!-- JS参照用に非表示で残す（削除するとquerySelectorがnullエラーになる） -->
-              <button class="dialog-btn delete-btn" style="display:none"></button>
-              <button class="dialog-btn cancel" style="display:none"></button>
-              <button class="dialog-btn ok"     style="display:none"></button>
-            </div>
-          </div>
-        </div><!-- /#sideDetailPanel -->
-        </div><!-- /#accDetail -->
-
-        <!-- 整列パネル -->
-        <hr class="panel-sep">
-        <button class="panel-title is-accordion" onclick="toggleAcc('accAlign',this)">
-          <svg width="11" height="11"><use href="icons/sprite.svg#icon-align-header"></use></svg>
-          整列
-          <svg class="acc-chevron" width="12" height="12"><use href="icons/sprite.svg#icon-chevron-down"></use></svg>
-        </button>
-        <div class="acc-body" id="accAlign">
-        <div id="alignPanel" class="align-panel is-disabled">
-          <div class="align-row">
-            <span class="align-row-label">水平</span>
-            <div class="align-btns">
-              <button class="align-btn" onclick="alignObjects('left')" title="水平左揃え">
-                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-left"></use></svg>
-              </button>
-              <button class="align-btn" onclick="alignObjects('centerH')" title="水平中央揃え">
-                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-centerH"></use></svg>
-              </button>
-              <button class="align-btn" onclick="alignObjects('right')" title="水平右揃え">
-                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-right"></use></svg>
-              </button>
-            </div>
-          </div>
-          <div class="align-row">
-            <span class="align-row-label">垂直</span>
-            <div class="align-btns">
-              <button class="align-btn" onclick="alignObjects('top')" title="垂直上揃え">
-                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-top"></use></svg>
-              </button>
-              <button class="align-btn" onclick="alignObjects('centerV')" title="垂直中央揃え">
-                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-centerV"></use></svg>
-              </button>
-              <button class="align-btn" onclick="alignObjects('bottom')" title="垂直下揃え">
-                <svg width="22" height="19"><use href="icons/sprite.svg#icon-align-bottom"></use></svg>
-              </button>
-            </div>
-          </div>
-        </div><!-- /#alignPanel -->
-        </div><!-- /#accAlign -->
 
         </div><!-- /#authoringPanels -->
 
