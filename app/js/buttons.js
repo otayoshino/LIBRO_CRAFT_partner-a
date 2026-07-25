@@ -245,6 +245,11 @@ import { pushUndo } from './undo-redo.js';
       document.querySelectorAll('.daimon-btn, .kotae-btn, .shomei-btn').forEach(btn => {
         swapButtonPressedImage(btn, false);
       });
+      // daimonの開閉状態（dataset.daimonOpen）も編集モード再入場時にリセットする。
+      // 次に閲覧モードへ入ったときの初回押下が必ず「全て開く」から始まるようにするため。
+      document.querySelectorAll('.daimon-btn').forEach(btn => {
+        delete btn.dataset.daimonOpen;
+      });
     }
 
 
@@ -347,14 +352,24 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} btn - 大問ボタン要素
      */
     export function addDaimonClickHandler(btn) {
+      // reinitElement()（Undo/Redoによるプロパティ変更の復元、annotation-interaction.js）は
+      // 新規クローン要素だけでなく「作成時にすでにこのリスナーが登録済みの既存要素」に対しても
+      // 呼ばれることがある。addEventListener は同一要素に対して呼ぶたびリスナーを追加登録してしまい、
+      // 解除されないまま2重に発火すると一括開閉の判定が自己干渉して壊れるため、
+      // 再呼び出し時は前回登録したリスナーを解除してから登録し直す（初回呼び出し時は何もしない）。
+      if (btn._daimonDblclickHandler) btn.removeEventListener('dblclick', btn._daimonDblclickHandler);
+      if (btn._daimonClickHandler)    btn.removeEventListener('click',    btn._daimonClickHandler);
+
       // ダブルクリック：編集モード時にスタイル編集ポップアップを開く
-      btn.addEventListener('dblclick', (e) => {
+      btn._daimonDblclickHandler = (e) => {
         if (document.body.classList.contains('is-view-mode')) return;
         e.preventDefault();
         e.stopPropagation();
         openEditPopup(btn);
-      });
-      btn.addEventListener('click', (e) => {
+      };
+      btn.addEventListener('dblclick', btn._daimonDblclickHandler);
+
+      btn._daimonClickHandler = (e) => {
         if (!document.body.classList.contains('is-view-mode')) {
           // 編集モード：選択処理
           if (e.shiftKey) {
@@ -379,18 +394,16 @@ import { pushUndo } from './undo-redo.js';
           ...document.querySelectorAll(`.sticky-note[data-daimon-id="${did}"]`),
         ];
         if (targets.length === 0) return;
-        // 全オブジェクトが「開いている状態」かを判定
-        // 証明ボタン管理の付箋は shomeiOutline で、それ以外は state-hidden で判断する
-        const allVisible = targets.every(t => {
-          if (t.classList.contains('sticky-note') && t.dataset.shomeiId) {
-            return t.dataset.shomeiOutline !== '1';
-          }
-          return !t.classList.contains('state-hidden');
-        });
+        // daimon自身の開閉状態（dataset.daimonOpen）を基準に判定する。
+        // 配下付箋の個別開閉状態（state-hidden/state-visible等）は判定に使わない
+        // ＝個別操作で一部だけ開いた/閉じた状態でも、daimon側の前回状態だけで次の一括開閉を決める。
+        // 未設定（初回押下）は「閉」扱い：新規作成時・switchToEditMode()での編集モード再入場時に
+        // 付箋がstate-visible（閉）へリセットされる（resetAllButtonPressedImages()でdaimonOpenも削除）のに合わせている。
+        const allOpen = btn.dataset.daimonOpen === '1';
         targets.forEach(t => {
           if (t.classList.contains('sticky-note') && t.dataset.shomeiId) {
             // 証明ボタン管理の付箋：白塗り（開）⇔ 赤枠のみ（閉）を再現する
-            if (allVisible) {
+            if (allOpen) {
               // 閉じる：赤枠のみ表示
               t.style.background = 'transparent';
               t.style.outline    = '2px solid rgb(255,0,0)';
@@ -405,21 +418,24 @@ import { pushUndo } from './undo-redo.js';
             t.classList.add('state-visible');
             t.classList.remove('state-hidden');
           } else {
-            t.classList.toggle('state-visible', !allVisible);
-            t.classList.toggle('state-hidden',   allVisible);
+            t.classList.toggle('state-visible', allOpen);
+            t.classList.toggle('state-hidden',  !allOpen);
           }
         });
-        swapButtonPressedImage(btn, allVisible);
+        // daimon自身の新しい開閉状態を保存（次回押下時の判定基準にする）
+        btn.dataset.daimonOpen = allOpen ? '0' : '1';
+        swapButtonPressedImage(btn, !allOpen);
         // 配下の付箋を共有する答ボタンの押下背景も連動させる（付箋共有で自動検出）。
         // targets（daimon配下の付箋）が持つ kotaeId から対応する答ボタンを引き、
-        // daimonと同じ allVisible 状態で押下背景を切り替える。
+        // daimonと同じ状態（押下後に全員開＝グレー）で押下背景を切り替える。
         const linkedKotaeIds = new Set(targets.map(t => t.dataset.kotaeId).filter(Boolean));
         linkedKotaeIds.forEach(kid => {
           const kbtn = document.querySelector(`.kotae-btn[data-kotae-id="${kid}"]`);
-          if (kbtn) swapButtonPressedImage(kbtn, allVisible);
+          if (kbtn) swapButtonPressedImage(kbtn, !allOpen);
         });
         updateStatus();
-      });
+      };
+      btn.addEventListener('click', btn._daimonClickHandler);
     }
 
 
