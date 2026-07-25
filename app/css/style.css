@@ -41,7 +41,7 @@
       display: flex;
       align-items: center;
       height: 38px;
-      background: #647cc0;
+      background: #353c47;
       color: #fff;
       flex-shrink: 0;
       user-select: none;
@@ -68,7 +68,7 @@
       height: 26px;
       align-items: center;
       justify-content: center;
-      background: #647cc0;
+      background: #353c47;
       color: #fff;
       border-radius: 0 0 0 6px;
       cursor: pointer;
@@ -87,7 +87,7 @@
       justify-content: center;
       width: 270px;
       height: 100%;
-      background: #576ba6;
+      background: #353c47;
       border-right: 1px solid rgba(255,255,255,0.2);
       flex-shrink: 0;
       font-size: 13px;
@@ -125,7 +125,7 @@
 
     /* ページブロック背景をナビバーと同色に */
     .nav .blk.page-nav {
-      background: #647cc0;
+      background: #353c47;
     }
 
     /* ブロック区切り線 */
@@ -163,7 +163,7 @@
 
     .nav-btn.selected {
       background: #fff;
-      color: #7489c6;
+      color: #353c47;
     }
 
     .nav-btn.disabled {
@@ -188,9 +188,9 @@
       width: 40px;
       height: 26px;
       border-radius: 4px;
-      background: #6982c9;
+      background: #fff;
       border: none;
-      color: #fff;
+      color: #353c47;
       text-align: center;
       font-size: 13px;
       font-weight: 700;
@@ -208,7 +208,7 @@
     }
 
     .nav .grp.direct .input:focus {
-      outline: 2px solid rgba(255,255,255,0.6);
+      outline: 2px solid #6898d8;
     }
 
     /* 見開きページ表示中バッジ（real-page-count超過ページで表示） */
@@ -253,7 +253,7 @@
 
     .fit-btn.selected {
       background: #fff;
-      color: #7489c6;
+      color: #353c47;
     }
 
     .fit-btn:hover {
