@@ -46,7 +46,7 @@
       flex-shrink: 0;
       user-select: none;
       position: relative;
-      z-index: 10;
+      z-index: 40;
       overflow: visible;
       transition: height 0.2s ease;
     }
