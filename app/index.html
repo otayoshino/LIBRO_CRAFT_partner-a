@@ -91,9 +91,12 @@
         </button>
       </div>
 
-      <!-- 詳細設定ブロック（header直接入力方式。旧ドロップダウン方式から変更） -->
+      <!-- 詳細設定ブロック（1920px以上はheader直接入力、未満はドロップダウンに自動切替） -->
       <div class="blk detail-group">
-        <div class="hdr-inline" id="accDetail">
+        <button class="nav-btn" data-tip="詳細設定" onclick="toggleAcc('accDetail',this)">
+          <svg width="11" height="11"><use href="icons/sprite.svg#icon-edit"></use></svg>
+        </button>
+        <div class="hdr-inline is-closed" id="accDetail">
         <div id="sideDetailPanel">
           <!-- デフォルト：グレーアウト展示の付箋フォーム -->
           <div id="sideDetailEmpty">
@@ -151,9 +154,12 @@
         </div><!-- /#accDetail -->
       </div><!-- /.blk.detail-group -->
 
-      <!-- 整列ブロック（header直接入力方式。旧ドロップダウン方式から変更） -->
+      <!-- 整列ブロック（1920px以上はheader直接入力、未満はドロップダウンに自動切替） -->
       <div class="blk align-group">
-        <div class="hdr-inline" id="accAlign">
+        <button class="nav-btn" data-tip="整列" onclick="toggleAcc('accAlign',this)">
+          <svg width="11" height="11"><use href="icons/sprite.svg#icon-align-header"></use></svg>
+        </button>
+        <div class="hdr-inline is-closed" id="accAlign">
         <div id="alignPanel" class="align-panel is-disabled">
           <div class="align-row">
             <span class="align-row-label">水平</span>
