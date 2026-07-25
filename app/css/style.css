@@ -108,7 +108,7 @@
     .nav-inner {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       flex: 1;
       gap: 4px;
       height: 100%;
