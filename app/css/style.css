@@ -130,6 +130,7 @@
 
     /* ブロック区切り線 */
     .nav .blk.settings-group::after,
+    .nav .blk.index-edit-group::after,
     .nav .blk.scale::after,
     .nav .blk.fit-group::after {
       content: '';
