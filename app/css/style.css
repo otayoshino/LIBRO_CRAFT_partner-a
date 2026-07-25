@@ -633,44 +633,6 @@
       display: block;
     }
 
-    /* px定規（page-container基準。編集モードのみ表示） */
-    .ruler {
-      position: absolute;
-      pointer-events: none;
-      z-index: 30;
-      background: #1a1a1a;
-      overflow: hidden;
-    }
-    .ruler-top {
-      top: 0;
-      left: 16px;
-      right: 0;
-      height: 16px;
-    }
-    .ruler-left {
-      top: 16px;
-      left: 0;
-      bottom: 0;
-      width: 16px;
-    }
-    .ruler canvas {
-      display: block;
-    }
-    .ruler-corner {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 16px;
-      height: 16px;
-      background: #1a1a1a;
-      pointer-events: none;
-      z-index: 30;
-    }
-    body.is-view-mode .ruler,
-    body.is-view-mode .ruler-corner {
-      display: none;
-    }
-
     /* book未読込時は.pageの白背景・影を非表示にする（読込ボタンのみ見せる） */
     .page.no-book {
       background: transparent;

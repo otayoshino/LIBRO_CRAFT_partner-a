@@ -11,7 +11,6 @@ import { closeDialog, handleZipFile, loadAnnotationsFromZip, saveAnnotationsAsLi
 import { toggleAcc, toggleNav, updateStatus } from './ui-common.js';
 import { redo, undo } from './undo-redo.js';
 import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, openSettingsModal } from './settings.js';
-import { initRulers } from './ruler.js';
 
 
     /* キーボードイベント（Esc / Delete / Space / Cmd+C / Cmd+V / Cmd+X） */
@@ -374,9 +373,6 @@ import { initRulers } from './ruler.js';
     // オートセーブ復元確認は、対応するbookのzipを読み込んだタイミングで行う（storage.js側）
     // デバウンス保存が先延ばしになり続けるケースの保険として、一定間隔でも保存する
     startAutoSaveInterval();
-
-    // px定規（page-container基準）の初期化
-    initRulers();
 
 
 
