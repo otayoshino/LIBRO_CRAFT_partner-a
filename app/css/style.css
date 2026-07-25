@@ -574,7 +574,9 @@
     .view {
       flex: 1;
       position: relative;
-      background: #515661;
+      background-color: #515661;
+      background-image: radial-gradient(circle, rgba(255, 255, 255, 0.06) 1.6px, transparent 1.6px);
+      background-size: 38px 38px;
       overflow: hidden;
       display: flex;
       align-items: center;
@@ -614,9 +616,6 @@
       justify-content: center;
       height: 100%;
       width: 100%;
-      background-color: #515661;
-      background-image: radial-gradient(circle, rgba(255, 255, 255, 0.06) 1.6px, transparent 1.6px);
-      background-size: 38px 38px;
     }
 
     /* ページ */
