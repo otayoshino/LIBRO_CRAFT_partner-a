@@ -89,6 +89,7 @@
       height: 100%;
       background: #353c47;
       border-right: 1px solid rgba(255,255,255,0.2);
+      border-bottom: 1px solid rgba(255,255,255,0.2);
       flex-shrink: 0;
       font-size: 13px;
       font-weight: 700;
