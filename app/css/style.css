@@ -363,6 +363,12 @@
       color: #444;
     }
 
+    .side .mode-btn.is_disabled {
+      opacity: 0.4;
+      cursor: default;
+      pointer-events: none;
+    }
+
     /* パネルタイトル */
     .side .panel-title {
       display: flex;

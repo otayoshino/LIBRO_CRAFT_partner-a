@@ -123,8 +123,8 @@
     <aside class="side authoring">
       <div class="inner">
 
-        <!-- モード切替 -->
-        <button class="mode-btn toDisplay" id="modeSwitchBtn" onclick="switchToViewMode()">
+        <!-- モード切替（ZIP未読込時は非活性。活性制御は updateAuthoringPanelState） -->
+        <button class="mode-btn toDisplay is_disabled" id="modeSwitchBtn" onclick="switchToViewMode()">
           <svg width="15" height="15"><use href="icons/sprite.svg#icon-mode-switch"></use></svg>
           <span id="modeSwitchBtnLabel">閲覧モードに切替</span>
         </button>

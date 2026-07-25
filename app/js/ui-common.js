@@ -41,9 +41,10 @@ import { state } from './state.js';
 
     /**
      * ZIP（book）の読み込み状態に応じて、オーサリングパネル
-     * （#accAuthoring .panel-stack）内の各アノテーション追加ボタンの
-     * 活性/非活性を切り替える。未読み込み時は is_disabled クラスにより
-     * グレーアウト表示＋クリック無効（pointer-events: none）となる。
+     * （#accAuthoring .panel-stack）内の各アノテーション追加ボタンと
+     * モード切替ボタン（#modeSwitchBtn）の活性/非活性を切り替える。
+     * 未読み込み時は is_disabled クラスによりグレーアウト表示＋
+     * クリック無効（pointer-events: none）となる。
      * ※ #accStickyOps 側の is_disabled は選択状態連動
      *   （updateStickyOpsPanel）が管理するため、ここでは触らない。
      */
@@ -51,6 +52,7 @@ import { state } from './state.js';
       const items = document.querySelectorAll('#accAuthoring .panel-stack > li');
       const disabled = !state.currentBookId;
       items.forEach(li => li.classList.toggle('is_disabled', disabled));
+      document.getElementById('modeSwitchBtn')?.classList.toggle('is_disabled', disabled);
     }
 
 
