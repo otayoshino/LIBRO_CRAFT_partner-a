@@ -345,7 +345,7 @@ import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, openSetting
 
       // ズームステップ：ホイール1ノッチあたり10%
       const delta = e.deltaY < 0 ? 10 : -10;
-      const newZoom = Math.min(200, Math.max(50, state.zoomLevel + delta));
+      const newZoom = Math.min(400, Math.max(50, state.zoomLevel + delta));
       // マウスカーソル位置を中心としてズームを適用する
       applyZoomChange(newZoom, e.clientX, e.clientY);
     }, { passive: false });

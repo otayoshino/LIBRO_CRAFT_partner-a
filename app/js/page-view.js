@@ -332,7 +332,7 @@ import { updateStatus } from './ui-common.js';
      * ズームレベルを変更し、アノテーションの位置・サイズを追従させる。
      * マウス座標が指定された場合はその点を中心にズームする。
      * 座標が未指定の場合はビュー中心を基準にズームする。
-     * @param {number}  newZoom       - 新しいズームレベル（50〜200）
+     * @param {number}  newZoom       - 新しいズームレベル（50〜400）
      * @param {number} [mouseClientX] - マウスのビューポートX座標
      * @param {number} [mouseClientY] - マウスのビューポートY座標
      */
@@ -372,8 +372,8 @@ import { updateStatus } from './ui-common.js';
      * ズームインする。
      */
     export function zoomIn() {
-      if (state.zoomLevel < 200) {
-        applyZoomChange(Math.min(200, state.zoomLevel + 10));
+      if (state.zoomLevel < 400) {
+        applyZoomChange(Math.min(400, state.zoomLevel + 10));
       }
     }
 
