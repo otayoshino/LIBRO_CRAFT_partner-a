@@ -320,7 +320,7 @@ import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, openSetting
     ============================ */
     // 高さフィットボタンを初期選択状態にする
     document.querySelectorAll('.fit-btn').forEach(b => b.classList.remove('selected'));
-    document.querySelectorAll('.fit-btn')[1].classList.add('selected');
+    document.querySelectorAll('.fit-btn')[0].classList.add('selected');
 
     // 初回リサイズ
     resizePage();
