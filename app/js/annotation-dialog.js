@@ -988,7 +988,6 @@ import { pushUndo } from './undo-redo.js';
         fileDd.querySelector('input').insertAdjacentHTML('afterend',
           '<p class="field-note">※ファイル名の拡張子「.mp4」は除く</p>' +
           '<p class="field-note">※LIBRO+上では常に別タブで再生されます（「表示方法」の選択はCRAFT内プレビューにのみ適用されます）</p>');
-        _appendDropZone(fileDd, 'annFile', 'video', existingEl);
         const showMode = savedData.annShowMode || '0';
         const modeDt = _buildRadioDt('表示方法');
         const modeDd = _buildRadioDD('annShowMode', 'annShowModeRadio', showMode, [
