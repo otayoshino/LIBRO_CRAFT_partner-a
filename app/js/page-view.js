@@ -5,9 +5,27 @@ import { updateStatus } from './ui-common.js';
 
 
     /**
-     * ページを次へ進める。
+     * index.json の configs['rl-reading-order'] が "right"（右綴じ）かどうかを判定する。
+     * LIBRO book未読込時・独自ZIP形式読込時・値未設定時は false（左綴じ扱い、従来動作）を返す。
+     * @returns {boolean}
+     */
+    function isRightBoundBook() {
+      return state.libroBook?.indexJson?.configs?.['rl-reading-order'] === 'right';
+    }
+
+
+    /**
+     * ページを次へ進める（「次へ」ボタン・スライドナビ右側・矢印キー右/下から呼ばれる、画面右側固定の操作）。
+     * 右綴じbookでは読み進め方向が逆になるため、ページ番号を減らす。
      */
     export function nextPage() {
+      if (isRightBoundBook()) {
+        if (state.currentPage > 1) {
+          state.currentPage--;
+          updatePageDisplay();
+        }
+        return;
+      }
       if (state.currentPage < state.totalPages) {
         state.currentPage++;
         updatePageDisplay();
@@ -16,9 +34,17 @@ import { updateStatus } from './ui-common.js';
 
 
     /**
-     * ページを前へ戻る。
+     * ページを前へ戻る（「前へ」ボタン・スライドナビ左側・矢印キー左/上から呼ばれる、画面左側固定の操作）。
+     * 右綴じbookでは読み進め方向が逆になるため、ページ番号を増やす。
      */
     export function prevPage() {
+      if (isRightBoundBook()) {
+        if (state.currentPage < state.totalPages) {
+          state.currentPage++;
+          updatePageDisplay();
+        }
+        return;
+      }
       if (state.currentPage > 1) {
         state.currentPage--;
         updatePageDisplay();
@@ -27,19 +53,21 @@ import { updateStatus } from './ui-common.js';
 
 
     /**
-     * 最初のページへ移動する。
+     * 先頭ページボタン（画面左端固定）で呼ばれる。
+     * 右綴じbookでは画面左端＝読み進めた末尾側になるため、最終ページへ移動する。
      */
     export function goFirstPage() {
-      state.currentPage = 1;
+      state.currentPage = isRightBoundBook() ? state.totalPages : 1;
       updatePageDisplay();
     }
 
 
     /**
-     * 最後のページへ移動する。
+     * 末尾ページボタン（画面右端固定）で呼ばれる。
+     * 右綴じbookでは画面右端＝読み進めた先頭側になるため、先頭ページへ移動する。
      */
     export function goLastPage() {
-      state.currentPage = state.totalPages;
+      state.currentPage = isRightBoundBook() ? 1 : state.totalPages;
       updatePageDisplay();
     }
 
@@ -112,7 +140,22 @@ import { updateStatus } from './ui-common.js';
       // LIBRO book ページを描画
       if (state.bookPages) renderPage(state.currentPage);
 
-      // 前ページ・最初ページのボタン活性制御
+      // 前ページ・最初ページのボタン活性制御（右綴じ時は左右の意味が入れ替わるため関数化）
+      updateNavButtonStates();
+      // 現在ページのアノテーションのみ表示する
+      updateAnnotationVisibility();
+    }
+
+
+    /**
+     * ページ送り関連ボタン（先頭/前/次/末尾・スライドナビ）の活性状態を更新する。
+     * 右綴じbookでは nextPage/prevPage/goFirstPage/goLastPage の意味が反転するため、
+     * 画面左側のコントロール（first/prev/slideNavPrev）は「終端到達で無効化」、
+     * 画面右側のコントロール（next/last/slideNavNext）は「先頭到達で無効化」に判定を入れ替える。
+     * state.libroBook 設定直後（storage.js）からも呼び直されるため、updatePageDisplay 本体とは
+     * 独立した関数としてexportする（updateTocButtonStateと同じ理由）。
+     */
+    export function updateNavButtonStates() {
       const navBtns = document.querySelectorAll('.blk.page-nav .nav-btn');
       const firstBtn = navBtns[0];
       const prevBtn  = navBtns[1];
@@ -120,7 +163,14 @@ import { updateStatus } from './ui-common.js';
       const lastBtn  = navBtns[3];
       const slideNavPrev = document.getElementById('slideNavPrev');
       const slideNavNext = document.getElementById('slideNavNext');
-      if (state.currentPage <= 1) {
+
+      const atStart = state.currentPage <= 1;
+      const atEnd = state.currentPage >= state.totalPages;
+      const rightBound = isRightBoundBook();
+      const leftDisabled  = rightBound ? atEnd : atStart;
+      const rightDisabled = rightBound ? atStart : atEnd;
+
+      if (leftDisabled) {
         prevBtn?.classList.add('disabled');
         firstBtn?.classList.add('disabled');
         slideNavPrev?.classList.add('is-hidden');
@@ -129,7 +179,7 @@ import { updateStatus } from './ui-common.js';
         firstBtn?.classList.remove('disabled');
         slideNavPrev?.classList.remove('is-hidden');
       }
-      if (state.currentPage >= state.totalPages) {
+      if (rightDisabled) {
         nextBtn?.classList.add('disabled');
         lastBtn?.classList.add('disabled');
         slideNavNext?.classList.add('is-hidden');
@@ -138,8 +188,6 @@ import { updateStatus } from './ui-common.js';
         lastBtn?.classList.remove('disabled');
         slideNavNext?.classList.remove('is-hidden');
       }
-      // 現在ページのアノテーションのみ表示する
-      updateAnnotationVisibility();
     }
 
 

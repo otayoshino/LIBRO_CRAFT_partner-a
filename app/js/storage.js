@@ -4,7 +4,7 @@ import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, resolveVideoSrc, styleToRect } from './libro-format.js';
-import { loadLibroBookPages, updateAnnotationVisibility, updateTocButtonState } from './page-view.js';
+import { loadLibroBookPages, updateAnnotationVisibility, updateNavButtonStates, updateTocButtonState } from './page-view.js';
 import { updateLibroBookBtnStates } from './index-outline.js';
 import { mediaBlobs, state } from './state.js';
 import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateStatus } from './ui-common.js';
@@ -289,6 +289,7 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
       // 音声・アノテーション画像のパス一覧（書き出し時に強制暗号化する対象）
       state.libroBook = { zip, baseDir, indexJson, unencryptedAssetPaths };
       updateTocButtonState();
+      updateNavButtonStates();
       updateLibroBookBtnStates();
       // book識別子：LIBRO book folder名（baseDir）。folder無し（index.jsonがzipルート直下）の場合は
       // 元zipファイル名にフォールバックする
