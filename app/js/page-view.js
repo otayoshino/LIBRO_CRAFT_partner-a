@@ -363,13 +363,8 @@ import { updateStatus } from './ui-common.js';
         page.style.width  = w + 'px';
       } else if (state.fitMode === 'width') {
         const viewW = view.clientWidth  - padding;
-        const viewH = view.clientHeight - padding;
-        let w = viewW;
-        let h = w / state.PAGE_ASPECT;
-        if (h > viewH) {
-          h = viewH;
-          w = h * state.PAGE_ASPECT;
-        }
+        const w = viewW;
+        const h = w / state.PAGE_ASPECT;
         page.style.width  = w + 'px';
         page.style.height = h + 'px';
       } else if (state.fitMode === 'page') {
