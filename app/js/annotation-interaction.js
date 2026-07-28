@@ -80,10 +80,15 @@ import { pushUndo } from './undo-redo.js';
      */
     export function onDrawPreviewMove(e) {
       if (!state.drawStartPos || !state.drawPreviewEl || !state.drawClientStart) return;
-      state.drawPreviewEl.style.left   = Math.min(e.clientX, state.drawClientStart.x) + 'px';
-      state.drawPreviewEl.style.top    = Math.min(e.clientY, state.drawClientStart.y) + 'px';
-      state.drawPreviewEl.style.width  = Math.abs(e.clientX - state.drawClientStart.x) + 'px';
-      state.drawPreviewEl.style.height = Math.abs(e.clientY - state.drawClientStart.y) + 'px';
+      // 実際に作成される矩形は getPageRelativePos() で紙面内にクランプされるため、
+      // プレビュー破線も紙面の可視範囲でクランプして見た目と結果を一致させる
+      const rect = document.getElementById('pageLeft').getBoundingClientRect();
+      const cx = Math.min(Math.max(e.clientX, rect.left), rect.right);
+      const cy = Math.min(Math.max(e.clientY, rect.top),  rect.bottom);
+      state.drawPreviewEl.style.left   = Math.min(cx, state.drawClientStart.x) + 'px';
+      state.drawPreviewEl.style.top    = Math.min(cy, state.drawClientStart.y) + 'px';
+      state.drawPreviewEl.style.width  = Math.abs(cx - state.drawClientStart.x) + 'px';
+      state.drawPreviewEl.style.height = Math.abs(cy - state.drawClientStart.y) + 'px';
     }
 
 
@@ -397,6 +402,9 @@ import { pushUndo } from './undo-redo.js';
         pasted.push(el);
       });
 
+      // 貼り付け結果が紙面外へはみ出す場合、相対位置を保ったままグループごと紙面内へ引き戻す
+      clampGroupIntoPage(pasted);
+
       // 連続ペースト時は次回を OFFSET ずらして重なりを避ける（linkedObj の位置も更新）
       state.annClipboard = state.annClipboard.map(s => {
         const updated = { ...s, left: s.left + OFFSET, top: s.top + OFFSET };
@@ -482,6 +490,175 @@ import { pushUndo } from './undo-redo.js';
         state.drawPreviewEl = null;
       }
       state.drawStartPos = null;
+    }
+
+
+    /* ============================
+       紙面内クランプ
+    ============================ */
+
+
+    /**
+     * 紙面（#pageLeft）のベース座標系サイズを返す。
+     * offsetWidth / offsetHeight は CSS transform: scale() の影響を受けないレイアウトサイズのため、
+     * オブジェクトの style.left/top/width/height と同じ座標系の値になる。
+     * @returns {{w: number, h: number}}
+     */
+    export function getPageBaseSize() {
+      const page = document.getElementById('pageLeft');
+      return { w: page?.offsetWidth || 0, h: page?.offsetHeight || 0 };
+    }
+
+
+    /**
+     * 矩形が紙面内に完全に収まるよう left/top をクランプして返す。
+     * 幅・高さが紙面より大きい場合は左上（0,0）に寄せる。
+     * @param {number} left
+     * @param {number} top
+     * @param {number} w
+     * @param {number} h
+     * @returns {{left: number, top: number}}
+     */
+    export function clampRectToPage(left, top, w, h) {
+      const page = getPageBaseSize();
+      if (!page.w || !page.h) return { left, top };
+      const maxLeft = Math.max(0, page.w - w);
+      const maxTop  = Math.max(0, page.h - h);
+      return {
+        left: Math.min(Math.max(left, 0), maxLeft),
+        top:  Math.min(Math.max(top,  0), maxTop),
+      };
+    }
+
+
+    /**
+     * 要素の現在位置を紙面内へクランプして適用する。
+     * 生成直後・貼り付け直後・入力反映直後など、矩形が確定したタイミングで呼ぶ。
+     * @param {HTMLElement} el
+     */
+    export function clampElementToPage(el) {
+      if (!el) return;
+      const left = parseFloat(el.style.left) || 0;
+      const top  = parseFloat(el.style.top)  || 0;
+      const pos  = clampRectToPage(left, top, el.offsetWidth, el.offsetHeight);
+      el.style.left = pos.left + 'px';
+      el.style.top  = pos.top  + 'px';
+    }
+
+
+    /**
+     * 複数要素の相対位置を保ったまま、外接矩形が紙面内に収まるようグループ全体を平行移動する。
+     * グループが紙面より大きい場合は左上を優先して合わせる。
+     * @param {HTMLElement[]} els
+     */
+    export function clampGroupIntoPage(els) {
+      const page = getPageBaseSize();
+      const list = (els || []).filter(Boolean);
+      if (!page.w || !page.h || list.length === 0) return;
+      const rects = list.map(el => ({
+        el,
+        left:   parseFloat(el.style.left) || 0,
+        top:    parseFloat(el.style.top)  || 0,
+        width:  el.offsetWidth,
+        height: el.offsetHeight,
+      }));
+      const minLeft   = Math.min(...rects.map(r => r.left));
+      const minTop    = Math.min(...rects.map(r => r.top));
+      const maxRight  = Math.max(...rects.map(r => r.left + r.width));
+      const maxBottom = Math.max(...rects.map(r => r.top  + r.height));
+      // 右下のはみ出しを先に戻し、そのうえで左上が負にならないよう戻す
+      let dx = 0, dy = 0;
+      if (maxRight  > page.w) dx = page.w - maxRight;
+      if (maxBottom > page.h) dy = page.h - maxBottom;
+      if (minLeft + dx < 0) dx = -minLeft;
+      if (minTop  + dy < 0) dy = -minTop;
+      if (dx === 0 && dy === 0) return;
+      rects.forEach(r => {
+        r.el.style.left = (r.left + dx) + 'px';
+        r.el.style.top  = (r.top  + dy) + 'px';
+      });
+    }
+
+
+    /**
+     * 移動ドラッグの移動量(dx, dy)を、対象群の外接矩形が紙面内に収まる範囲へ制限する。
+     *
+     * 上限・下限を 0 側へ丸めているのは、LIBRO book 由来などで読み込み時点から紙面外に
+     * はみ出している要素を強制的に引き戻さないため。
+     * 「はみ出しを悪化させる方向」は 0 で止まり、「解消する方向」は自由に動かせる。
+     *
+     * @param {number} dx
+     * @param {number} dy
+     * @param {Array<{left:number, top:number, width:number, height:number}>} rects - ドラッグ開始時の矩形群
+     * @returns {{dx: number, dy: number}}
+     */
+    export function clampMoveDelta(dx, dy, rects) {
+      const page = getPageBaseSize();
+      if (!page.w || !page.h || !rects || rects.length === 0) return { dx, dy };
+      const minLeft   = Math.min(...rects.map(r => r.left));
+      const minTop    = Math.min(...rects.map(r => r.top));
+      const maxRight  = Math.max(...rects.map(r => r.left + r.width));
+      const maxBottom = Math.max(...rects.map(r => r.top  + r.height));
+      const dxMin = Math.min(-minLeft, 0);
+      const dxMax = Math.max(page.w - maxRight, 0);
+      const dyMin = Math.min(-minTop, 0);
+      const dyMax = Math.max(page.h - maxBottom, 0);
+      return {
+        dx: Math.min(Math.max(dx, dxMin), dxMax),
+        dy: Math.min(Math.max(dy, dyMin), dyMax),
+      };
+    }
+
+
+    /**
+     * リサイズドラッグの移動量(dx, dy)を、リサイズ結果の矩形が紙面内に収まる範囲へ制限する。
+     * ハンドルごとに「どの辺が動くか」が決まっているため、辺ごとに上限・下限を求めて
+     * dx / dy をクランプする（矩形計算そのものは呼び出し側の既存ロジックをそのまま使える）。
+     *
+     * @param {string} corner - 'tl'|'tc'|'tr'|'ml'|'mr'|'bl'|'bc'|'br'
+     * @param {number} dx
+     * @param {number} dy
+     * @param {{left:number, top:number, width:number, height:number}} start - ドラッグ開始時の矩形
+     * @param {number} minSize
+     * @param {number|null} aspect - 縦横比ロック時の width/height。ロックなしは null
+     * @returns {{dx: number, dy: number}}
+     */
+    export function clampResizeDelta(corner, dx, dy, start, minSize, aspect = null) {
+      const page = getPageBaseSize();
+      if (!page.w || !page.h) return { dx, dy };
+      const { left, top, width, height } = start;
+      const movesLeft   = corner === 'tl' || corner === 'ml' || corner === 'bl';
+      const movesRight  = corner === 'tr' || corner === 'mr' || corner === 'br';
+      const movesTop    = corner === 'tl' || corner === 'tc' || corner === 'tr';
+      const movesBottom = corner === 'bl' || corner === 'bc' || corner === 'br';
+
+      let dxMin = -Infinity, dxMax = Infinity;
+      let dyMin = -Infinity, dyMax = Infinity;
+
+      // 左辺が動く：left が 0 未満にならず、幅が minSize を下回らない範囲
+      if (movesLeft)   { dxMin = -left;            dxMax = width  - minSize; }
+      // 右辺が動く：右端が紙面幅を超えず、幅が minSize を下回らない範囲
+      if (movesRight)  { dxMin = minSize - width;  dxMax = page.w - (left + width); }
+      if (movesTop)    { dyMin = -top;             dyMax = height - minSize; }
+      if (movesBottom) { dyMin = minSize - height; dyMax = page.h - (top + height); }
+
+      if (aspect) {
+        // 縦横比ロック時は高さが幅から決まるため、高さ側の制約も dx の上限・下限に反映する。
+        // tl / tr は下辺固定（上へ伸びる）、bl / br は上辺固定（下へ伸びる）。
+        const maxH = (corner === 'tl' || corner === 'tr') ? (top + height) : (page.h - top);
+        const maxW = maxH * aspect;
+        if (corner === 'tl' || corner === 'bl') {
+          // 幅は -dx 方向に増えるため下限を引き上げる
+          dxMin = Math.max(dxMin, width - maxW);
+        } else {
+          dxMax = Math.min(dxMax, maxW - width);
+        }
+      }
+
+      return {
+        dx: Math.min(Math.max(dx, dxMin), dxMax),
+        dy: Math.min(Math.max(dy, dyMin), dyMax),
+      };
     }
 
 
@@ -720,6 +897,14 @@ import { pushUndo } from './undo-redo.js';
             }
             prevShift = ev.shiftKey;
 
+            // 紙面外へはみ出さないよう移動量を制限する（縦横比ロック時は高さ側の制約も dx に反映される）
+            ({ dx, dy } = clampResizeDelta(
+              corner, dx, dy,
+              { left: startLeft, top: startTop, width: startWidth, height: startHeight },
+              MIN_SIZE,
+              lockAspectRatio ? aspectRatio : null
+            ));
+
             if (lockAspectRatio) {
               // 縦横比維持リサイズ：width を基準に height を算出
               if (corner === 'tl') {
@@ -956,6 +1141,11 @@ import { pushUndo } from './undo-redo.js';
             });
           });
 
+          // 紙面内クランプ用：複製直後の各要素の矩形（相対位置を保つため外接矩形で判定する）
+          const cloneRects = clones.map(({ clone, startLeft, startTop }) => ({
+            left: startLeft, top: startTop, width: clone.offsetWidth, height: clone.offsetHeight
+          }));
+
           const startX = e.clientX;
           const startY = e.clientY;
 
@@ -997,6 +1187,9 @@ import { pushUndo } from './undo-redo.js';
             }
             prevShift2 = ev.shiftKey;
 
+            // 紙面外へはみ出さないよう移動量を制限する
+            ({ dx, dy } = clampMoveDelta(dx, dy, cloneRects));
+
             // 全クローンに同じデルタを適用
             clones.forEach(({ clone, startLeft, startTop }) => {
               clone.style.left = (startLeft + dx) + 'px';
@@ -1036,6 +1229,10 @@ import { pushUndo } from './undo-redo.js';
             el:        orig,
             startLeft: parseInt(orig.style.left, 10) || 0,
             startTop:  parseInt(orig.style.top,  10) || 0
+          }));
+          // 紙面内クランプ用：選択群の矩形（相対位置を保つため外接矩形で判定する）
+          const multiRects = multiTargets.map(({ el: t, startLeft, startTop }) => ({
+            left: startLeft, top: startTop, width: t.offsetWidth, height: t.offsetHeight
           }));
 
           const startX = e.clientX;
@@ -1077,6 +1274,9 @@ import { pushUndo } from './undo-redo.js';
               shiftSnapXM = shiftSnapYM = frozenDxM = frozenDyM = null;
             }
             prevShiftM = ev.shiftKey;
+
+            // 紙面外へはみ出さないよう移動量を制限する
+            ({ dx, dy } = clampMoveDelta(dx, dy, multiRects));
 
             multiTargets.forEach(({ el: t, startLeft, startTop }) => {
               t.style.left = (startLeft + dx) + 'px';
@@ -1201,6 +1401,11 @@ import { pushUndo } from './undo-redo.js';
             shiftSnapX = shiftSnapY = frozenDx = frozenDy = null;
           }
           prevShift = ev.shiftKey;
+
+          // 紙面外へはみ出さないよう移動量を制限する
+          ({ dx, dy } = clampMoveDelta(dx, dy, [{
+            left: startLeft, top: startTop, width: target.offsetWidth, height: target.offsetHeight
+          }]));
 
           target.style.left = (startLeft + dx) + 'px';
           target.style.top  = (startTop  + dy) + 'px';
@@ -1337,6 +1542,15 @@ import { pushUndo } from './undo-redo.js';
             }
             prevShift = ev.shiftKey;
 
+            // 紙面外へはみ出さないよう移動量を制限する。
+            // 各オブジェクトはこの外接矩形に対して比例スケーリングされるため、
+            // 外接矩形が紙面内に収まれば中身も紙面内に収まる。
+            ({ dx, dy } = clampResizeDelta(
+              corner, dx, dy,
+              { left: boxLeft, top: boxTop, width: boxWidth, height: boxHeight },
+              MIN_SIZE, null
+            ));
+
             let newLeft   = boxLeft;
             let newTop    = boxTop;
             let newWidth  = boxWidth;
@@ -1397,6 +1611,10 @@ import { pushUndo } from './undo-redo.js';
           const onUp = () => {
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup',   onUp);
+            // アイコン型・画像アイコン型は矩形スケールに追従せずサイズ固定のため、
+            // 外接矩形が紙面内でも自身のサイズ分だけはみ出しうる。個別に補正する。
+            getSelectedObjects().forEach(el => clampElementToPage(el));
+            updateAlignPanel();
           };
           document.addEventListener('mousemove', onMove);
           document.addEventListener('mouseup',   onUp);

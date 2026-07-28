@@ -1,6 +1,6 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
-import { deactivateAnnotationMode, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
+import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
 import { applyDaimonImageAspect, generatePressedVariant, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { mediaBlobs, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
@@ -619,6 +619,20 @@ import { pushUndo } from './undo-redo.js';
         });
 
         // バウンディングボックスを再描画
+        updateAlignPanel();
+      }
+      // 紙面外への配置を禁止：入力反映後に紙面内へ引き戻す
+      if (allTargets.length === 1) {
+        clampElementToPage(allTargets[0]);
+        // 入力欄の値と実際の位置がずれないよう、クランプ後の値を書き戻す
+        const clamped  = allTargets[0];
+        const posXEl   = document.getElementById('annPosX');
+        const posYEl   = document.getElementById('annPosY');
+        if (posXEl) posXEl.value = Math.round(parseFloat(clamped.style.left) || 0);
+        if (posYEl) posYEl.value = Math.round(parseFloat(clamped.style.top)  || 0);
+      } else {
+        // 複数選択：個別にクランプすると相対位置が崩れるため、グループごと引き戻す
+        clampGroupIntoPage(allTargets);
         updateAlignPanel();
       }
       // 次回デルタ計算のために現在値を保持
@@ -1592,6 +1606,10 @@ import { pushUndo } from './undo-redo.js';
           if (savedData.annPosY !== undefined) existingEl.style.top  = parseInt(savedData.annPosY, 10) + 'px';
           if (savedData.annWidth !== undefined)  existingEl.style.width  = parseInt(savedData.annWidth, 10) + 'px';
           if (savedData.annHeight !== undefined) existingEl.style.height = parseInt(savedData.annHeight, 10) + 'px';
+          // 紙面外への配置を禁止：クランプ後の実位置を savedData にも反映してから保存する
+          clampElementToPage(existingEl);
+          savedData.annPosX = parseInt(existingEl.style.left, 10) || 0;
+          savedData.annPosY = parseInt(existingEl.style.top,  10) || 0;
 
           if (isLibroToggleNote && keepsOriginalImage) {
             // 「既存付箋カラー」に戻した場合：色上書きを解除し、元の閉画像表示に戻す
@@ -1644,6 +1662,8 @@ import { pushUndo } from './undo-redo.js';
           makeResizable(note);
           note.dataset.page = state.currentPage;
           document.getElementById('pageLeft').appendChild(note);
+          // 紙面外への配置を禁止(クイック作成はクリック点が中央になるため端で半分はみ出しうる)
+          clampElementToPage(note);
           pushUndo({ type: 'create', elements: [note] });
           updateStatus();
         }
@@ -1668,6 +1688,10 @@ import { pushUndo } from './undo-redo.js';
 
         if (savedData.annPosX !== undefined) existingEl.style.left = parseInt(savedData.annPosX, 10) + 'px';
         if (savedData.annPosY !== undefined) existingEl.style.top  = parseInt(savedData.annPosY, 10) + 'px';
+        // 紙面外への配置を禁止：クランプ後の実位置を savedData にも反映してから保存する
+        clampElementToPage(existingEl);
+        savedData.annPosX = parseInt(existingEl.style.left, 10) || 0;
+        savedData.annPosY = parseInt(existingEl.style.top,  10) || 0;
         renderButtonVisual(existingEl, type, savedData);
         existingEl.dataset.savedData = JSON.stringify(savedData);
         // renderButtonVisual() は el.textContent = '' で子要素を全削除するため、
@@ -1678,6 +1702,8 @@ import { pushUndo } from './undo-redo.js';
         // 画像が変わっていない場合（ラベル・色だけ変更した場合など）は、ユーザーが手動リサイズした
         // 矩形を勝手に戻さないよう何もしない。
         if (nextBtnImage && nextBtnImage !== prevBtnImage) applyDaimonImageAspect(existingEl);
+        // 画像差し替えで高さが変わると下端がはみ出しうるため、もう一度クランプする
+        clampElementToPage(existingEl);
         updateStatus();
 
       } else {
@@ -1741,6 +1767,13 @@ import { pushUndo } from './undo-redo.js';
           } else {
             makeResizable(existingEl);
           }
+          // 紙面外への配置を禁止。サイズ確定後にクランプし、実位置を savedData へ反映し直す
+          clampElementToPage(existingEl);
+          existingEl.dataset.savedData = JSON.stringify({
+            ...savedData,
+            annPosX: parseInt(existingEl.style.left, 10) || 0,
+            annPosY: parseInt(existingEl.style.top,  10) || 0,
+          });
           updateStatus();
         } else {
           // 新規作成：連続作成用に設定を保存し、displayType に応じて要素を生成
@@ -1788,6 +1821,8 @@ import { pushUndo } from './undo-redo.js';
           }
           ann.dataset.page = state.currentPage;
           document.getElementById('pageLeft').appendChild(ann);
+          // 紙面外への配置を禁止(クイック作成の中央寄せ・アイコン型の既定サイズ置換ではみ出しうる)
+          clampElementToPage(ann);
           pushUndo({ type: 'create', elements: [ann] });
           const dispLabel = displayType === 'icon' ? 'アイコン' : displayType === 'page-color' ? '紙面カラー' : displayType === 'image' ? '画像' : 'マーカー';
           updateStatus();

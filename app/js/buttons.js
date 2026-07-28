@@ -1,5 +1,5 @@
 import { openEditPopup } from './annotation-dialog.js';
-import { makeDraggable, makeResizable } from './annotation-interaction.js';
+import { clampElementToPage, makeDraggable, makeResizable } from './annotation-interaction.js';
 import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, DAIMON_DEFAULT_ASPECT, DAIMON_DEFAULT_MIN_WIDTH_PX, DAIMON_DEFAULT_WIDTH_RATIO } from './config.js';
 import { mediaBlobs, selectedStickySet, state } from './state.js';
 import { showToast, updateStatus } from './ui-common.js';
@@ -334,6 +334,8 @@ import { pushUndo } from './undo-redo.js';
       makeDaimonResizable(el);
       el.dataset.page = state.currentPage;
       page.appendChild(el);
+      // 紙面外への配置を禁止(紐付けオブジェクトが紙面端にある場合に左右・下がはみ出しうる)
+      clampElementToPage(el);
       // 大問ボタン作成を Undo スタックに積む
       pushUndo({
         type: 'daimon-create',
@@ -488,6 +490,8 @@ import { pushUndo } from './undo-redo.js';
       makeDaimonResizable(el);
       el.dataset.page = state.currentPage;
       page.appendChild(el);
+      // 紙面外への配置を禁止(紐付けオブジェクトが紙面端にある場合に左右・下がはみ出しうる)
+      clampElementToPage(el);
       // 答ボタン作成を Undo スタックに積む
       pushUndo({
         type: 'kotae-create',
@@ -600,6 +604,8 @@ import { pushUndo } from './undo-redo.js';
       makeDaimonResizable(el);
       el.dataset.page = state.currentPage;
       page.appendChild(el);
+      // 紙面外への配置を禁止(紐付けオブジェクトが紙面端にある場合に左右・下がはみ出しうる)
+      clampElementToPage(el);
       // 証明ボタン作成を Undo スタックに積む
       pushUndo({
         type: 'shomei-create',
