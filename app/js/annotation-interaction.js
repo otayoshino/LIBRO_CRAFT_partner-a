@@ -324,10 +324,19 @@ import { pushUndo } from './undo-redo.js';
           makeResizable(el);
           selectedStickySet.add(el);
         } else {
-          // アイコン型・画像アイコン型はサイズなし、マーカー型はサイズあり
-          const isIcon  = snap.className.includes('ann-icon-obj');
-          const isImage = snap.className.includes('ann-image-obj');
-          el.className = isIcon ? 'ann-icon-obj' : isImage ? 'ann-image-obj' : 'ann-object';
+          // アイコン型・画像アイコン型・紙面カラー型はサイズなし/専用分岐、マーカー型はサイズあり
+          let snapDisplayType = 'marker';
+          try {
+            snapDisplayType = JSON.parse(snap.savedData || '{}').annDisplayType || 'marker';
+          } catch (_) {}
+          const isIcon      = snap.className.includes('ann-icon-obj');
+          const isImage     = snap.className.includes('ann-image-obj');
+          const isPageColor = !isIcon && !isImage &&
+            (snap.className.includes('dt-page-color') || snapDisplayType === 'page-color');
+          el.className = isIcon ? 'ann-icon-obj'
+                        : isImage ? 'ann-image-obj'
+                        : isPageColor ? 'ann-object dt-page-color'
+                        : 'ann-object';
           if (isIcon) {
             // アイコン型は常に 1:1。コピー元が万一非正方形でも短辺に揃えて正方形を保証する
             const iconSize = Math.max(14, Math.min(snap.width, snap.height));
@@ -352,6 +361,17 @@ import { pushUndo } from './undo-redo.js';
               renderAnnImageContent(el, JSON.parse(snap.savedData || '{}'));
             } catch (_) {}
             makeResizable(el, { lockAspectRatio: true, minSize: 14 });
+          } else if (isPageColor) {
+            // 紙面カラー型：背景・ラベルは付与しない。種別色は renderAnnObjectContent が
+            // --ann-type-rgb インラインカスタムプロパティ経由でCSS側に渡す（新規作成・更新と同じ仕組み）
+            el.style.cssText = [
+              `left:${newLeft}px`,
+              `top:${newTop}px`,
+              `width:${snap.width}px`,
+              `height:${snap.height}px`,
+            ].join('; ') + ';';
+            renderAnnObjectContent(el, snap.type, 'page-color');
+            makeResizable(el);
           } else {
             el.style.cssText = [
               `left:${newLeft}px`,
