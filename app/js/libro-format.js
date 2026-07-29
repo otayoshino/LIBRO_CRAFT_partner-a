@@ -1,7 +1,7 @@
 import { mediaBlobs } from './state.js';
 import { ANNOTATION_TYPE_CONFIG, BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR } from './config.js';
 import { addStickyClickHandler } from './sticky.js';
-import { makeDraggable, makeResizable } from './annotation-interaction.js';
+import { getPageBaseSize, makeDraggable, makeResizable } from './annotation-interaction.js';
 import { addDaimonClickHandler, renderButtonVisual } from './buttons.js';
 
 /* ============================================================
@@ -893,7 +893,12 @@ export async function parseLibroBookZip(zip) {
  */
 export function renderTogglePairs(togglePairs) {
   const page = document.getElementById('pageLeft');
-  const pageRect = page.getBoundingClientRect();
+  // getBoundingClientRect はCSS transform（ズーム）適用後の視覚座標を返すため、
+  // ズーム中に読み込むとズーム倍率分だけ座標がずれる。アノテーションの
+  // style.left/top/width/height はズーム前のベース座標系で保持する規約のため、
+  // transformの影響を受けない offsetWidth/offsetHeight（getPageBaseSize）を使う。
+  const base = getPageBaseSize();
+  const pageRect = { width: base.w, height: base.h };
   const wrapByKey = new Map(); // `${pageNum}:${id}` -> 要素（closedId・openId両方をキーに登録。答ボタンリンク解決用）
 
   // groupIdごとのメンバー数を数え、複数メンバーのグループのみdataset.groupIdを設定する
@@ -1034,7 +1039,10 @@ function addNetworkClickHandler(slotEl) {
  */
 export function renderNetworkGroups(networkGroups) {
   const page = document.getElementById('pageLeft');
-  const pageRect = page.getBoundingClientRect();
+  // renderTogglePairs と同じ理由でベース座標系のサイズ（offsetWidth/offsetHeight）を使う。
+  // getBoundingClientRect ではズーム中の読み込みで座標がずれる。
+  const base = getPageBaseSize();
+  const pageRect = { width: base.w, height: base.h };
 
   networkGroups.forEach(net => {
     const memberById = new Map(net.members.map(m => [m._id, m]));
