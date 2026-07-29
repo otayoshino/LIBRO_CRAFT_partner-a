@@ -414,6 +414,7 @@
              対応する data-settings-pane="xxx" のペインを右側に追加する -->
         <div class="settings-tabs" id="settingsTabs">
           <button type="button" class="settings-tab is-active" data-settings-tab="sticky">付箋</button>
+          <button type="button" class="settings-tab" data-settings-tab="video">動画再生</button>
         </div>
         <!-- 設定内容ペイン -->
         <div class="settings-panes">
@@ -443,6 +444,22 @@
                   </div>
                 </dd>
               </dl>
+            </div>
+          </div>
+          <div class="settings-pane" data-settings-pane="video">
+            <div class="dialog-contents">
+              <p class="settings-pane-heading">J-stream選択時のデフォルト値を設定</p>
+              <dl>
+                <dt>Jストリームディレクトリ</dt>
+                <dd>
+                  <input type="text" class="d-input" id="settingsJstreamDirInput" placeholder="Jストリームディレクトリ">
+                </dd>
+                <dt>企業ID</dt>
+                <dd>
+                  <input type="text" class="d-input" id="settingsJstreamCorpIdInput" placeholder="企業ID">
+                </dd>
+              </dl>
+              <p class="field-note">※出版社ごとに固定の値です。動画アノテーションを新規作成して「J-stream」を選んだとき、この値が初期入力されます（難読化IDは対象外）。</p>
             </div>
           </div>
         </div>

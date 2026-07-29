@@ -113,15 +113,30 @@ export const state = {
   currentBookId: null,
   /**
    * 環境設定：付箋のデフォルト背景色（STICKY_COLOR_MAP/STICKY_COLORSのインデックス文字列）。
-   * '0'=青, '1'=緑, '2'=黄, '3'=紙色。ページ再読み込みで初期値（'3'）に戻る（セッション内保持のみ）。
+   * '0'=青, '1'=緑, '2'=黄, '3'=紙色。初期値は '3'。
+   * 値は settings.js が localStorage（キー: ContentsBuilderSettings）へ永続化し、
+   * 起動時に loadSettings() で復元する。
    */
   settingsStickyDefaultColor: '3',
   /**
    * 環境設定：大問ボタン作成メニューの表示文言（'大問' | 'ALL' | '解答'）。
    * サイドバーの大問ボタン作成メニュー項目のラベルにのみ反映し、実際に生成されるボタンの
-   * 見た目（色・アイコン・テキスト）は変更しない。ページ再読み込みで初期値（'大問'）に戻る。
+   * 見た目（色・アイコン・テキスト）は変更しない。初期値は '大問'。
+   * 値は settings.js が localStorage へ永続化し、起動時に loadSettings() で復元する。
    */
   settingsDaimonLabel: '大問',
+  /**
+   * 環境設定：動画アノテーションでJ-streamを選択したときの「Jストリームディレクトリ」
+   * デフォルト値。出版社ごとに固定の値のため環境設定で登録し、新規作成時のみ入力欄へ
+   * 初期表示する（既存アノテーションの編集時には使わない）。
+   * 値は settings.js が localStorage へ永続化し、起動時に loadSettings() で復元する。
+   */
+  settingsJstreamDir: '',
+  /**
+   * 環境設定：動画アノテーションでJ-streamを選択したときの「企業ID」デフォルト値。
+   * 用途・反映タイミングは settingsJstreamDir と同じ。
+   */
+  settingsJstreamCorpId: '',
 };
 
     /* -------- メディアBlobキャッシュ -------- */

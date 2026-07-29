@@ -30,6 +30,21 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
+     * 環境設定「Jストリームディレクトリ」「企業ID」変更時に、連続作成用に保持している
+     * 動画の前回設定（lastNewAnnData.video）の該当値も新しいデフォルトへ揃える。
+     * これを行わないと、既に動画を1つ以上作成したあとに設定を変更しても
+     * lastNewAnnData 側の値が優先され、新しいデフォルトが反映されない。
+     * @param {string} dir - Jストリームディレクトリ
+     * @param {string} corpId - 企業ID
+     */
+    export function syncJstreamDefaults(dir, corpId) {
+      if (!lastNewAnnData.video) return;
+      lastNewAnnData.video.annJstreamDir    = String(dir);
+      lastNewAnnData.video.annJstreamCorpId = String(corpId);
+    }
+
+
+    /**
      * 既存のアノテーションオブジェクトをダブルクリックしたときに表示する編集ポップアップ。
      * quick-popup と同じ構造を使い、確定時に confirmAnnotation(type, el) を呼んで更新する。
      * @param {HTMLElement} el - 編集対象の ann-object / ann-icon-obj 要素
@@ -1030,18 +1045,24 @@ import { pushUndo } from './undo-redo.js';
         } else {
           // annFile欄と同じ「1グループ=1dd」の配置に合わせ、3つの入力欄を1つのddにまとめる。
           // dtラベルは置かず、各inputのplaceholderに項目名称を表示する。
+          // ディレクトリ・企業IDは出版社ごとに固定値のため、新規作成時（existingElなし）のみ
+          // 環境設定のデフォルト値をフォールバックにする。既存アノテーションの編集時は
+          // 保存済みの値をそのまま表示し、環境設定値で上書きしない。
+          // 難読化IDは動画ごとに異なるためデフォルト値の対象外（常に空フォールバック）。
+          const jsDirFallback  = existingEl ? '' : (state.settingsJstreamDir || '');
+          const jsCorpFallback = existingEl ? '' : (state.settingsJstreamCorpId || '');
           const jsDd = document.createElement('dd');
           const dirInput = document.createElement('input');
           dirInput.type = 'text';
           dirInput.className = 'd-input';
           dirInput.id = 'annJstreamDir';
-          dirInput.value = savedData.annJstreamDir || '';
+          dirInput.value = savedData.annJstreamDir || jsDirFallback;
           dirInput.placeholder = 'Jストリームディレクトリ';
           const corpInput = document.createElement('input');
           corpInput.type = 'text';
           corpInput.className = 'd-input';
           corpInput.id = 'annJstreamCorpId';
-          corpInput.value = savedData.annJstreamCorpId || '';
+          corpInput.value = savedData.annJstreamCorpId || jsCorpFallback;
           corpInput.placeholder = '企業ID';
           const vidInput = document.createElement('input');
           vidInput.type = 'text';

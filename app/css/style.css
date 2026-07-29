@@ -2991,6 +2991,14 @@
     #settingsOverlay .dialog-contents dl dt { width: 140px; }
     #settingsOverlay .dialog-contents dl dd { width: calc(100% - 140px); }
 
+    /* 動画再生タブのみ：「Jストリームディレクトリ」が140pxでは折り返すため更に広げる */
+    #settingsOverlay .settings-pane[data-settings-pane="video"] .dialog-contents dl dt {
+      width: 170px;
+    }
+    #settingsOverlay .settings-pane[data-settings-pane="video"] .dialog-contents dl dd {
+      width: calc(100% - 170px);
+    }
+
     .settings-modal-actions {
       display: flex;
       align-items: center;
