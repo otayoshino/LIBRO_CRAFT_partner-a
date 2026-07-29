@@ -2986,6 +2986,17 @@
       color: #555;
     }
 
+    /* 環境設定モーダルの入力値エラー表示（既定は非表示、is-shown付与時のみ表示） */
+    .settings-error {
+      display: none;
+      margin: 8px 0 0;
+      font-size: 11px;
+      line-height: 1.6;
+      color: #c00;
+      white-space: pre-wrap;
+    }
+    .settings-error.is-shown { display: block; }
+
     /* 環境設定モーダル内のみ：項目名が長いため dt 幅を広げる
        （.dialog-contents の共通ルールは変更せず、ここでスコープ限定で上書きする） */
     #settingsOverlay .dialog-contents dl dt { width: 140px; }
