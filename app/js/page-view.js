@@ -285,8 +285,17 @@ import { updateStatus } from './ui-common.js';
       const pageEl  = document.getElementById('pageLeft');
       const pageAspect = pageData.width / pageData.height;
       if (Math.abs(pageAspect - state.PAGE_ASPECT) > 0.001) {
+        // 紙面サイズ（縦横比)の異なるページ（表紙・見開きページ等）へ移動すると、
+        // resizePage() が #pageLeft のベースサイズ（offsetWidth/offsetHeight）を変える。
+        // アノテーションの style.left/top/width/height はこのベースサイズを座標系とする px 値のため、
+        // 変換しないと「座標系だけが変わってオブジェクトが取り残される」状態になり、
+        // 書き出し（%換算）・自動保存・別サイズページ上の表示位置がすべてずれる。
+        // リサイズ前後のベースサイズ比で全アノテーションを変換し、座標系との整合を保つ。
+        const oldBaseW = pageEl.offsetWidth;
+        const oldBaseH = pageEl.offsetHeight;
         state.PAGE_ASPECT = pageAspect;
         resizePage();
+        rebaseAnnotations(oldBaseW, oldBaseH, pageEl.offsetWidth, pageEl.offsetHeight);
       }
 
       const dpr   = window.devicePixelRatio || 1;
@@ -324,6 +333,45 @@ import { updateStatus } from './ui-common.js';
         const h = parseFloat(el.style.height) || el.offsetHeight;
         el.style.width  = (w * ratio) + 'px';
         el.style.height = (h * ratio) + 'px';
+      });
+    }
+
+
+    /**
+     * ページのベースサイズ（#pageLeft の offsetWidth/offsetHeight）が変わったとき、
+     * 全アノテーションのページ座標（px）を新しいベースサイズの座標系へ変換する。
+     *
+     * scaleAnnotations() との違い：
+     *  - scaleAnnotations() はフィット変更用で、縦横比が変わらない前提の単一比率スケール。
+     *  - 本関数は表紙・見開きページのように「縦横比そのものが変わる」ケース用で、横（rx）と縦（ry）に
+     *    別々の比率を掛ける。
+     *  - 対象は「ページ座標系の left/top を持つ全アノテーション」。CSS固定サイズのボタン
+     *    （インラインの width/height を持たない .daimon-btn / .kotae-btn / .shomei-btn）も
+     *    left/top はページ座標系の px なので変換対象に含める。width/height は
+     *    インライン値がある要素のみ変換する（CSS固定サイズを px で上書きしないため）。
+     *  - 非表示ページの要素（.ann-hidden-page＝display:none）は offsetWidth/offsetHeight が 0 に
+     *    なるため、実寸へのフォールバックは行わずインライン値の有無だけで判定する。
+     *
+     * @param {number} oldW - 変更前のベース幅
+     * @param {number} oldH - 変更前のベース高さ
+     * @param {number} newW - 変更後のベース幅
+     * @param {number} newH - 変更後のベース高さ
+     */
+    export function rebaseAnnotations(oldW, oldH, newW, newH) {
+      if (!oldW || !oldH || !newW || !newH) return;
+      const rx = newW / oldW;
+      const ry = newH / oldH;
+      if (rx === 1 && ry === 1) return;
+      document.querySelectorAll(
+        '#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj, #pageLeft .ann-image-obj, ' +
+        '#pageLeft .daimon-btn, #pageLeft .kotae-btn, #pageLeft .shomei-btn, #pageLeft .libro-network-slot'
+      ).forEach(el => {
+        el.style.left = ((parseFloat(el.style.left) || 0) * rx) + 'px';
+        el.style.top  = ((parseFloat(el.style.top)  || 0) * ry) + 'px';
+        const w = parseFloat(el.style.width);
+        const h = parseFloat(el.style.height);
+        if (!isNaN(w)) el.style.width  = (w * rx) + 'px';
+        if (!isNaN(h)) el.style.height = (h * ry) + 'px';
       });
     }
 
