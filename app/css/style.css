@@ -2986,8 +2986,9 @@
       color: #555;
     }
 
-    /* 環境設定モーダルの入力値エラー表示（既定は非表示、is-shown付与時のみ表示） */
-    .settings-error {
+    /* 入力値エラー表示（環境設定モーダル／クイック作成・編集ポップアップ共用。
+       既定は非表示、is-shown付与時のみ表示） */
+    .input-error {
       display: none;
       margin: 8px 0 0;
       font-size: 11px;
@@ -2995,7 +2996,7 @@
       color: #c00;
       white-space: pre-wrap;
     }
-    .settings-error.is-shown { display: block; }
+    .input-error.is-shown { display: block; }
 
     /* 環境設定モーダル内のみ：項目名が長いため dt 幅を広げる
        （.dialog-contents の共通ルールは変更せず、ここでスコープ限定で上書きする） */

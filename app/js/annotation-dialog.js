@@ -2,6 +2,7 @@ import { addAnnClickHandler } from './annotation-actions.js';
 import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
 import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
 import { applyDaimonImageAspect, generatePressedVariant, makeDaimonResizable, renderButtonVisual } from './buttons.js';
+import { validateJstreamCorpId, validateJstreamDir, validateJstreamVideoId } from './jstream-validate.js';
 import { mediaBlobs, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
 import { closeDialog, saveDialog } from './storage.js';
@@ -41,6 +42,63 @@ import { pushUndo } from './undo-redo.js';
       if (!lastNewAnnData.video) return;
       lastNewAnnData.video.annJstreamDir    = String(dir);
       lastNewAnnData.video.annJstreamCorpId = String(corpId);
+    }
+
+
+    /**
+     * クイック作成／編集ポップアップのJ-stream入力欄が、J-Streamの想定入力値かを検証する。
+     * 動画以外の種別、「J-stream」未選択（内部ファイル・外部タグ）、LIBRO由来の生文字列を
+     * 保持しているリンク（3欄が生成されない）は検証対象外として常に true を返す。
+     *
+     * - error：ポップアップ内にメッセージを表示し該当欄へフォーカスして中止する。
+     * - warn ：confirm でユーザーがOKを選んだ場合のみ続行する。
+     *
+     * 種別固有フィールドのidはサイドバーの詳細フォームにも同時に存在しうるため、
+     * 必ず #quickCreatePopup を起点に取得すること（document.getElementById は使わない）。
+     * @param {string} type - アノテーション種別
+     * @returns {boolean} true なら確定処理を続行してよい
+     */
+    function validateQuickPopupJstream(type) {
+      const popup = document.getElementById('quickCreatePopup');
+      if (type !== 'video' || !popup) return true;
+      // 「動画ファイル」ラジオの hidden input。'2' がJ-stream指定
+      const srcEl = popup.querySelector('[id="annVideoSrc"]');
+      if (!srcEl || srcEl.value !== '2') return true;
+
+      const errEl = popup.querySelector('[id="qcJstreamError"]');
+      const clearError = () => {
+        if (errEl) {
+          errEl.textContent = '';
+          errEl.classList.remove('is-shown');
+        }
+      };
+      const targets = [
+        ['annJstreamDir',     validateJstreamDir],
+        ['annJstreamCorpId',  validateJstreamCorpId],
+        ['annJstreamVideoId', validateJstreamVideoId],
+      ];
+      for (const [id, validate] of targets) {
+        const input = popup.querySelector(`[id="${id}"]`);
+        if (!input) continue;
+        const result = validate(input.value.trim());
+        if (result.level === 'error') {
+          if (errEl) {
+            errEl.textContent = result.message;
+            errEl.classList.add('is-shown');
+          }
+          input.focus();
+          return false;
+        }
+        // errorでなくなった時点で前回のメッセージは解消済みなのでクリアする
+        // （警告confirmをキャンセルして中止する場合に古い文言が残らないようにする）
+        clearError();
+        if (result.level === 'warn' && !window.confirm(result.message)) {
+          input.focus();
+          return false;
+        }
+      }
+      clearError();
+      return true;
     }
 
 
@@ -87,6 +145,7 @@ import { pushUndo } from './undo-redo.js';
               <dl id="qcFormSpecific"></dl>
             </div>
           </div>
+          <p class="input-error" id="qcJstreamError"></p>
         </div>
         <div class="dialog-footer">
           <button class="dialog-btn cancel" id="qcCancelBtn">× キャンセル</button>
@@ -138,6 +197,8 @@ import { pushUndo } from './undo-redo.js';
 
       // 更新ボタン：popup フォーム値 → サイドバーフォームへ転写 → confirmAnnotation
       document.getElementById('qcOkBtn').onclick = () => {
+        // J-stream指定の入力値を検証する。通らない場合はポップアップを閉じず更新もしない
+        if (!validateQuickPopupJstream(type)) return;
         // ポップアップ内フォーム値を直接収集
         const savedData = {};
         ['qcFormCommon', 'qcFormSpecific'].forEach(formId => {
@@ -221,6 +282,7 @@ import { pushUndo } from './undo-redo.js';
               <dl id="qcFormSpecific"></dl>
             </div>
           </div>
+          <p class="input-error" id="qcJstreamError"></p>
         </div>
         <div class="dialog-footer">
           <button class="dialog-btn cancel" id="qcCancelBtn">× キャンセル</button>
@@ -296,6 +358,8 @@ import { pushUndo } from './undo-redo.js';
      * @param {number} pageY - ページ相対Y座標
      */
     function confirmQuickCreate(type, pageX, pageY) {
+      // J-stream指定の入力値を検証する。通らない場合はポップアップを閉じずオブジェクトも作らない
+      if (!validateQuickPopupJstream(type)) return;
       // ポップアップフォームから値を収集し、サイドバーの共通/種別固有フォームに転写する
       ['qcFormCommon', 'qcFormSpecific'].forEach((srcId, i) => {
         const src  = document.getElementById(srcId);
