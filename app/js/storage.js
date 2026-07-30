@@ -9,6 +9,30 @@ import { updateLibroBookBtnStates } from './index-outline.js';
 import { mediaBlobs, state } from './state.js';
 import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateStatus } from './ui-common.js';
 
+    /**
+     * DOM上の付箋に付いている付箋グループID（`grp-N` 形式）を走査し、
+     * state.stickyGroupCounter をその最大値まで引き上げる。
+     *
+     * book読み込み・オートセーブ復元では data-group-id がDOMへ書き戻される
+     * （libro-format.js の renderTogglePairs / 本ファイルの restoreAnnotationsFromArray・
+     * restoreLibroStickyOverrides）が、カウンタは0のままだった。そのため復元後に
+     * 新規グループ化（sticky.js の toggleStickyGroup）や貼り付け（annotation-interaction.js の
+     * pasteClipboard）を行うと `grp-1` から採番し直し、既存グループとIDが衝突する。
+     * IDが衝突するとLIBRO書き出しの付箋グループ集約が別ページの付箋を同一グループとみなし、
+     * 付箋が意図しないページへ書き出される。state.annIdCounter と同じ考え方で引き上げる。
+     */
+    function syncStickyGroupCounterFromDom() {
+      let maxN = state.stickyGroupCounter;
+      document.querySelectorAll('#pageLeft .sticky-note[data-group-id]').forEach(el => {
+        // `grp-1--p3`（ページごとに分割して書き出したID）も数値部分を拾えるよう前方一致で見る
+        const m = /^grp-(\d+)/.exec(el.dataset.groupId || '');
+        if (!m) return;
+        const n = parseInt(m[1], 10);
+        if (Number.isFinite(n) && n > maxN) maxN = n;
+      });
+      state.stickyGroupCounter = maxN;
+    }
+
         /**
          * アノテーション配列からDOMを再構築する共通処理。
          * handleZipFile から呼び出される。
@@ -148,6 +172,8 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
                 page.appendChild(el);
               });
               updateAnnotationVisibility();
+              // 復元した data-group-id と新規発行IDが衝突しないようカウンタを引き上げる
+              syncStickyGroupCounterFromDom();
               showToast('アノテーションをファイルから復元しました');
         }
 
@@ -194,6 +220,8 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
           overlay.style.background = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
         }
       });
+      // 復元した data-group-id と新規発行IDが衝突しないようカウンタを引き上げる
+      syncStickyGroupCounterFromDom();
     }
 
     /**
@@ -326,6 +354,9 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
 
       // 新規アノテーションのID採番が既存IDと衝突しないよう、カウンターを引き上げる
       state.annIdCounter = Math.max(state.annIdCounter, maxAnnotId);
+      // 付箋グループIDも同様に引き上げる（renderTogglePairs が libro-craft-meta の
+      // group-id から data-group-id を復元するため、この位置で走らせる必要がある）
+      syncStickyGroupCounterFromDom();
       // 未知アノテーション・Hide/Showペアの生データは編集不可のまま保持し、書き出し時にそのまま書き戻す
       state.libroUnknownAnnotations = unknownAnnotations;
       // 大問ボタンは書き出し未対応のため、位置未編集・未削除の場合の書き戻し用に生データを保持する
