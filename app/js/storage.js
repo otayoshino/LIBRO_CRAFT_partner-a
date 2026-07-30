@@ -463,15 +463,34 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
 
       // 付箋（sticky-note）をグループ単位（groupId未設定は単独1件）でまとめ、
       // LIBROのHide/Showペア（既存付箋は画像そのまま再利用、新規付箋は色から新規PNGを生成）に変換する
-      const groupBuckets = new Map();
+      //
+      // バケットのキーは「ページ番号＋groupId」とする。#pageLeft には全ページ分の付箋が
+      // 共存しており（表示外は .ann-hidden-page）、groupId だけでまとめると別ページの
+      // 同一groupId付き付箋が1つのバケットへ混ざり、代表ページ（先頭要素のページ）へ
+      // 全メンバーがまとめて書き出されてしまう（付箋が別ページへ配置される不具合）。
+      // グループIDの衝突自体は復元時のカウンタ引き上げ（syncStickyGroupCounterFromDom）で
+      // 防いでいるが、既存データに衝突が残っていても書き出しがページを跨がないようにする。
+      const groupBuckets = new Map(); // `${pageNum}::${gid}` -> { pageNum, gid, members: HTMLElement[] }
       page.querySelectorAll('.sticky-note').forEach(el => {
         // 証明ボタン（shomei）紐付き付箋は、shomeiボタン自体がLIBRO+書き出し未対応のため
         // 「開閉するボタンの無い付箋」を出力しないよう、暫定的に書き出しから除外する
         // （解答は露出するが破損はしない。shomei正式対応時に本除外を撤去する）。
         if (el.dataset.shomeiId) return;
+        const pageNum = parseInt(el.dataset.page, 10) || 1;
         const gid = el.dataset.groupId || `__solo-${el.dataset.id}`;
-        if (!groupBuckets.has(gid)) groupBuckets.set(gid, []);
-        groupBuckets.get(gid).push(el);
+        const key = `${pageNum}::${gid}`;
+        if (!groupBuckets.has(key)) groupBuckets.set(key, { pageNum, gid, members: [] });
+        groupBuckets.get(key).members.push(el);
+      });
+
+      // 同一groupIdが複数ページに散っている場合（既存データにIDの衝突が残っているケース）は、
+      // 書き出す group-id もページごとに分ける。分けないと、書き出したbookを再読込した際に
+      // renderTogglePairs() が group-id 一致で（ページを区別せず）グループを再構成し、
+      // ページを跨いだ1グループとして復元されて同じ不具合が再発する。
+      const pagesByGid = new Map();
+      groupBuckets.forEach(({ pageNum, gid }) => {
+        if (!pagesByGid.has(gid)) pagesByGid.set(gid, new Set());
+        pagesByGid.get(gid).add(pageNum);
       });
 
       // 大問ボタンが紐付く付箋のclosed/open idを引くための逆引き（付箋要素→id）。
@@ -480,8 +499,7 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
       const stickyIdsByEl = new Map();
 
       const domStickyGroups = [];
-      groupBuckets.forEach((members, gid) => {
-        const pageNum = parseInt(members[0].dataset.page, 10) || 1;
+      groupBuckets.forEach(({ pageNum, gid, members }) => {
         const memberDescs = members.map(el => {
           const left   = parseFloat(el.style.left)   || 0;
           const top    = parseFloat(el.style.top)    || 0;
@@ -533,7 +551,9 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
           stickyIdsByEl.set(el, { closedId, openId });
           return desc;
         });
-        domStickyGroups.push({ pageNum, members: memberDescs, groupId: gid });
+        // 同一gidが複数ページに散っている場合のみ、書き出すgroup-idをページごとに分ける
+        const exportGid = (pagesByGid.get(gid)?.size || 1) > 1 ? `${gid}--p${pageNum}` : gid;
+        domStickyGroups.push({ pageNum, members: memberDescs, groupId: exportGid });
       });
 
       // 【追加要件②】daimon配下の付箋を共有する答ボタンをdaimonのHide/Showターゲットへ
