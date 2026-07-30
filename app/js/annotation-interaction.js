@@ -184,6 +184,22 @@ import { pushUndo } from './undo-redo.js';
           .map(s => s.kotaeId)
       );
 
+      // 付箋グループ（data-group-id）は複製元と同じIDのまま貼り付けると、複製先が別ページの
+      // 場合にLIBRO書き出し時の付箋グループ処理（storage.jsのgroupBuckets）が複製元・複製先を
+      // 同一グループとして誤って1ページへ集約してしまう（付箋が別ページへ配置される／
+      // 紐付く大問ボタンとの関係が壊れる不具合の原因）。そのため貼り付けのたびに新しい
+      // グループIDを発行する。同一ペースト操作内で複数メンバーが同じgroupIdを共有していた
+      // 場合は、複製後も互いに同じグループとして振る舞う必要があるため、この呼び出し内では
+      // 旧groupId→新groupIdの対応をキャッシュして使い回す。
+      const groupIdRemap = new Map();
+      const remapGroupId = (oldGid) => {
+        if (!oldGid) return undefined;
+        if (!groupIdRemap.has(oldGid)) {
+          groupIdRemap.set(oldGid, `grp-${++state.stickyGroupCounter}`);
+        }
+        return groupIdRemap.get(oldGid);
+      };
+
       const pasted = [];
       state.annClipboard.forEach(snap => {
         const newLeft = snap.left + dx;
@@ -224,7 +240,7 @@ import { pushUndo } from './undo-redo.js';
             note.dataset.type     = 'sticky';
             note.dataset.shomeiId = newShomeiId;
             note.dataset.savedData = ns.savedData || '{}';
-            if (ns.groupId) note.dataset.groupId = ns.groupId;
+            if (ns.groupId) note.dataset.groupId = remapGroupId(ns.groupId);
             // 背景は元々常に白固定だが、sticky-open-lockedクラス（クリック無効化・
             // 破線アウトライン等）はコピー元の状態を維持する（F-1と同じ理由）。
             let nsOpenLocked = false;
@@ -271,7 +287,7 @@ import { pushUndo } from './undo-redo.js';
             note.dataset.type    = 'sticky';
             note.dataset.kotaeId = newKotaeId;
             note.dataset.savedData = ns.savedData || '{}';
-            if (ns.groupId) note.dataset.groupId = ns.groupId;
+            if (ns.groupId) note.dataset.groupId = remapGroupId(ns.groupId);
             // 背景は元々常に白固定だが、sticky-open-lockedクラス（クリック無効化・
             // 破線アウトライン等）はコピー元の状態を維持する（F-1と同じ理由）。
             let nsOpenLocked = false;
@@ -321,7 +337,7 @@ import { pushUndo } from './undo-redo.js';
         el.dataset.id        = ++state.annIdCounter;
         el.dataset.type      = snap.type;
         el.dataset.savedData = snap.savedData;
-        if (snap.groupId) el.dataset.groupId = snap.groupId;
+        if (snap.groupId) el.dataset.groupId = remapGroupId(snap.groupId);
 
         if (snap.type === 'sticky') {
           // 「開閉方式：表示ボタン削除」（annStickyOpenMode）はコピー元の状態を維持する。
