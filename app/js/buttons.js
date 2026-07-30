@@ -462,6 +462,10 @@ import { pushUndo } from './undo-redo.js';
         if (!note.dataset.kotaeOrigBg) {
           note.dataset.kotaeOrigBg = note.style.background || note.style.backgroundColor || '';
         }
+        // LIBRO由来の既存付箋（.libro-toggle）は見た目が閉/開2枚のPNGで、ラッパのインライン背景は
+        // 閉状態では閉画像に隠れて効かず、開状態では逆に残って解答を覆ってしまう。
+        // 紙色表示はCSS（.sticky-note.libro-toggle[data-kotae-id]）側で行うため背景は触らない。
+        if (note.dataset.libroToggle === '1') return;
         note.style.background = '#ffffff';
       });
 

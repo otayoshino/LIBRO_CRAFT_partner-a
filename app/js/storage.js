@@ -151,6 +151,50 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
               showToast('アノテーションをファイルから復元しました');
         }
 
+    /**
+     * LIBRO book由来の付箋（.sticky-note.libro-toggle）に対してCRAFT側で付けた編集情報を、
+     * 自動保存スナップショットから復元する。
+     *
+     * これらの付箋要素はbook読み込み時に renderTogglePairs() が毎回描画し直すため
+     * restoreAnnotationsFromArray() の再構築対象ではない（削除もされない）。一方で
+     * 答ボタン・大問ボタン・証明ボタンとの紐付けや色上書きはCRAFT側の編集結果であり、
+     * 復元しないとボタンだけが復元されて紐付き付箋を1件も引けなくなる
+     * （閲覧モードで押しても何も起きず、再書き出しでもボタンが除外される）。
+     *
+     * 対応する要素は「ページ番号＋閉id」で引く（renderTogglePairsがdata-page/data-closed-idを
+     * 付与済み）。要素が見つからない場合（book差し替え等）はその項目を無視する。
+     * @param {Array<Object>|undefined} list - 自動保存スナップショットの libroStickies
+     */
+    export function restoreLibroStickyOverrides(list) {
+      if (!Array.isArray(list)) return;
+      const page = document.getElementById('pageLeft');
+      if (!page) return;
+      list.forEach(obj => {
+        if (!obj || obj.closedId === undefined) return;
+        const el = page.querySelector(
+          `.sticky-note.libro-toggle[data-page="${obj.page}"][data-closed-id="${obj.closedId}"]`
+        );
+        if (!el) return;
+        if (obj.kotaeId)    el.dataset.kotaeId    = obj.kotaeId;
+        if (obj.kotaeOrigBg !== undefined) el.dataset.kotaeOrigBg = obj.kotaeOrigBg;
+        if (obj.daimonId)   el.dataset.daimonId   = obj.daimonId;
+        if (obj.shomeiId)   el.dataset.shomeiId   = obj.shomeiId;
+        if (obj.groupId)    el.dataset.groupId    = obj.groupId;
+        if (obj.stickyColorOverride !== undefined) {
+          // 色上書き（設定ダイアログで色を選び直した状態）は、閉側プレビュー用の
+          // オーバーレイ要素とセットで復元する（confirmAnnotation と同じ構成）
+          el.dataset.stickyColorOverride = obj.stickyColorOverride;
+          const colorIdx = parseInt(obj.stickyColorOverride, 10);
+          let overlay = el.querySelector('.libro-toggle-color-override');
+          if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.className = 'libro-toggle-color-override';
+            el.appendChild(overlay);
+          }
+          overlay.style.background = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+        }
+      });
+    }
 
     /**
      * ファイル名と拡張子からメディアの再生URL を解決する。
@@ -416,15 +460,22 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
                         `width:${(width / pageRect.width) * 100}%;height:${(height / pageRect.height) * 100}%;`;
 
           let closedId, openId, desc;
+          // 答ボタン（.kotae-btn）に紐付いた付箋は、CRAFT画面上と同じく「閉」（解答を隠す面）を
+          // 紙色（STICKY_COLOR_MAPのインデックス3＝#ffffff）で書き出す。
+          // 見た目の確定はCSS（.sticky-note[data-kotae-id].state-visible）と対になっている。
+          const isKotaeLinked = !!el.dataset.kotaeId;
           if (el.dataset.libroToggle === '1') {
             // 既存付箋：id・画像は基本そのまま再利用する。
             // 「開」（解答等が描き込まれている可能性がある元画像）は常に無変更のまま維持し、
-            // 色が上書きされた場合（dataset.stickyColorOverride）のみ「閉」だけを新規生成する。
+            // 答ボタン紐付け（紙色）または色が上書きされた場合（dataset.stickyColorOverride）のみ
+            // 「閉」だけを新規生成する。
             closedId = parseInt(el.dataset.closedId, 10);
             openId   = parseInt(el.dataset.openId, 10);
             const closedFile = el.dataset.closedFile;
             const openFile   = el.dataset.openFile;
-            if (el.dataset.stickyColorOverride) {
+            if (isKotaeLinked) {
+              desc = { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color: STICKY_COLOR_MAP[3], style };
+            } else if (el.dataset.stickyColorOverride) {
               const colorIdx = parseInt(el.dataset.stickyColorOverride, 10);
               const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
               desc = { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color, style };
@@ -440,7 +491,9 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
             let sd = {};
             try { sd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
             const colorIdx = parseInt(sd.annColor || '0', 10);
-            const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+            const color = isKotaeLinked
+              ? STICKY_COLOR_MAP[3]
+              : (STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0]);
             desc = { closedId, openId, closedMode: 'color', openMode: 'transparent', color, style };
           }
           // 「開削除」設定（3-2-4/3-2-5節でクラス反映済み）をLIBRO書き出し側へ伝える。

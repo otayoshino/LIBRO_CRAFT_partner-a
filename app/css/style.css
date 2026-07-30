@@ -1562,6 +1562,27 @@
     .sticky-note.libro-toggle.state-hidden  .libro-toggle-closed { display: none;  }
     .sticky-note.libro-toggle.state-hidden  .libro-toggle-open   { display: block; }
 
+    /* 答ボタン（.kotae-btn）に紐付いた付箋：解答を隠す面（閉＝state-visible）を紙色(白)固定で
+       表示する。答ボタンの紐付け/解除は data-kotae-id の付け外しだけで行われるため、
+       インライン背景に頼らずCSS側で見た目を確定させる（Undo/Redo・自動保存復元でも崩れない）。
+       「開削除」設定（.sticky-open-locked）と同じ考え方。 */
+    .sticky-note[data-kotae-id].state-visible {
+      background: #ffffff !important;
+    }
+
+    /* LIBRO由来の既存付箋（.libro-toggle）は見た目が閉/開2枚のPNGのため、上の背景色は
+       閉画像に隠れて効かない。閉画像そのものを隠して紙色の背景を見せる（開側の元画像は無変更）。 */
+    .sticky-note.libro-toggle[data-kotae-id] .libro-toggle-closed {
+      display: none !important;
+    }
+
+    /* 解答が見えている状態（開＝state-hidden）では紙色を出さない。
+       .libro-toggle は state-hidden の opacity:0 を打ち消しているため、背景色が残ると
+       完全透明の「開」PNGを通して白い矩形が解答を覆ってしまう。 */
+    .sticky-note.libro-toggle[data-kotae-id].state-hidden {
+      background: transparent !important;
+    }
+
     /* 既存付箋の色を選び直した場合のプレビュー用オーバーレイ（閉側のみ差し替え、開側の元画像は無変更のまま維持） */
     .sticky-note.libro-toggle .libro-toggle-color-override {
       position: absolute;

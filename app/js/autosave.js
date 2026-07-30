@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { restoreAnnotationsFromArray } from './storage.js';
+import { restoreAnnotationsFromArray, restoreLibroStickyOverrides } from './storage.js';
 import { showToast } from './ui-common.js';
 
     /* ============================
@@ -79,15 +79,43 @@ import { showToast } from './ui-common.js';
     }
 
     /**
+     * LIBRO book由来の付箋（.sticky-note.libro-toggle）に対してCRAFT側で付けた編集情報だけを
+     * 抽出する。これらの要素はbook読み込み時に renderTogglePairs() が毎回描画し直すため
+     * collectAnnotationSnapshotData() の対象外（セレクタで除外している）だが、
+     * 答/大問/証明ボタンとの紐付け・色上書きはCRAFT側の編集結果であり、保存しないと
+     * 復元時にボタンだけが生き残って紐付きが切れる。位置・サイズ・画像はzip側が真とするため保存しない。
+     * @returns {Array<Object>} 紐付け・色上書きを持つ付箋のみの配列（無ければ空配列）
+     */
+    function collectLibroStickyOverrides() {
+      const page = document.getElementById('pageLeft');
+      if (!page) return [];
+      return Array.from(page.querySelectorAll('.sticky-note.libro-toggle'))
+        .filter(el => el.dataset.kotaeId || el.dataset.daimonId || el.dataset.shomeiId ||
+                      el.dataset.stickyColorOverride || el.dataset.groupId)
+        .map(el => ({
+          page:     el.dataset.page,
+          closedId: el.dataset.closedId,
+          kotaeId:  el.dataset.kotaeId,
+          kotaeOrigBg: el.dataset.kotaeOrigBg,
+          daimonId: el.dataset.daimonId,
+          shomeiId: el.dataset.shomeiId,
+          groupId:  el.dataset.groupId,
+          stickyColorOverride: el.dataset.stickyColorOverride,
+        }));
+    }
+
+    /**
      * 現在のアノテーション状態をIndexedDBへ保存する。
      */
     async function saveAutoSaveSnapshot() {
       try {
         const data = collectAnnotationSnapshotData();
+        // LIBRO book由来付箋の紐付け情報（本体はzip側が真のため、編集分だけを別枠で保存する）
+        const libroStickies = collectLibroStickyOverrides();
         const db = await openAutoSaveDB();
         await new Promise((resolve, reject) => {
           const tx = db.transaction(STORE_NAME, 'readwrite');
-          tx.objectStore(STORE_NAME).put({ data, savedAt: Date.now(), bookId: state.currentBookId }, SNAPSHOT_KEY);
+          tx.objectStore(STORE_NAME).put({ data, libroStickies, savedAt: Date.now(), bookId: state.currentBookId }, SNAPSHOT_KEY);
           tx.oncomplete = resolve;
           tx.onerror = () => reject(tx.error);
         });
@@ -146,6 +174,9 @@ import { showToast } from './ui-common.js';
         const restore = window.confirm(`このbookの自動保存された編集内容があります（${savedAt} 保存）。\n復元しますか？`);
         if (restore) {
           restoreAnnotationsFromArray(snapshot.data);
+          // LIBRO book由来付箋の紐付け情報を復元する（旧スナップショットではキーが無いが、
+          // 復元側が配列以外を無視するためそのまま渡してよい）
+          restoreLibroStickyOverrides(snapshot.libroStickies);
           showToast('オートセーブデータから復元しました');
         } else {
           await clearAutoSaveSnapshot();
