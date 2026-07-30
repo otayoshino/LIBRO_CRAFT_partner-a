@@ -1034,6 +1034,10 @@ import { pushUndo } from './undo-redo.js';
     export function reinitElement(el) {
       if (el.classList.contains('sticky-note')) {
         addStickyClickHandler(el);
+        // 付箋も他の種別と同様にドラッグ移動可能にする。これが無いと
+        // restoreAnnotationsFromArray() 経由で復元した付箋（オートセーブ復元・
+        // 独自ZIP読み込み）が移動できなくなる（新規作成パスは makeDraggable を呼んでいる）。
+        makeDraggable(el);
         makeResizable(el);
       } else if (el.classList.contains('daimon-btn')) {
         addDaimonClickHandler(el);
@@ -1071,10 +1075,19 @@ import { pushUndo } from './undo-redo.js';
      * 要素をドラッグで移動可能にする。
      * - Shift を押しながらドラッグ：水平または垂直に固定して移動
      * - Alt を押しながらドラッグ：要素をコピーしてドラッグ（オリジナルは元の位置に残る）
+     *
+     * 同一要素に対して2回以上呼ばれても mousedown リスナーは1つしか登録しない。
+     * 二重登録すると1回のドラッグで move のUndoエントリが2件積まれ、Alt+ドラッグでは
+     * 複製が2個作られてしまう。Alt+ドラッグの複製処理は makeDraggable(clone) の直後に
+     * reinitElement(clone) を呼ぶ構造で、reinitElement() 側も付箋以外の種別では
+     * makeDraggable() を呼ぶため、実際に二重登録が起こり得る。
+     * cloneNode() はJSプロパティを複製しないため、複製先要素のフラグは未設定から始まる。
      * @param {HTMLElement} el - ドラッグ対象要素
      * @param {string} [excludeSelector] - この CSS セレクタにマッチする子要素からのドラッグは無視
      */
     export function makeDraggable(el, excludeSelector) {
+      if (el._draggableInit) return;
+      el._draggableInit = true;
       el.addEventListener('mousedown', (e) => {
         if (document.body.classList.contains('is-view-mode')) return; // 閲覧モードはドラッグ無効
         if (excludeSelector && e.target.matches(excludeSelector)) return;
