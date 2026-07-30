@@ -1,5 +1,5 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
 import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getPageBaseSize, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
 import { applyDaimonImageAspect, generatePressedVariant, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { validateJstreamCorpId, validateJstreamDir, validateJstreamVideoId } from './jstream-validate.js';
@@ -263,7 +263,12 @@ import { pushUndo } from './undo-redo.js';
 
       buildCommonFields(document.getElementById('qcFormCommon'), type, prevData, null, el);
 
-      const isLibroToggleSticky = type === 'sticky' && el.dataset.libroToggle === '1';
+      // dataset.libroToggleCraftは libro-format.js の renderTogglePairs() が、CRAFT自身が
+      // 書き出した付箋（libro-craft-metaあり）を再読込した際にのみ付与する。CRAFT製なら
+      // 元画像を再生成できるため、開閉方式欄の表示だけはLIBRO+製由来との判定から除外する
+      // （色編集不可の制約はisLibroToggleStickyのまま維持し、buildCommonFields側は無変更）。
+      const isLibroToggleSticky = type === 'sticky' && el.dataset.libroToggle === '1'
+        && el.dataset.libroToggleCraft !== '1';
       if (!isLibroToggleSticky) {
         buildSpecificFields(document.getElementById('qcFormSpecific'), type, prevData, el);
         document.getElementById('qcSepWrap').style.display = '';
@@ -830,7 +835,9 @@ import { pushUndo } from './undo-redo.js';
       if (type === 'sticky') {
         // LIBRO由来の既存付箋（.libro-toggle）は閉側画像が元データ由来のため、
         // 開閉方式の変更（閉側の白画像再生成）を提供しない（既存付箋カラー選択と同じ制約）。
-        if (existingEl?.dataset.libroToggle === '1') return;
+        // ただしCRAFT自身が書き出した付箋を再読込した場合（dataset.libroToggleCraft==='1'）は
+        // 開閉方式欄自体は表示してよい（openEditPopupのisLibroToggleStickyと同じ判定基準）。
+        if (existingEl?.dataset.libroToggle === '1' && existingEl.dataset.libroToggleCraft !== '1') return;
         const openMode = savedData.annStickyOpenMode || '0';
         form.appendChild(_buildRadioDt('開閉方式'));
         form.appendChild(_buildRadioDD('annStickyOpenMode', 'annStickyOpenModeRadio', openMode, [
@@ -856,26 +863,13 @@ import { pushUndo } from './undo-redo.js';
           form.appendChild(hiddenLabel);
         }
 
-        // プリセットスタイル
-        const presetDt = document.createElement('dt');
-        presetDt.textContent = 'スタイル';
-        form.appendChild(presetDt);
-        const presetDd = document.createElement('dd');
-        const presetWrap = document.createElement('div');
-        presetWrap.className = 'd-select-wrap';
-        const presetSel = document.createElement('select');
-        presetSel.className = 'd-select';
-        presetSel.id = 'btnPreset';
-        BTN_COLOR_OPTIONS.forEach((c, i) => {
-          const o = document.createElement('option');
-          o.value = i;
-          o.textContent = c.label;
-          presetSel.appendChild(o);
-        });
-        presetSel.value = savedData.btnPreset !== undefined ? savedData.btnPreset : defaultPresetIdx;
-        presetWrap.appendChild(presetSel);
-        presetDd.appendChild(presetWrap);
-        form.appendChild(presetDd);
+        // プリセットスタイル：UI上は編集させないため hidden とする（btnLabelと同じパターン）。
+        // 値（btnPreset）自体はrenderButtonVisual・LIBRO書き出しで引き続き使用するため保持する。
+        const presetHidden = document.createElement('input');
+        presetHidden.type  = 'hidden';
+        presetHidden.id    = 'btnPreset';
+        presetHidden.value = savedData.btnPreset !== undefined ? savedData.btnPreset : defaultPresetIdx;
+        form.appendChild(presetHidden);
 
         // 拡大率
         const scaleDt = document.createElement('dt');
@@ -1827,8 +1821,9 @@ import { pushUndo } from './undo-redo.js';
           existingEl.classList.toggle('sticky-open-locked', savedData.annStickyOpenMode === '1');
           updateStatus();
         } else {
-          // 新規作成：連続作成用に設定を保存
-          lastNewAnnData[type] = savedData;
+          // 新規作成：連続作成用に設定を保存する。ただし「開閉方式」は付箋ごとに個別設定すべき
+          // 項目のため引継ぎ対象から除外し、次回ポップアップは常に既定値（通常開閉）から始める。
+          lastNewAnnData[type] = { ...savedData, annStickyOpenMode: '0' };
           const { x, y, w, h } = state.pendingRect;
           const note = document.createElement('div');
           note.className = 'sticky-note state-visible';
@@ -1963,8 +1958,10 @@ import { pushUndo } from './undo-redo.js';
           });
           updateStatus();
         } else {
-          // 新規作成：連続作成用に設定を保存し、displayType に応じて要素を生成
-          lastNewAnnData[type] = savedData;
+          // 新規作成：連続作成用に設定を保存し、displayType に応じて要素を生成する。
+          // 音声再生のファイル名（annFile）はファイルごとに個別指定すべき値のため、
+          // 引継ぎ対象から除外し次回ポップアップは空欄から始める（video種別は対象外）。
+          lastNewAnnData[type] = type === 'audio' ? { ...savedData, annFile: '' } : savedData;
           const ann = document.createElement('div');
           ann.dataset.id        = ++state.annIdCounter;
           ann.dataset.type      = type;

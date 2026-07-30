@@ -1535,8 +1535,8 @@
 
     .sticky-note.is-selected {
       --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
-      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
-                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
+      box-shadow: inset 0 0 0 var(--ann-sel-ring) #fff,
+                  inset 0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
       z-index: 20;
     }
 
@@ -1698,8 +1698,8 @@
        種別ごとの通常時box-shadow（ドロップシャドウ等）より優先させるため!importantで上書きする。 */
     .ann-object.is-selected {
       --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
-      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
-                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
+      box-shadow: inset 0 0 0 var(--ann-sel-ring) #fff,
+                  inset 0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
       z-index: 20;
       overflow: visible;
     }
@@ -1777,8 +1777,8 @@
     }
     .ann-icon-obj.is-selected {
       --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
-      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
-                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
+      box-shadow: inset 0 0 0 var(--ann-sel-ring) #fff,
+                  inset 0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
       z-index: 20;
     }
     .ann-icon-obj svg {
@@ -1801,8 +1801,8 @@
     }
     .ann-image-obj.is-selected {
       --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
-      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
-                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
+      box-shadow: inset 0 0 0 var(--ann-sel-ring) #fff,
+                  inset 0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
       z-index: 20;
       /* 選択時はリサイズハンドル（負のオフセットで枠外に配置）をクリック可能にするため表示を許可する */
       overflow: visible;
@@ -2402,8 +2402,8 @@
     }
     .daimon-btn.is-selected {
       --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
-      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
-                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
+      box-shadow: inset 0 0 0 var(--ann-sel-ring) #fff,
+                  inset 0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
     }
     .is-view-mode .daimon-btn {
       cursor: pointer;
@@ -2438,8 +2438,8 @@
     }
     .kotae-btn.is-selected {
       --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
-      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
-                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
+      box-shadow: inset 0 0 0 var(--ann-sel-ring) #fff,
+                  inset 0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
     }
     .is-view-mode .kotae-btn {
       cursor: pointer;
@@ -2474,8 +2474,8 @@
     }
     .shomei-btn.is-selected {
       --ann-sel-ring: calc(2px * var(--zoom-inv-scale, 1));
-      box-shadow: 0 0 0 var(--ann-sel-ring) #fff,
-                  0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
+      box-shadow: inset 0 0 0 var(--ann-sel-ring) #fff,
+                  inset 0 0 0 calc(var(--ann-sel-ring) * 2) var(--ann-selected-color) !important;
     }
     .is-view-mode .shomei-btn {
       cursor: pointer;

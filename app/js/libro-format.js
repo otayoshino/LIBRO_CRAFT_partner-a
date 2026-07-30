@@ -1088,6 +1088,16 @@ export function renderTogglePairs(togglePairs) {
     if (tp.groupId && groupMemberCounts.get(tp.groupId) > 1) {
       wrap.dataset.groupId = tp.groupId;
     }
+    if (tp.craftMeta) {
+      // CRAFT自身が書き出した付箋（libro-craft-metaあり）：開閉方式（表示ボタン削除＝
+      // open-locked）を復元する。dataset.libroToggleCraftはannotation-dialog.jsの
+      // openEditPopup/buildSpecificFieldsが「開閉方式欄を表示してよいCRAFT製トグル付箋」か
+      // どうかの判定に使う（色・元画像の編集不可制約はdataset.libroToggleのまま維持）。
+      wrap.dataset.libroToggleCraft = '1';
+      const openLocked = tp.craftMeta['open-locked'] === true;
+      wrap.dataset.savedData = JSON.stringify({ annStickyOpenMode: openLocked ? '1' : '0' });
+      wrap.classList.toggle('sticky-open-locked', openLocked);
+    }
     wrap.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
 
     const closedImg = document.createElement('img');
