@@ -39,9 +39,9 @@ function decodeBase64(v) {
 
 /**
  * Jストリームディレクトリの入力値がJ-Streamの想定入力値かを判定する。
- * 空文字（未入力）は許容する。
+ * 空文字（未入力）は許容する。想定外の値はすべて error とし、確認ダイアログは出さない。
  * @param {string} v - トリム済みの入力値
- * @returns {{level:'ok'|'warn'|'error', message:string}}
+ * @returns {{level:'ok'|'error', message:string}}
  */
 export function validateJstreamDir(v) {
   if (v === '') return { level: 'ok', message: '' };
@@ -53,8 +53,8 @@ export function validateJstreamDir(v) {
   }
   if (!JSTREAM_DIR_PATTERN.test(v)) {
     return {
-      level: 'warn',
-      message: `「${v}」はJストリームディレクトリの想定形式（「eq」＋半角英小文字・数字8桁）と異なります。\nこのまま続行しますか？`,
+      level: 'error',
+      message: 'Jストリームディレクトリの想定形式（「eq」＋半角英小文字・数字8桁）と異なります。',
     };
   }
   return { level: 'ok', message: '' };
@@ -65,10 +65,10 @@ export function validateJstreamDir(v) {
  * 難読化ID（企業ID・Jストリーム難読化ID）の入力値がJ-Streamの想定入力値かを判定する。
  * 企業ID＝貼付タグのパラメータ「c」、難読化ID＝同「m」で、いずれも数値をBase64化した
  * 同一形式のため判定基準を共有し、文言だけを差し替える。
- * 空文字（未入力）は許容する。
+ * 空文字（未入力）は許容する。想定外の値はすべて error とし、確認ダイアログは出さない。
  * @param {string} v - トリム済みの入力値
  * @param {{label:string, param:string, plainLabel:string}} labels - 項目名／貼付タグのパラメータ名／平文値の呼称
- * @returns {{level:'ok'|'warn'|'error', message:string}}
+ * @returns {{level:'ok'|'error', message:string}}
  */
 function validateObfuscatedId(v, labels) {
   if (v === '') return { level: 'ok', message: '' };
@@ -87,8 +87,8 @@ function validateObfuscatedId(v, labels) {
   }
   if (!/^[0-9]{1,10}$/.test(decoded)) {
     return {
-      level: 'warn',
-      message: `${labels.label}「${v}」は難読化を解くと数値になる想定ですが、そうなっていません。\nこのまま続行しますか？`,
+      level: 'error',
+      message: `${labels.label}の想定形式（数値をBase64化した難読化文字列）と異なります。`,
     };
   }
   return { level: 'ok', message: '' };
@@ -98,7 +98,7 @@ function validateObfuscatedId(v, labels) {
 /**
  * 企業ID（難読化形式・貼付タグのパラメータ「c」）の入力値を判定する。
  * @param {string} v - トリム済みの入力値
- * @returns {{level:'ok'|'warn'|'error', message:string}}
+ * @returns {{level:'ok'|'error', message:string}}
  */
 export function validateJstreamCorpId(v) {
   return validateObfuscatedId(v, { label: '企業ID', param: 'c', plainLabel: '平文の企業ID' });
@@ -108,7 +108,7 @@ export function validateJstreamCorpId(v) {
 /**
  * Jストリーム難読化ID（動画ID・貼付タグのパラメータ「m」）の入力値を判定する。
  * @param {string} v - トリム済みの入力値
- * @returns {{level:'ok'|'warn'|'error', message:string}}
+ * @returns {{level:'ok'|'error', message:string}}
  */
 export function validateJstreamVideoId(v) {
   return validateObfuscatedId(v, { label: 'Jストリーム難読化ID', param: 'm', plainLabel: '平文の動画ID' });

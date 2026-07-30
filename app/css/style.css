@@ -2998,6 +2998,12 @@
     }
     .input-error.is-shown { display: block; }
 
+    /* 入力欄の直下に出すエラー表示（J-streamの3欄・環境設定の2欄）は上下の余白を詰める */
+    .side-detail-form .input-error,
+    #settingsOverlay .dialog-contents dl dd .input-error {
+      margin: 3px 0 6px;
+    }
+
     /* 環境設定モーダル内のみ：項目名が長いため dt 幅を広げる
        （.dialog-contents の共通ルールは変更せず、ここでスコープ限定で上書きする） */
     #settingsOverlay .dialog-contents dl dt { width: 140px; }

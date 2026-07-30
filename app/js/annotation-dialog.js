@@ -50,8 +50,9 @@ import { pushUndo } from './undo-redo.js';
      * 動画以外の種別、「J-stream」未選択（内部ファイル・外部タグ）、LIBRO由来の生文字列を
      * 保持しているリンク（3欄が生成されない）は検証対象外として常に true を返す。
      *
-     * - error：ポップアップ内にメッセージを表示し該当欄へフォーカスして中止する。
-     * - warn ：confirm でユーザーがOKを選んだ場合のみ続行する。
+     * - error：該当欄の直下にメッセージを表示し、最初にエラーになった欄へフォーカスして中止する
+     *   （3欄すべてを判定するため、複数欄が同時にエラー表示になることがある。
+     *     確認ダイアログは出さず、ユーザーに続行可否を尋ねない）。
      *
      * 種別固有フィールドのidはサイドバーの詳細フォームにも同時に存在しうるため、
      * 必ず #quickCreatePopup を起点に取得すること（document.getElementById は使わない）。
@@ -65,39 +66,30 @@ import { pushUndo } from './undo-redo.js';
       const srcEl = popup.querySelector('[id="annVideoSrc"]');
       if (!srcEl || srcEl.value !== '2') return true;
 
-      const errEl = popup.querySelector('[id="qcJstreamError"]');
-      const clearError = () => {
-        if (errEl) {
-          errEl.textContent = '';
-          errEl.classList.remove('is-shown');
-        }
-      };
+      // 3欄すべてを判定し、エラーの欄には各欄直下のエラー表示欄へメッセージを出す
+      // （最初のエラーで打ち切らない）。フォーカスは最初にエラーになった欄へ当てる。
       const targets = [
-        ['annJstreamDir',     validateJstreamDir],
-        ['annJstreamCorpId',  validateJstreamCorpId],
-        ['annJstreamVideoId', validateJstreamVideoId],
+        ['annJstreamDir',     'annJstreamDirError',     validateJstreamDir],
+        ['annJstreamCorpId',  'annJstreamCorpIdError',  validateJstreamCorpId],
+        ['annJstreamVideoId', 'annJstreamVideoIdError', validateJstreamVideoId],
       ];
-      for (const [id, validate] of targets) {
+      let firstInvalid = null;
+      for (const [id, errId, validate] of targets) {
         const input = popup.querySelector(`[id="${id}"]`);
         if (!input) continue;
         const result = validate(input.value.trim());
-        if (result.level === 'error') {
-          if (errEl) {
-            errEl.textContent = result.message;
-            errEl.classList.add('is-shown');
-          }
-          input.focus();
-          return false;
+        const isError = result.level === 'error';
+        const errEl = popup.querySelector(`[id="${errId}"]`);
+        if (errEl) {
+          errEl.textContent = isError ? result.message : '';
+          errEl.classList.toggle('is-shown', isError);
         }
-        // errorでなくなった時点で前回のメッセージは解消済みなのでクリアする
-        // （警告confirmをキャンセルして中止する場合に古い文言が残らないようにする）
-        clearError();
-        if (result.level === 'warn' && !window.confirm(result.message)) {
-          input.focus();
-          return false;
-        }
+        if (isError && !firstInvalid) firstInvalid = input;
       }
-      clearError();
+      if (firstInvalid) {
+        firstInvalid.focus();
+        return false;
+      }
       return true;
     }
 
@@ -145,7 +137,6 @@ import { pushUndo } from './undo-redo.js';
               <dl id="qcFormSpecific"></dl>
             </div>
           </div>
-          <p class="input-error" id="qcJstreamError"></p>
         </div>
         <div class="dialog-footer">
           <button class="dialog-btn cancel" id="qcCancelBtn">× キャンセル</button>
@@ -282,7 +273,6 @@ import { pushUndo } from './undo-redo.js';
               <dl id="qcFormSpecific"></dl>
             </div>
           </div>
-          <p class="input-error" id="qcJstreamError"></p>
         </div>
         <div class="dialog-footer">
           <button class="dialog-btn cancel" id="qcCancelBtn">× キャンセル</button>
@@ -1134,7 +1124,16 @@ import { pushUndo } from './undo-redo.js';
           vidInput.id = 'annJstreamVideoId';
           vidInput.value = savedData.annJstreamVideoId || '';
           vidInput.placeholder = 'Jストリーム難読化ID';
-          [dirInput, corpInput, vidInput].forEach(inp => jsDd.appendChild(inp));
+          // 入力欄ごとの検証エラー表示欄。既定は非表示（.input-error）で、
+          // validateQuickPopupJstream() が is-shown を付けたときだけ表示される。
+          [[dirInput, 'annJstreamDirError'], [corpInput, 'annJstreamCorpIdError'], [vidInput, 'annJstreamVideoIdError']]
+            .forEach(([inp, errId]) => {
+              jsDd.appendChild(inp);
+              const errP = document.createElement('p');
+              errP.className = 'input-error';
+              errP.id = errId;
+              jsDd.appendChild(errP);
+            });
           jsFields = [jsDd];
         }
         [...jsFields, modeDt, modeDd].forEach(el => form.appendChild(el));

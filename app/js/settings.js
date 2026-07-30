@@ -66,33 +66,33 @@ function saveSettings() {
 }
 
 /**
- * 検証結果に応じてエラー表示・確認ダイアログを出し、設定の反映を続行してよいかを返す。
- * - error：反映不可。動画再生タブへ切り替え、該当欄にフォーカスしてエラーメッセージを表示する。
- * - warn ：confirm でユーザーがOKを選んだ場合のみ続行する。
- * @param {{level:'ok'|'warn'|'error', message:string}} result
- * @param {HTMLInputElement} input - 検証対象の入力欄
+ * 環境設定のJ-stream入力値を検証し、設定の反映を続行してよいかを返す。
+ * 2欄すべてを判定し、エラーの欄には各欄直下のエラー表示欄へメッセージを出す
+ * （最初のエラーで打ち切らないため、複数欄が同時にエラー表示になることがある）。
+ * エラーがあれば動画再生タブへ切り替え、最初にエラーになった欄へフォーカスして
+ * 反映を中止する（確認ダイアログは出さない）。
+ * @param {string} dirValue  - トリム済みのJストリームディレクトリ
+ * @param {string} corpValue - トリム済みの企業ID
  * @returns {boolean} true なら反映を続行してよい
  */
-function confirmJstreamValue(result, input) {
-  const el = document.getElementById('settingsJstreamError');
-  if (result.level === 'error') {
-    if (el) {
-      el.textContent = result.message;
-      el.classList.add('is-shown');
+function applyJstreamValidation(dirValue, corpValue) {
+  const targets = [
+    ['settingsJstreamDirInput',    'settingsJstreamDirError',    validateJstreamDir(dirValue)],
+    ['settingsJstreamCorpIdInput', 'settingsJstreamCorpIdError', validateJstreamCorpId(corpValue)],
+  ];
+  let firstInvalid = null;
+  for (const [inputId, errId, result] of targets) {
+    const isError = result.level === 'error';
+    const errEl = document.getElementById(errId);
+    if (errEl) {
+      errEl.textContent = isError ? result.message : '';
+      errEl.classList.toggle('is-shown', isError);
     }
-    switchSettingsTab('video');
-    input.focus();
-    return false;
+    if (isError && !firstInvalid) firstInvalid = document.getElementById(inputId);
   }
-  // errorでなくなった時点で、前回表示したエラーメッセージは解消済みなのでクリアする
-  // （警告confirmをキャンセルして early return する場合に古い文言が残らないようにする）
-  if (el) {
-    el.textContent = '';
-    el.classList.remove('is-shown');
-  }
-  if (result.level === 'warn' && !window.confirm(result.message)) {
+  if (firstInvalid) {
     switchSettingsTab('video');
-    input.focus();
+    firstInvalid.focus();
     return false;
   }
   return true;
@@ -107,11 +107,13 @@ export function openSettingsModal() {
   document.getElementById('settingsJstreamDirInput').value    = state.settingsJstreamDir;
   document.getElementById('settingsJstreamCorpIdInput').value = state.settingsJstreamCorpId;
   // 前回開いたときのエラー表示は持ち越さない
-  const errEl = document.getElementById('settingsJstreamError');
-  if (errEl) {
-    errEl.textContent = '';
-    errEl.classList.remove('is-shown');
-  }
+  ['settingsJstreamDirError', 'settingsJstreamCorpIdError'].forEach(id => {
+    const errEl = document.getElementById(id);
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.classList.remove('is-shown');
+    }
+  });
   document.getElementById('settingsOverlay').classList.add('is-open');
 }
 
@@ -125,16 +127,13 @@ export function closeSettingsModal(save) {
 
   if (save) {
     // J-streamのデフォルト値は書き出し時にそのまま toMovie の引数となるため、
-    // 反映前にJ-Streamの想定入力値かを検証する。形式としてありえない値（error）は
-    // 反映せずモーダルを開いたままにし、想定パターン外だが形式は成立する値（warn）は
-    // confirm で確認のうえ反映する。空欄（未設定）は常に許容する。
+    // 反映前にJ-Streamの想定入力値かを検証する。想定外の値は反映せず、
+    // モーダルを開いたまま該当欄の直下にエラーメッセージを表示する
+    // （確認ダイアログは出さない）。空欄（未設定）は常に許容する。
     // 前後の空白は検証・保持のいずれでも除去する（意図しない空白混入を防ぐ）。
-    const dirInput   = document.getElementById('settingsJstreamDirInput');
-    const corpInput  = document.getElementById('settingsJstreamCorpIdInput');
-    const dirValue   = dirInput.value.trim();
-    const corpValue  = corpInput.value.trim();
-    if (!confirmJstreamValue(validateJstreamDir(dirValue), dirInput)) return;
-    if (!confirmJstreamValue(validateJstreamCorpId(corpValue), corpInput)) return;
+    const dirValue  = document.getElementById('settingsJstreamDirInput').value.trim();
+    const corpValue = document.getElementById('settingsJstreamCorpIdInput').value.trim();
+    if (!applyJstreamValidation(dirValue, corpValue)) return;
 
     state.settingsStickyDefaultColor = document.getElementById('settingsStickyColorSelect').value;
     state.settingsDaimonLabel        = document.getElementById('settingsDaimonLabelSelect').value;
