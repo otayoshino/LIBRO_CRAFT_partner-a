@@ -1804,11 +1804,15 @@ import { pushUndo } from './undo-redo.js';
             existingEl.style.background = bgColor;
             renderAnnObjectContent(existingEl, type, 'marker', label);
           }
-          // タイプ変更後にリサイズハンドルを再付与（icon ↔ marker 切り替え時にハンドルがなくなる問題を修正）
-          if (displayType === 'icon' || displayType === 'image') {
-            makeResizable(existingEl, { lockAspectRatio: true, minSize: 14 });
-          } else {
-            makeResizable(existingEl);
+          // タイプ変更後にリサイズハンドルを再付与（icon ↔ marker 切り替え時にハンドルがなくなる問題を修正）。
+          // LIBRO+製（libro-craft-metaなし＝他オーサリングツール由来）のknown系は、元画像の歪みを
+          // 防ぐためリサイズ不可のまま維持する（dataset.libroLockedSize、reinitElementと同じ判定）。
+          if (existingEl.dataset.libroLockedSize !== '1') {
+            if (displayType === 'icon' || displayType === 'image') {
+              makeResizable(existingEl, { lockAspectRatio: true, minSize: 14 });
+            } else {
+              makeResizable(existingEl);
+            }
           }
           // 紙面外への配置を禁止。サイズ確定後にクランプし、実位置を savedData へ反映し直す
           clampElementToPage(existingEl);

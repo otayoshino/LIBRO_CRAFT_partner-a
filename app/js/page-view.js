@@ -322,11 +322,11 @@ import { updateStatus } from './ui-common.js';
      */
     export function scaleAnnotations(ratio) {
       if (ratio === 1) return;
-      // ページ座標系の矩形にひもづく大問ボタン（LIBRO由来の .libro-toggle と、
-      // LIBRO実データ基準の既定サイズで新規作成した .is-sized）は、通常の付箋・
-      // アノテーションと同様に追従させる。CSS固定サイズのままの答/証明ボタンと、
-      // 本改修以前に作成された大問ボタンは現行仕様のまま対象外とする。
-      document.querySelectorAll('#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj, #pageLeft .ann-image-obj, #pageLeft .daimon-btn.libro-toggle, #pageLeft .daimon-btn.is-sized, #pageLeft .libro-network-slot').forEach(el => {
+      // ページ座標系の矩形にひもづくボタン（LIBRO+由来の .daimon-btn.libro-toggle と、
+      // LIBRO実データ基準の既定サイズを持つ .is-sized の大問/答/証明ボタン）は、通常の付箋・
+      // アノテーションと同様に追従させる。インラインの width/height を持たない
+      // CSS固定サイズのボタン（本改修以前に作成されたもの）は現行仕様のまま対象外とする。
+      document.querySelectorAll('#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj, #pageLeft .ann-image-obj, #pageLeft .daimon-btn.libro-toggle, #pageLeft .daimon-btn.is-sized, #pageLeft .kotae-btn.is-sized, #pageLeft .shomei-btn.is-sized, #pageLeft .libro-network-slot').forEach(el => {
         el.style.left = ((parseFloat(el.style.left) || 0) * ratio) + 'px';
         el.style.top  = ((parseFloat(el.style.top)  || 0) * ratio) + 'px';
         const w = parseFloat(el.style.width)  || el.offsetWidth;

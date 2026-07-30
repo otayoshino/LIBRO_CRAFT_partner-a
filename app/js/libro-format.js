@@ -1,8 +1,8 @@
 import { mediaBlobs } from './state.js';
-import { ANNOTATION_TYPE_CONFIG, BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, ICON_COLOR_OPTIONS } from './config.js';
 import { addStickyClickHandler } from './sticky.js';
 import { getPageBaseSize, makeDraggable, makeResizable } from './annotation-interaction.js';
-import { addDaimonClickHandler, renderButtonVisual } from './buttons.js';
+import { addDaimonClickHandler, addKotaeClickHandler, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 
 /* ============================================================
    LIBRO bookフォルダ形式（index.json / p####.json / 暗号化ページ画像 /
@@ -24,8 +24,19 @@ const CRAFT_META_KEY = 'libro-craft-meta';
 const CRAFT_META_SCHEMA_VERSION = 1;
 
 /**
- * annots[] 単位のlibro-craft-metaを付与しうる種別（Hide/Showトグル系のみ。
- * pagelink/uri/launchはactions構成のみで一意判定できるため対象外）。
+ * libro-craft-metaのうち「Hide/Showトグルのペア（role:'closed'|'open'）」として
+ * 復元する種別。付箋・答ボタン・大問ボタン・証明ボタンが対象。
+ *
+ * known系（pagelink/uri/launch由来）にもlibro-craft-metaを付与するが、そちらは
+ * actions構成のみで種別が一意判定できるため role を持たせず、表示形式（display-type）・
+ * 塗り色・ラベルの復元にのみ使う（applyCraftMetaDisplayType 参照）。roleが無いメタは
+ * extractCraftMetaTogglePairs 側でトグルペアとして扱われない。
+ *
+ * また大問／答ボタンのメタには見た目（btn-preset / btn-scale / btn-label / image-file）も
+ * 記録し、再インポート時にネイティブボタンとして完全に復元できるようにしている
+ * （convertDaimonButtonToLibroAnnots / renderTogglePairs 参照）。
+ * メタの有無は「CRAFT製かどうか」の判別にも使い、メタなし（他ツール由来）は
+ * 元データの見た目を壊さないようリサイズ・見た目編集を制限する。
  */
 const CRAFT_META_TOGGLE_TYPES = new Set(['sticky', 'kotae', 'daimon', 'shomei']);
 
@@ -268,7 +279,9 @@ function findTogglePairs(annots) {
  * その中でメンバーごとの closed/open の対応付けは `rect` の一致で復元する
  * （convertStickyGroupToLibroAnnotsはメンバーごとに同一rectでclosed/open両方を生成するため）。
  * @param {Array<Object>} annots - _id 付与済みのページ内annots配列
- * @returns {{ pairs: Array<{closed:Object, open:Object, groupId:string, type:string}>, consumedIds: Set<number> }}
+ * @returns {{ pairs: Array<{closed:Object, open:Object, groupId:string, type:string, meta:Object}>,
+ *   consumedIds: Set<number> }} meta は closed 側のlibro-craft-meta本体（大問／答ボタンの
+ *   見た目復元に使う。CRAFT製かどうかの判別にも使う）
  */
 function extractCraftMetaTogglePairs(annots) {
   const byGroup = new Map(); // groupId -> { closed: Object[], open: Object[] }
@@ -294,7 +307,7 @@ function extractCraftMetaTogglePairs(annots) {
       const idx = openPool.findIndex(o => JSON.stringify(o.rect) === rectKey);
       if (idx === -1) return; // 対応するopenが見つからない場合はこのメンバーだけ復元を諦める
       const [open] = openPool.splice(idx, 1);
-      pairs.push({ closed, open, groupId, type: closed[CRAFT_META_KEY].type });
+      pairs.push({ closed, open, groupId, type: closed[CRAFT_META_KEY].type, meta: closed[CRAFT_META_KEY] });
       consumedIds.add(closed._id);
       consumedIds.add(open._id);
     });
@@ -411,6 +424,48 @@ function rectToStyle(rect, pageWidth, pageHeight) {
   return `left:${leftPct}%;top:${topPct}%;width:${widthPct}%;height:${heightPct}%;`;
 }
 
+/**
+ * CRAFT自身が書き出したknown系アノテーション（annots[]要素にlibro-craft-metaを持つもの）の
+ * 表示形式を、書き出し時のCRAFT上の見た目どおりに復元する。
+ *
+ * インポート時の既定処理（parseLibroBookZip末尾）は、元画像（annots/xxxx.png）が存在すれば
+ * 表示タイプを「画像」（annDisplayType:'image' / .ann-image-obj）へ上書きする。これは
+ * 他オーサリングツール由来bookの見た目をそのまま再現するための処理であり、CRAFTが
+ * ラスタライズして書き出したアイコン・マーカーPNGに対しては誤変換になる。
+ * メタがある＝CRAFT製と確定できるため、そちらを優先して元の表示形式へ戻す。
+ *
+ * 塗り色は、書き出し時のsavedData.annColor（選択肢インデックス）をメタのcolor-indexとして
+ * 保持しているため、アイコン型はICON_COLOR_OPTIONS、マーカー型はANN_COLOR_OPTIONSの
+ * 同インデックスから復元する（'existing'等の非数値・未設定はインデックス0へフォールバック）。
+ * @param {Object} k - convertPageAnnotationsが生成したknownアノテーション（破壊的に更新する）
+ * @param {Object} meta - annots[]要素のlibro-craft-meta
+ */
+function applyCraftMetaDisplayType(k, meta) {
+  const displayType = meta['display-type'];
+
+  let sd = {};
+  try { sd = JSON.parse(k.savedData || '{}'); } catch (_) {}
+  sd.annDisplayType = displayType;
+  if (meta['color-index'] !== undefined) sd.annColor = String(meta['color-index']);
+  if (meta.label) sd.annLabel = meta.label;
+  k.savedData = JSON.stringify(sd);
+
+  const colorIdx = parseInt(sd.annColor, 10);
+  // convertPageAnnotationsがマーカー型用に埋め込んだ種別色背景を一旦外し、
+  // 表示形式ごとの背景を付け直す
+  const baseStyle = (k.style || '').replace(/background:[^;]*;?/, '');
+
+  if (displayType === 'icon') {
+    k.className = 'ann-icon-obj';
+    k.style = baseStyle + `background:${ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value};`;
+  } else if (displayType === 'page-color') {
+    k.className = 'ann-object dt-page-color';
+    k.style = baseStyle;
+  } else {
+    k.className = 'ann-object';
+    k.style = baseStyle + `background:${ANN_COLOR_OPTIONS[colorIdx]?.value ?? ANN_COLOR_OPTIONS[0].value};`;
+  }
+}
 
 /**
  * ページ内のannots[]を、ContentsBuilderの既知アノテーション（annotations.json互換オブジェクト）、
@@ -457,13 +512,17 @@ function convertPageAnnotations(pageJson, pageNum) {
   const networkConsumedIds = new Set();
   let maxId = 0;
 
-  metaResult.pairs.forEach(({ closed, open, groupId, type }) => {
+  metaResult.pairs.forEach(({ closed, open, groupId, type, meta }) => {
     maxId = Math.max(maxId, closed._id || 0, open._id || 0);
-    const kind = type === 'daimon' ? 'daimon' : 'sticky';
-    // 大問ボタンはrenderTogglePairsがtp.groupIds（紐付き付箋のid列）を見て
-    // dataset.daimonIdをリンクするため、自身のactions[]から紐付きid（自己参照を除く）を
-    // 算出する（detectDaimonGroupの構造ヒューリスティック判定と同じ抽出方法）。
-    const groupIds = kind === 'daimon'
+    // 大問ボタン・答ボタンは付箋ではなくネイティブのボタン（.daimon-btn / .kotae-btn）として
+    // 復元するため、メタの種別をそのままkindへ渡す。証明ボタン（shomei）は書き出し未対応で
+    // メタが生成されないため到達しないが、想定外の値は安全側で付箋扱いにする。
+    const kind = (type === 'daimon' || type === 'kotae') ? type : 'sticky';
+    // 大問ボタン・答ボタンはrenderTogglePairsがtp.groupIds（紐付き付箋のid列）を見て
+    // dataset.daimonId / dataset.kotaeIdをリンクするため、自身のactions[]から
+    // 紐付きid（自己参照を除く）を算出する（detectDaimonGroupの構造ヒューリスティック判定と
+    // 同じ抽出方法）。
+    const groupIds = (kind === 'daimon' || kind === 'kotae')
       ? (() => {
           const selfIds = new Set([closed._id, open._id]);
           return [...new Set([...flattenTargets(closed.actions), ...flattenTargets(open.actions)])]
@@ -482,8 +541,15 @@ function convertPageAnnotations(pageJson, pageNum) {
       kind,
       groupId,
       groupIds,
+      // CRAFT製の証（メタ本体）。renderTogglePairsがボタンの見た目（プリセット・拡大率・
+      // 表示文言・画像素材）を復元し、リサイズ可否を分けるために使う。
+      craftMeta: meta,
     });
-    if (kind === 'daimon') daimonPassthrough.push({ pageNum, closedId: closed._id, closed, open });
+    // CRAFT製の大問ボタンはpassthrough（生データの無変更書き戻し）対象にしない。
+    // 位置・サイズ・見た目の編集を書き出しへ反映させるため、答ボタンと同じ
+    // storage.jsの新規ボタン経路（convertDaimonButtonToLibroAnnots）で再生成する
+    // （passthroughへ登録すると二重出力になる）。構造ヒューリスティックで検出した
+    // LIBRO+製の大問ボタン（下の pairs.forEach 側）は従来どおりpassthroughのまま。
   });
 
   pairs.forEach(([a, b]) => {
@@ -571,6 +637,7 @@ function convertPageAnnotations(pageJson, pageNum) {
         style,
         savedData: JSON.stringify({ annDisplayType: 'page-color', annTarget: goto?.page ?? '' }),
         _iconFilename: a.filename,
+        _craftMeta: a[CRAFT_META_KEY] || null,
       });
     } else if (kind === 'uri') {
       const uri = a.actions.find(ac => ac.action === 'URI');
@@ -591,6 +658,7 @@ function convertPageAnnotations(pageJson, pageNum) {
           style: style + `background:${ANNOTATION_TYPE_CONFIG.plusfile.color};`,
           savedData: JSON.stringify({ annDisplayType: 'marker', annFile: dirName || '', annShowMode: showMode ?? '0' }),
           _iconFilename: a.filename,
+          _craftMeta: a[CRAFT_META_KEY] || null,
         });
       } else if (call?.fn === 'toMovie' || call?.fn === 'toMovieBNR') {
         // toMovieBNR("ファイル名",表示モード) は内部ファイル指定（annVideoSrc:'0'）へ、
@@ -618,6 +686,7 @@ function convertPageAnnotations(pageJson, pageNum) {
           style: style + `background:${ANNOTATION_TYPE_CONFIG.video.color};`,
           savedData: JSON.stringify(vidData),
           _iconFilename: a.filename,
+          _craftMeta: a[CRAFT_META_KEY] || null,
         });
       } else {
         known.push({
@@ -628,6 +697,7 @@ function convertPageAnnotations(pageJson, pageNum) {
           style: style + `background:${ANNOTATION_TYPE_CONFIG.externallink.color};`,
           savedData: JSON.stringify({ annDisplayType: 'marker', annUrl: uriValue }),
           _iconFilename: a.filename,
+          _craftMeta: a[CRAFT_META_KEY] || null,
         });
       }
     } else if (kind === 'launch') {
@@ -643,6 +713,7 @@ function convertPageAnnotations(pageJson, pageNum) {
         style: style + `background:${ANNOTATION_TYPE_CONFIG.audio.color};`,
         savedData: JSON.stringify({ annDisplayType: 'marker', annFile: baseName, annPlayMode }),
         _iconFilename: a.filename,
+        _craftMeta: a[CRAFT_META_KEY] || null,
       });
     } else {
       // 既知パターンに一致しない：編集不可・削除しない未知アノテーションとして保持のみ行う
@@ -816,6 +887,7 @@ export async function parseLibroBookZip(zip) {
       kind:       tp.kind,
       groupIds:   tp.groupIds,
       groupId:    tp.groupId,
+      craftMeta:  tp.craftMeta,
       closedImageUrl: URL.createObjectURL(new Blob([closedBytes], { type: 'image/png' })),
       openImageUrl:   URL.createObjectURL(new Blob([openBytes],   { type: 'image/png' })),
     };
@@ -848,7 +920,20 @@ export async function parseLibroBookZip(zip) {
   // Promise.allで並列化することで同規模でも5-6秒程度に収まる。
   await Promise.all(knownAnnotations.map(async (k) => {
     const iconFilename = k._iconFilename;
+    const craftMeta    = k._craftMeta;
     delete k._iconFilename;
+    delete k._craftMeta;
+    // LIBRO+製（libro-craft-metaなし＝他オーサリングツール由来）のknown系は、元画像を
+    // object-fit:fillで矩形へ引き伸ばして表示するため、リサイズすると元データの絵が歪む。
+    // リサイズハンドルを出さないための目印を付ける（位置移動・設定ダイアログ編集は可能）。
+    if (!craftMeta) k.libroLockedSize = '1';
+    // CRAFT自身が書き出したアノテーション（libro-craft-metaあり）は、書き出し時の表示形式を
+    // メタから復元する。表示形式「画像」（display-type:'image'）だけは、下の元画像読込パスで
+    // annIconImage（mediaBlobsのキー）を解決する必要があるためここでは処理せず通す。
+    if (craftMeta && craftMeta['display-type'] && craftMeta['display-type'] !== 'image') {
+      applyCraftMetaDisplayType(k, craftMeta);
+      return;
+    }
     if (!iconFilename) return;
     const bytes = await loadAnnotPngBytes(baseDir + iconFilename);
     if (!bytes) return;
@@ -886,6 +971,16 @@ export async function parseLibroBookZip(zip) {
  * 未変更であれば実物の画像がそのまま使われる。紐付く答ボタン群は dataset.daimonId で
  * リンクする（addDaimonClickHandler が閲覧モードでこのidを見て一括開閉する）。
  *
+ * ボタン系（kind==='daimon' / 'kotae'）は、CRAFT製（tp.craftMetaあり）とLIBRO+製
+ * （メタなし＝構造ヒューリスティックで検出した大問ボタン）で復元方法を分ける。
+ *  - CRAFT製：メタに記録した見た目（btn-preset / btn-scale / btn-label / image-file）から
+ *    savedDataを復元し、`.is-sized` 付き・dataset.libroToggleなしのネイティブボタンとして
+ *    描画する。リサイズ可・プリセット/文言/拡大率/画像素材の再編集可で、書き出しは
+ *    storage.jsの新規ボタン経路（Hide/Showペア再生成）を通る。押下時（open）idを
+ *    再利用させるため dataset.daimonPressedId / dataset.kotaePressedId を設定する。
+ *  - LIBRO+製：従来どおり `.daimon-btn.libro-toggle` として描画する（元PNGを画像素材として
+ *    登録、リサイズ不可・プリセット再編集不可、書き出しは生データpassthrough）。
+ *
  * `libro-craft-meta` の group-id により複数メンバーのグループ（CRAFT自身が書き出した付箋グループ）
  * であることが判明した場合は、通常のCRAFT付箋グループと同じ dataset.groupId を設定する。
  * これにより addStickyClickHandler の既存のグループ一括開閉ロジックがそのまま機能する。
@@ -918,25 +1013,61 @@ export function renderTogglePairs(togglePairs) {
     const widthPx  = (w / tp.pageWidth)  * pageRect.width;
     const heightPx = (h / tp.pageHeight) * pageRect.height;
 
-    if (tp.kind === 'daimon') {
-      // 実物のPNG（閉/開）をネイティブ大問ボタンの「画像素材」として登録する
-      mediaBlobs[tp.closedFile] = tp.closedImageUrl;
-      mediaBlobs[`pressed__${tp.closedFile}`] = tp.openImageUrl;
+    if (tp.kind === 'daimon' || tp.kind === 'kotae') {
+      const meta    = tp.craftMeta || null;
+      const isCraft = !!meta;
+      // CRAFT製で画像素材モードだった場合の、元のmediaBlobsキー（アップロード時のファイル名）
+      const metaImageFile = (meta?.['image-file'] || '').trim();
 
-      const savedData = { btnPreset: '0', btnScale: '1', btnImageFile: tp.closedFile };
+      let savedData;
+      if (isCraft) {
+        // CRAFT製：書き出し時のsavedDataをメタから復元する。画像素材モードだった場合のみ、
+        // 元のキーで閉/開PNGを登録し直す（プリセットモードへ戻す編集も可能なまま維持する）。
+        if (metaImageFile) {
+          mediaBlobs[metaImageFile] = tp.closedImageUrl;
+          mediaBlobs[`pressed__${metaImageFile}`] = tp.openImageUrl;
+        }
+        savedData = {
+          btnPreset: meta['btn-preset'] ?? (tp.kind === 'kotae' ? '1' : '0'),
+          btnScale:  meta['btn-scale']  ?? '1',
+        };
+        if (meta['btn-label']) savedData.btnLabel     = meta['btn-label'];
+        if (metaImageFile)     savedData.btnImageFile = metaImageFile;
+      } else {
+        // LIBRO+製：実物のPNG（閉/開）をネイティブボタンの「画像素材」として登録する
+        mediaBlobs[tp.closedFile] = tp.closedImageUrl;
+        mediaBlobs[`pressed__${tp.closedFile}`] = tp.openImageUrl;
+        savedData = { btnPreset: '0', btnScale: '1', btnImageFile: tp.closedFile };
+      }
+
       const el = document.createElement('div');
-      el.className        = 'daimon-btn libro-toggle';
-      el.dataset.type      = 'daimon';
+      // CRAFT製はネイティブ作成のボタンと同じ .is-sized（ページ座標系サイズ＋リサイズ可）。
+      // LIBRO+製は従来どおり .libro-toggle（リサイズ不可・passthrough書き戻し対象）。
+      el.className         = isCraft ? `${tp.kind}-btn is-sized` : `${tp.kind}-btn libro-toggle`;
+      el.dataset.type      = tp.kind;
       el.dataset.id        = tp.closedId;
-      el.dataset.libroToggle = '1';
-      el.dataset.daimonId  = `libro-daimon-${tp.pageNum}-${tp.closedId}`;
+      if (!isCraft) el.dataset.libroToggle = '1';
       el.dataset.page      = tp.pageNum;
+      if (tp.kind === 'daimon') {
+        el.dataset.daimonId = `libro-daimon-${tp.pageNum}-${tp.closedId}`;
+        // 再書き出し時に押下時（open）idを新規発行せず、元のペアidをそのまま再利用させる
+        // （storage.jsのnewDaimonButtonsループが dataset.daimonPressedId を優先して使う）。
+        // LIBRO+製はpassthroughのため不要。
+        if (isCraft) el.dataset.daimonPressedId = String(tp.openId);
+      } else {
+        el.dataset.kotaeId = `libro-kotae-${tp.pageNum}-${tp.closedId}`;
+        el.dataset.kotaePressedId = String(tp.openId);
+      }
       el.dataset.savedData = JSON.stringify(savedData);
       el.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
-      renderButtonVisual(el, 'daimon', savedData);
+      renderButtonVisual(el, tp.kind, savedData);
 
-      addDaimonClickHandler(el);
+      if (tp.kind === 'daimon') addDaimonClickHandler(el);
+      else                      addKotaeClickHandler(el);
       makeDraggable(el);
+      // renderButtonVisual() は子要素を全削除するため、その後にハンドルを付ける。
+      // LIBRO+製は dataset.libroToggle により makeDaimonResizable 側で除外される。
+      makeDaimonResizable(el);
 
       wrapByKey.set(`${tp.pageNum}:${tp.closedId}`, el);
       wrapByKey.set(`${tp.pageNum}:${tp.openId}`,   el);
@@ -979,16 +1110,18 @@ export function renderTogglePairs(togglePairs) {
     page.appendChild(wrap);
   });
 
-  // 大問ボタンに紐付く答ボタン群を dataset.daimonId でリンクする
-  // （ネイティブの大問ボタン機能 addDaimonClickHandler が閲覧モードでこのidを見て一括開閉する）
+  // 大問ボタン・答ボタンに紐付く付箋群を dataset.daimonId / dataset.kotaeId でリンクする
+  // （ネイティブのボタン機能 addDaimonClickHandler / addKotaeClickHandler が閲覧モードで
+  // このidを見て一括開閉する）
   togglePairs.forEach(tp => {
-    if (tp.kind !== 'daimon') return;
+    if (tp.kind !== 'daimon' && tp.kind !== 'kotae') return;
     const leaderEl = wrapByKey.get(`${tp.pageNum}:${tp.closedId}`);
     if (!leaderEl) return;
-    const did = leaderEl.dataset.daimonId;
+    const linkKey = tp.kind === 'daimon' ? 'daimonId' : 'kotaeId';
+    const did = leaderEl.dataset[linkKey];
     (tp.groupIds || []).forEach(gid => {
       const followerWrap = wrapByKey.get(`${tp.pageNum}:${gid}`);
-      if (followerWrap && followerWrap !== leaderEl) followerWrap.dataset.daimonId = did;
+      if (followerWrap && followerWrap !== leaderEl) followerWrap.dataset[linkKey] = did;
     });
   });
 }
@@ -1382,6 +1515,17 @@ async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeigh
   const memberClosedIds = members.map(m => m.closedId);
   const memberOpenIds   = members.map(m => m.openId);
 
+  // 再インポート時にネイティブボタンとして完全に復元（プリセット色・拡大率・表示文言・
+  // 画像素材の再編集を可能に）するため、見た目を決めるsavedDataの内容をメタへ記録する。
+  // 画像素材モードの場合は image-file（mediaBlobsのキー＝アップロード時のファイル名）も残し、
+  // インポート側が閉/開PNGをそのキーで登録し直せるようにする。
+  const imageFile = (savedData?.btnImageFile || '').trim();
+  const btnMeta = { type: btnType, 'group-id': groupId };
+  if (savedData?.btnPreset !== undefined && savedData.btnPreset !== '') btnMeta['btn-preset'] = String(savedData.btnPreset);
+  if (savedData?.btnScale  !== undefined && savedData.btnScale  !== '') btnMeta['btn-scale']  = String(savedData.btnScale);
+  if ((savedData?.btnLabel || '').trim()) btnMeta['btn-label'] = savedData.btnLabel.trim();
+  if (imageFile) btnMeta['image-file'] = imageFile;
+
   const closedAnnot = {
     filename: closedFile,
     rect,
@@ -1391,7 +1535,7 @@ async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeigh
       { action: 'Hide', targets: [closedId] },
       { action: 'Show', targets: [openId] },
     ],
-    [CRAFT_META_KEY]: { type: btnType, role: 'closed', 'group-id': groupId },
+    [CRAFT_META_KEY]: { ...btnMeta, role: 'closed' },
   };
   const openAnnot = {
     filename: openFile,
@@ -1403,11 +1547,10 @@ async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeigh
       { action: 'Hide', targets: [openId] },
       { action: 'Show', targets: [closedId] },
     ],
-    [CRAFT_META_KEY]: { type: btnType, role: 'open', 'group-id': groupId },
+    [CRAFT_META_KEY]: { ...btnMeta, role: 'open' },
   };
 
   const newPngWrites = [];
-  const imageFile = (savedData?.btnImageFile || '').trim();
   if (imageFile && mediaBlobs[imageFile]) {
     // カスタム画像モード：既存の画像アイコン型書き出しと同じ方式で、mediaBlobsの画像バイトを
     // そのまま使用する（annots/*.pngは平文のためPbve2000エンコードしない）
@@ -1579,7 +1722,18 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
     newPngBytes = await rasterizeMarkerPng(domData.type, rect[2], rect[3], sd.annDisplayType, sd.annColor);
   }
 
-  return { annotJson: { filename, rect, actions }, newPngBytes };
+  // 再インポート時に表示形式（マーカー／アイコン／紙面カラー／画像）・塗り色・ラベルを
+  // そのまま復元できるよう、CRAFT独自メタデータを付与する（LIBRO+側は未知キーを無視する。
+  // 復元処理は applyCraftMetaDisplayType 参照）。付箋・ボタン系のメタと違いroleは持たない。
+  // メタの有無は「CRAFT製かどうか」の判別にも使う（メタなしはリサイズ不可にする）。
+  const craftMeta = {
+    type: domData.type,
+    'display-type': sd.annDisplayType || 'marker',
+  };
+  if (sd.annColor !== undefined && sd.annColor !== '') craftMeta['color-index'] = String(sd.annColor);
+  if ((sd.annLabel || '').trim()) craftMeta.label = sd.annLabel.trim();
+
+  return { annotJson: { filename, rect, actions, [CRAFT_META_KEY]: craftMeta }, newPngBytes };
 }
 
 

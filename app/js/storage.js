@@ -105,6 +105,11 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
                 if (obj.fuhyoji) el.dataset.fuhyoji = obj.fuhyoji;
                 // LIBRO由来フラグ（大問ボタンの書き出し passthrough 判定に必要）
                 if (obj.libroToggle) el.dataset.libroToggle = obj.libroToggle;
+                // 大問/答ボタンの押下時（open）id。自動保存復元後も同じペアidで書き出せるようにする
+                if (obj.daimonPressedId) el.dataset.daimonPressedId = obj.daimonPressedId;
+                if (obj.kotaePressedId)  el.dataset.kotaePressedId  = obj.kotaePressedId;
+                // LIBRO+製（他ツール由来）known系のリサイズ禁止フラグ（reinitElementが参照）
+                if (obj.libroLockedSize) el.dataset.libroLockedSize = obj.libroLockedSize;
                 // アイコン型（.ann-icon-obj）は常に 1:1 を保証する。
                 // width% はページ幅基準・height% はページ高さ基準で個別に復元されるため、
                 // 保存時と復元時でページの縦横比が異なると正方形が崩れうる。

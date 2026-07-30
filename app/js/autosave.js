@@ -68,6 +68,12 @@ import { showToast } from './ui-common.js';
           // LIBRO由来の大問ボタン（.daimon-btn.libro-toggle）を復元後も passthrough 書き出し
           // 対象として識別できるようにする
           libroToggle: el.dataset.libroToggle,
+          // 大問/答ボタンの押下時（open）id。復元後の書き出しで新規idを再発行させず、
+          // 元のペアid（LIBRO由来ボタンでは元bookのid）をそのまま使うために保存する
+          daimonPressedId: el.dataset.daimonPressedId,
+          kotaePressedId: el.dataset.kotaePressedId,
+          // LIBRO+製（他ツール由来）known系のリサイズ禁止フラグ
+          libroLockedSize: el.dataset.libroLockedSize,
         };
       });
     }

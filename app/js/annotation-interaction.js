@@ -1021,11 +1021,16 @@ import { pushUndo } from './undo-redo.js';
       } else if (el.dataset.type) {
         addAnnClickHandler(el);
         makeDraggable(el);
-        if (el.classList.contains('ann-icon-obj') || el.classList.contains('ann-image-obj')) {
-          // アイコン型・画像アイコン型：縦横比を維持してリサイズ（最小サイズ 14px）
-          makeResizable(el, { lockAspectRatio: true, minSize: 14 });
-        } else if (el.classList.contains('ann-object')) {
-          makeResizable(el);
+        // LIBRO+製（libro-craft-metaを持たない他オーサリングツール由来）のknown系は、
+        // 元画像をobject-fit:fillで矩形へ引き伸ばして表示するため、リサイズすると絵が歪む。
+        // リサイズハンドルのみ付けない（位置移動・設定ダイアログでの編集は従来どおり可能）。
+        if (el.dataset.libroLockedSize !== '1') {
+          if (el.classList.contains('ann-icon-obj') || el.classList.contains('ann-image-obj')) {
+            // アイコン型・画像アイコン型：縦横比を維持してリサイズ（最小サイズ 14px）
+            makeResizable(el, { lockAspectRatio: true, minSize: 14 });
+          } else if (el.classList.contains('ann-object')) {
+            makeResizable(el);
+          }
         }
       }
     }
