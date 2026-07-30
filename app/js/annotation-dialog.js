@@ -1788,7 +1788,19 @@ import { pushUndo } from './undo-redo.js';
           savedData.annPosX = parseInt(existingEl.style.left, 10) || 0;
           savedData.annPosY = parseInt(existingEl.style.top,  10) || 0;
 
-          if (isLibroToggleNote && keepsOriginalImage) {
+          const openLocked = savedData.annStickyOpenMode === '1';
+          if (isLibroToggleNote && openLocked) {
+            // 「表示ボタン削除」：.libro-toggle付箋は<img>が背景を覆うためbackground:#fff !important
+            // が反映されない。色選択と同じオーバーレイ機構で白（STICKY_COLOR_MAP[3]）を強制表示する。
+            existingEl.dataset.stickyColorOverride = '3';
+            let overlay = existingEl.querySelector('.libro-toggle-color-override');
+            if (!overlay) {
+              overlay = document.createElement('div');
+              overlay.className = 'libro-toggle-color-override';
+              existingEl.appendChild(overlay);
+            }
+            overlay.style.background = STICKY_COLOR_MAP[3];
+          } else if (isLibroToggleNote && keepsOriginalImage) {
             // 「既存付箋カラー」に戻した場合：色上書きを解除し、元の閉画像表示に戻す
             delete existingEl.dataset.stickyColorOverride;
           } else if (isLibroToggleNote) {

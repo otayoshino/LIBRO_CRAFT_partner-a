@@ -225,7 +225,11 @@ import { pushUndo } from './undo-redo.js';
             note.dataset.shomeiId = newShomeiId;
             note.dataset.savedData = ns.savedData || '{}';
             if (ns.groupId) note.dataset.groupId = ns.groupId;
-            note.className        = 'sticky-note state-visible';
+            // 背景は元々常に白固定だが、sticky-open-lockedクラス（クリック無効化・
+            // 破線アウトライン等）はコピー元の状態を維持する（F-1と同じ理由）。
+            let nsOpenLocked = false;
+            try { nsOpenLocked = JSON.parse(ns.savedData || '{}').annStickyOpenMode === '1'; } catch (_) {}
+            note.className        = 'sticky-note state-visible' + (nsOpenLocked ? ' sticky-open-locked' : '');
             note.style.cssText    = `left:${ns.left + dx}px; top:${ns.top + dy}px; width:${ns.width}px; height:${ns.height}px;`;
             note.style.background = '#ffffff';
             addStickyClickHandler(note);
@@ -268,7 +272,11 @@ import { pushUndo } from './undo-redo.js';
             note.dataset.kotaeId = newKotaeId;
             note.dataset.savedData = ns.savedData || '{}';
             if (ns.groupId) note.dataset.groupId = ns.groupId;
-            note.className       = 'sticky-note state-visible';
+            // 背景は元々常に白固定だが、sticky-open-lockedクラス（クリック無効化・
+            // 破線アウトライン等）はコピー元の状態を維持する（F-1と同じ理由）。
+            let nsOpenLocked = false;
+            try { nsOpenLocked = JSON.parse(ns.savedData || '{}').annStickyOpenMode === '1'; } catch (_) {}
+            note.className       = 'sticky-note state-visible' + (nsOpenLocked ? ' sticky-open-locked' : '');
             note.style.cssText   = `left:${ns.left + dx}px; top:${ns.top + dy}px; width:${ns.width}px; height:${ns.height}px;`;
             note.style.background = '#ffffff';
             addStickyClickHandler(note);
@@ -316,7 +324,12 @@ import { pushUndo } from './undo-redo.js';
         if (snap.groupId) el.dataset.groupId = snap.groupId;
 
         if (snap.type === 'sticky') {
-          el.className = 'sticky-note state-visible';
+          // 「開閉方式：表示ボタン削除」（annStickyOpenMode）はコピー元の状態を維持する。
+          // sticky-open-lockedクラスがCSS側の紙色強制・クリック無効化の適用条件のため、
+          // savedDataの値から復元する。
+          let stickyOpenLocked = false;
+          try { stickyOpenLocked = JSON.parse(snap.savedData || '{}').annStickyOpenMode === '1'; } catch (_) {}
+          el.className = 'sticky-note state-visible' + (stickyOpenLocked ? ' sticky-open-locked' : '');
           el.style.cssText = [
             `left:${newLeft}px`,
             `top:${newTop}px`,
