@@ -347,7 +347,7 @@
         flex: none;
       }
       .hdr-inline .side-detail-form .pos-field .d-input-sm {
-        width: 46px !important;
+        width: 64px !important;
       }
       .hdr-inline .side-detail-form .color-row {
         padding-left: 0;
@@ -1932,13 +1932,14 @@
       pointer-events: none;
     }
     .d-input-sm {
-      width: 62px !important;
+      width: 80px !important;
       padding-right: 22px !important;
       text-align: right;
     }
     /* 詳細設定パネル：カスタムスピンボタンを左配置するため入力窓の左辺を揃える */
     .side-detail-form .pos-field {
       flex: 1; /* 残幅を均等分割して収まるよう伸縮 */
+      min-width: 80px; /* 3〜4桁の数値でも見切れないよう最低幅を保証する */
     }
     .side-detail-form .pos-field .d-input-sm {
       width: 100% !important;
