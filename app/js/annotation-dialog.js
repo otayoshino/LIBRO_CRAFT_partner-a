@@ -1,6 +1,6 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
-import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
+import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getPageBaseSize, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
 import { applyDaimonImageAspect, generatePressedVariant, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { validateJstreamCorpId, validateJstreamDir, validateJstreamVideoId } from './jstream-validate.js';
 import { mediaBlobs, state } from './state.js';
@@ -16,6 +16,121 @@ import { pushUndo } from './undo-redo.js';
 
     /** 連続作成モード用：前回使用した設定を種別ごとに保存 */
     const lastNewAnnData = {};
+
+
+    /**
+     * 紙面表示用の内部px（#pageLeftのベースサイズ＝offsetWidth/offsetHeight基準。
+     * フィットモード・ウィンドウ幅で#pageLeftの表示サイズが変わるとこの内部pxの
+     * 「同じ座標が意味する画面上の位置」も変わる）を、LIBROページ画像の実寸px
+     * （index.json由来のstate.bookPages[n].width/height基準。フィット・ウィンドウ幅に
+     * よらず常に一定）に変換する。
+     *
+     * サイドパネル・編集ポップアップの位置/サイズ入力欄（annPosX/Y/annWidth/annHeight）は
+     * この実寸pxで表示・入力を受け付ける。内部処理（style.left/top・savedData.annPosX等・
+     * 書き出し・自動保存・Undo/Redo）は従来どおり内部pxのまま扱うため変更しない
+     * （影響範囲を表示・入力の変換レイヤーだけに限定するため）。
+     *
+     * ページのアスペクト比はresizePage()がstate.PAGE_ASPECTに基づいて維持しているため、
+     * X軸（width基準）・Y軸（height基準）で換算比率が異なることはない（確認済み）。
+     * @param {number} px    - 内部px値
+     * @param {'x'|'y'} axis - X軸（left/width）かY軸（top/height）か
+     * @returns {number} 実寸px値（変換元データが無い場合はpxをそのまま返す）
+     */
+    function internalToRealPx(px, axis) {
+      const base = getPageBaseSize();
+      const pageData = state.bookPages?.[state.currentPage - 1];
+      if (!pageData || !base.w || !base.h) return px;
+      const real     = axis === 'x' ? pageData.width : pageData.height;
+      const baseAxis = axis === 'x' ? base.w : base.h;
+      if (!baseAxis) return px;
+      return px * real / baseAxis;
+    }
+
+
+    /**
+     * internalToRealPx() の逆変換。UI入力欄（実寸px）から読み取った値を内部pxへ戻し、
+     * 従来どおりの内部処理（style適用・savedData保存）に渡すために使う。
+     * `app/js/undo-redo.js` からも使うため export する（`internalToRealPx` は
+     * このファイル内でしか使わないため非export＝確認済み）。
+     * @param {number} px    - 実寸px値
+     * @param {'x'|'y'} axis - X軸（left/width）かY軸（top/height）か
+     * @returns {number} 内部px値（変換元データが無い場合はpxをそのまま返す）
+     */
+    export function realToInternalPx(px, axis) {
+      const base = getPageBaseSize();
+      const pageData = state.bookPages?.[state.currentPage - 1];
+      if (!pageData || !base.w || !base.h) return px;
+      const real     = axis === 'x' ? pageData.width : pageData.height;
+      const baseAxis = axis === 'x' ? base.w : base.h;
+      if (!real) return px;
+      return px * baseAxis / real;
+    }
+
+
+    /**
+     * ドラッグ移動・リサイズ操作中（単一選択）に、サイドパネルの位置X・Y、変形W・Hの表示値を
+     * リアルタイムで更新する。DOM再構築（buildCommonFieldsの再呼び出し）は行わず、既存のinput要素
+     * （#annPosX等）の.valueだけを書き換えるため、mousemoveのたびに呼んでも軽量でフォーカスも失われない。
+     * サイドパネルが非表示（グレーアウト中）でも呼んで構わない（値を書き換えるだけで画面に影響しない）。
+     * @param {HTMLElement} el - ドラッグ・リサイズ中の要素
+     */
+    export function refreshPosFieldsLive(el) {
+      const posXEl = document.getElementById('annPosX');
+      const posYEl = document.getElementById('annPosY');
+      const wEl    = document.getElementById('annWidth');
+      const hEl    = document.getElementById('annHeight');
+      if (posXEl) posXEl.value = Math.round(internalToRealPx(parseFloat(el.style.left) || 0, 'x'));
+      if (posYEl) posYEl.value = Math.round(internalToRealPx(parseFloat(el.style.top)  || 0, 'y'));
+      if (wEl)    wEl.value    = Math.round(internalToRealPx(el.offsetWidth,  'x'));
+      if (hEl)    hEl.value    = Math.round(internalToRealPx(el.offsetHeight, 'y'));
+    }
+
+
+    /**
+     * 複数選択中、外接矩形（バウンディングボックス）の左上X・Y、幅・高さをサイドパネルへ表示する。
+     * 個々のオブジェクトの色・種別固有設定は複数選択では扱わないため、位置・変形の2行のみを表示する
+     * （buildCommonFields()にtype=nullを渡すと「変形欄は出る・塗り色欄と種別固有欄は出ない」分岐に
+     * なる＝確認済み）。
+     *
+     * サイドパネルが既に複数選択モードで構築済み（#sideDetailActiveのdataset.mode==='multi'）なら
+     * フォーム骨格の再構築はせず、既存input要素の.valueだけを更新する（mousemoveのたびに呼ばれるため、
+     * DOM再構築は初回のみに限定する）。
+     * @param {HTMLElement} box - #selectionBoundingBox要素（内部px座標のstyle.left/top/width/height）
+     */
+    export function refreshMultiSelectionPanel(box) {
+      const activePanel = document.getElementById('sideDetailActive');
+      if (activePanel.dataset.mode !== 'multi') {
+        // 初回：フォーム骨格を構築する
+        document.getElementById('dialogTitle').textContent = '複数選択';
+        const commonForm = document.getElementById('dialogFormCommon');
+        commonForm.innerHTML = '';
+        const specificForm = document.getElementById('dialogFormSpecific');
+        specificForm.innerHTML = '';
+        // デルタ計算の基準値をリセット（openAnnotationSettingsDialogと同じ処理）
+        applyLiveUpdate._prevX = undefined;
+        applyLiveUpdate._prevY = undefined;
+        applyLiveUpdate._prevW = undefined;
+        applyLiveUpdate._prevH = undefined;
+        buildCommonFields(commonForm, null, {}, null, null);
+        document.getElementById('detailSectionSep').style.display      = 'none';
+        document.getElementById('sideDetailSpecificWrap').style.display = 'none';
+        const dialogDeleteBtn = document.querySelector('.dialog-btn.delete-btn');
+        dialogDeleteBtn.style.display = 'none';
+        dialogDeleteBtn.onclick = null;
+        document.getElementById('sideDetailEmpty').style.visibility = 'hidden';
+        activePanel.style.display = '';
+        activePanel.dataset.mode = 'multi';
+      }
+      // 値をリアルタイム更新（DOM再構築なし）
+      const posXEl = document.getElementById('annPosX');
+      const posYEl = document.getElementById('annPosY');
+      const wEl    = document.getElementById('annWidth');
+      const hEl    = document.getElementById('annHeight');
+      if (posXEl) posXEl.value = Math.round(internalToRealPx(parseFloat(box.style.left)   || 0, 'x'));
+      if (posYEl) posYEl.value = Math.round(internalToRealPx(parseFloat(box.style.top)    || 0, 'y'));
+      if (wEl)    wEl.value    = Math.round(internalToRealPx(parseFloat(box.style.width)  || 0, 'x'));
+      if (hEl)    hEl.value    = Math.round(internalToRealPx(parseFloat(box.style.height) || 0, 'y'));
+    }
 
 
     /**
@@ -370,8 +485,10 @@ import { pushUndo } from './undo-redo.js';
       });
 
       const qcCommon = document.getElementById('qcFormCommon');
-      const w = Math.max(parseFloat(qcCommon?.querySelector('[id="annWidth"]')?.value)  || 120, 10);
-      const h = Math.max(parseFloat(qcCommon?.querySelector('[id="annHeight"]')?.value) || 40,  10);
+      // annWidth/annHeight欄はLIBRO実寸px表示のため、state.pendingRect（内部px前提）に
+      // 設定する前に内部pxへ変換する。
+      const w = Math.max(realToInternalPx(parseFloat(qcCommon?.querySelector('[id="annWidth"]')?.value)  || 120, 'x'), 10);
+      const h = Math.max(realToInternalPx(parseFloat(qcCommon?.querySelector('[id="annHeight"]')?.value) || 40,  'y'), 10);
       closeQuickCreateDialog();
 
       // クリック位置をオブジェクトの中央にして配置
@@ -425,6 +542,12 @@ import { pushUndo } from './undo-redo.js';
       const py = initRect ? Math.round(initRect.y) : (parseInt(savedData.annPosY,   10) || 0);
       const pw = initRect ? Math.round(initRect.w) : (parseInt(savedData.annWidth,  10) || 100);
       const ph = initRect ? Math.round(initRect.h) : (parseInt(savedData.annHeight, 10) || 100);
+      // px/py/pw/phは内部px（#pageLeftのベースサイズ基準）。入力欄にはLIBROページ実寸pxで
+      // 表示する（フィットモード・ウィンドウ幅を変えても同じ値になるようにするため）。
+      const dispX = Math.round(internalToRealPx(px, 'x'));
+      const dispY = Math.round(internalToRealPx(py, 'y'));
+      const dispW = Math.round(internalToRealPx(pw, 'x'));
+      const dispH = Math.round(internalToRealPx(ph, 'y'));
 
       // --- 位置 ---
       const posDt = document.createElement('dt');
@@ -437,7 +560,7 @@ import { pushUndo } from './undo-redo.js';
         const sp = document.createElement('span');
         sp.textContent = label;
         posRow.appendChild(sp);
-        posRow.appendChild(makePosField(['annPosX','annPosY'][i], [px, py][i]));
+        posRow.appendChild(makePosField(['annPosX','annPosY'][i], [dispX, dispY][i]));
       });
       posDd.appendChild(posRow);
       form.appendChild(posDd);
@@ -460,7 +583,7 @@ import { pushUndo } from './undo-redo.js';
         const sp = document.createElement('span');
         sp.textContent = label;
         szRow.appendChild(sp);
-        szRow.appendChild(makePosField(['annWidth','annHeight'][i], [pw, ph][i]));
+        szRow.appendChild(makePosField(['annWidth','annHeight'][i], [dispW, dispH][i]));
       });
       szDd.appendChild(szRow);
       form.appendChild(szDd);
@@ -571,10 +694,12 @@ import { pushUndo } from './undo-redo.js';
       }
 
 
-      const x = parseFloat(document.getElementById('annPosX')?.value)  ?? 0;
-      const y = parseFloat(document.getElementById('annPosY')?.value)  ?? 0;
-      const w = parseFloat(document.getElementById('annWidth')?.value)  || 0;
-      const h = parseFloat(document.getElementById('annHeight')?.value) || 0;
+      // 入力欄の値はLIBRO実寸px表示のため、内部px（#pageLeftベースサイズ基準）に変換してから
+      // 以降の適用ロジック（単一/複数選択の位置・サイズ計算）へ渡す。以降のロジックは無変更。
+      const x = realToInternalPx(parseFloat(document.getElementById('annPosX')?.value)  ?? 0, 'x');
+      const y = realToInternalPx(parseFloat(document.getElementById('annPosY')?.value)  ?? 0, 'y');
+      const w = realToInternalPx(parseFloat(document.getElementById('annWidth')?.value)  || 0, 'x');
+      const h = realToInternalPx(parseFloat(document.getElementById('annHeight')?.value) || 0, 'y');
       const colorIdx = parseInt(document.getElementById('annColor')?.value || '0', 10);
 
       // ボタン系要素（答/大問/証明ボタン）か判定するヘルパー
@@ -674,8 +799,8 @@ import { pushUndo } from './undo-redo.js';
         const clamped  = allTargets[0];
         const posXEl   = document.getElementById('annPosX');
         const posYEl   = document.getElementById('annPosY');
-        if (posXEl) posXEl.value = Math.round(parseFloat(clamped.style.left) || 0);
-        if (posYEl) posYEl.value = Math.round(parseFloat(clamped.style.top)  || 0);
+        if (posXEl) posXEl.value = Math.round(internalToRealPx(parseFloat(clamped.style.left) || 0, 'x'));
+        if (posYEl) posYEl.value = Math.round(internalToRealPx(parseFloat(clamped.style.top)  || 0, 'y'));
       } else {
         // 複数選択：個別にクランプすると相対位置が崩れるため、グループごと引き戻す
         clampGroupIntoPage(allTargets);
@@ -910,8 +1035,10 @@ import { pushUndo } from './undo-redo.js';
         const hEl = container.querySelector('#annHeight');
         const newW = Math.max(14, Math.round(nw * ratio / 100));
         const newH = Math.max(14, Math.round(nh * ratio / 100));
-        if (wEl) wEl.value = newW;
-        if (hEl) hEl.value = newH;
+        // newW/newHは内部px。入力欄（annWidth/annHeight）は実寸px表示のため変換して書き込む。
+        // state.pendingRectは内部px前提のためnewW/newHをそのまま設定する（無変更）。
+        if (wEl) wEl.value = Math.round(internalToRealPx(newW, 'x'));
+        if (hEl) hEl.value = Math.round(internalToRealPx(newH, 'y'));
         if (state.pendingRect) { state.pendingRect.w = newW; state.pendingRect.h = newH; }
         applyLiveUpdate(type);
       };
@@ -1523,6 +1650,10 @@ import { pushUndo } from './undo-redo.js';
      */
     export function openAnnotationSettingsDialog(type, existingEl = null) {
       state.lastDetailType = type;  // 最後に表示した種別を履歴保持
+      // 複数選択モード（refreshMultiSelectionPanelが構築したフォーム）から抜けたことを示す。
+      // これが無いと、複数選択→単一選択→再び複数選択と切り替えたとき、
+      // refreshMultiSelectionPanelがフォーム骨格を作り直すべきタイミングを見誤る可能性がある。
+      document.getElementById('sideDetailActive').dataset.mode = 'single';
       // デルタ計算の基準値をリセット（新たな選択に備える）
       applyLiveUpdate._prevX = undefined;
       applyLiveUpdate._prevY = undefined;
@@ -1617,6 +1748,15 @@ import { pushUndo } from './undo-redo.js';
           });
         });
       }
+      // annPosX/Y・annWidth/Heightは入力欄上ではLIBRO実寸px表示のため、以降の内部処理
+      // （style.left/top・savedData保存はすべて内部px＝#pageLeftベースサイズ基準）に渡す前に
+      // 実寸px→内部pxへ変換する。overrideSavedData経由（編集ポップアップの更新ボタン）・
+      // 通常のdialogForm収集経由のどちらもこの1箇所で吸収できる（確認済み）。
+      // これ以降（1600行目以降の各種別の分岐）は無変更。
+      if (savedData.annPosX   !== undefined) savedData.annPosX   = String(Math.round(realToInternalPx(parseFloat(savedData.annPosX)   || 0, 'x')));
+      if (savedData.annPosY   !== undefined) savedData.annPosY   = String(Math.round(realToInternalPx(parseFloat(savedData.annPosY)   || 0, 'y')));
+      if (savedData.annWidth  !== undefined) savedData.annWidth  = String(Math.round(realToInternalPx(parseFloat(savedData.annWidth)  || 0, 'x')));
+      if (savedData.annHeight !== undefined) savedData.annHeight = String(Math.round(realToInternalPx(parseFloat(savedData.annHeight) || 0, 'y')));
 
       if (type === 'sticky') {
         // LIBRO由来の既存付箋（.libro-toggle）は色プロパティを持たないため、

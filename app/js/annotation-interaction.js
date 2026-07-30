@@ -1,5 +1,5 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { confirmAnnotation, openAnnotationSettingsDialog, openQuickCreateDialog } from './annotation-dialog.js';
+import { confirmAnnotation, openAnnotationSettingsDialog, openQuickCreateDialog, refreshMultiSelectionPanel, refreshPosFieldsLive } from './annotation-dialog.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { selectedStickySet, state } from './state.js';
@@ -971,6 +971,8 @@ import { pushUndo } from './undo-redo.js';
                 el.style.height = Math.max(startHeight + dy, MIN_SIZE) + 'px';
               }
             }
+            // サイドパネルの位置・サイズ表示をリアルタイム更新
+            refreshPosFieldsLive(el);
           };
 
           const onUp = () => {
@@ -1414,6 +1416,8 @@ import { pushUndo } from './undo-redo.js';
 
           target.style.left = (startLeft + dx) + 'px';
           target.style.top  = (startTop  + dy) + 'px';
+          // サイドパネルの位置表示をリアルタイム更新（単一選択・Altコピー複製先どちらも対象）
+          refreshPosFieldsLive(target);
         };
         const onUp = () => {
           document.removeEventListener('mousemove', onMove);
@@ -1611,6 +1615,8 @@ import { pushUndo } from './undo-redo.js';
             box.style.top    = newTop    + 'px';
             box.style.width  = newWidth  + 'px';
             box.style.height = newHeight + 'px';
+            // サイドパネルの外接矩形表示をリアルタイム更新（updateAlignPanel全体は呼ばず軽量に）
+            refreshMultiSelectionPanel(box);
           };
 
           const onUp = () => {
@@ -1911,6 +1917,9 @@ import { pushUndo } from './undo-redo.js';
       const existing = document.getElementById('selectionBoundingBox');
       if (count < 2) {
         if (existing) existing.remove();
+        // 複数選択パネルが構築されている場合、単一選択/選択なしへ戻ったことを示すフラグを落とす
+        // （表示・非表示自体はopenAnnotationSettingsDialog/closeDialogに委ねる）
+        delete document.getElementById('sideDetailActive').dataset.mode;
         return;
       }
 
@@ -1944,6 +1953,9 @@ import { pushUndo } from './undo-redo.js';
 
       // バウンディングボックスにリサイズハンドルを設置
       addBoundingBoxHandles(box);
+
+      // サイドパネルに外接矩形の左上X・Y、幅・高さをリアルタイム表示する
+      refreshMultiSelectionPanel(box);
     }
 
 
