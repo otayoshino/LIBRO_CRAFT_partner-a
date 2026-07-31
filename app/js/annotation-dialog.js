@@ -68,6 +68,24 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
+     * 位置・サイズ入力欄（#annPosX等）へ値を書き戻す。
+     * ユーザーが入力中（フォーカス中）の欄は書き換えない。
+     *
+     * 入力は `input` イベントで1文字ごとに applyLiveUpdate() → 外接矩形の再計算 → 書き戻し
+     * まで走るため、フォーカス中の欄まで上書きすると「1500」と打とうとしても1文字目の時点で
+     * 欄が実配置の値へ差し替わり、多桁の値を入力できない（紙面端でクランプされた場合は
+     * 何桁足しても戻されて「一定以上変更できない」状態になる）。
+     * 入力中の欄と実配置のずれは、フォーカスが外れた時点の再同期（buildCommonFieldsのblur）で解消する。
+     * @param {HTMLElement|null} el    - 入力欄
+     * @param {number}           value - 書き戻す値（実寸px）
+     */
+    function setPosFieldValue(el, value) {
+      if (!el || el === document.activeElement) return;
+      el.value = value;
+    }
+
+
+    /**
      * ドラッグ移動・リサイズ操作中（単一選択）に、サイドパネルの位置X・Y、変形W・Hの表示値を
      * リアルタイムで更新する。DOM再構築（buildCommonFieldsの再呼び出し）は行わず、既存のinput要素
      * （#annPosX等）の.valueだけを書き換えるため、mousemoveのたびに呼んでも軽量でフォーカスも失われない。
@@ -79,10 +97,10 @@ import { pushUndo } from './undo-redo.js';
       const posYEl = document.getElementById('annPosY');
       const wEl    = document.getElementById('annWidth');
       const hEl    = document.getElementById('annHeight');
-      if (posXEl) posXEl.value = Math.round(internalToRealPx(parseFloat(el.style.left) || 0, 'x'));
-      if (posYEl) posYEl.value = Math.round(internalToRealPx(parseFloat(el.style.top)  || 0, 'y'));
-      if (wEl)    wEl.value    = Math.round(internalToRealPx(el.offsetWidth,  'x'));
-      if (hEl)    hEl.value    = Math.round(internalToRealPx(el.offsetHeight, 'y'));
+      setPosFieldValue(posXEl, Math.round(internalToRealPx(parseFloat(el.style.left) || 0, 'x')));
+      setPosFieldValue(posYEl, Math.round(internalToRealPx(parseFloat(el.style.top)  || 0, 'y')));
+      setPosFieldValue(wEl,    Math.round(internalToRealPx(el.offsetWidth,  'x')));
+      setPosFieldValue(hEl,    Math.round(internalToRealPx(el.offsetHeight, 'y')));
     }
 
 
@@ -106,11 +124,6 @@ import { pushUndo } from './undo-redo.js';
         commonForm.innerHTML = '';
         const specificForm = document.getElementById('dialogFormSpecific');
         specificForm.innerHTML = '';
-        // デルタ計算の基準値をリセット（openAnnotationSettingsDialogと同じ処理）
-        applyLiveUpdate._prevX = undefined;
-        applyLiveUpdate._prevY = undefined;
-        applyLiveUpdate._prevW = undefined;
-        applyLiveUpdate._prevH = undefined;
         buildCommonFields(commonForm, null, {}, null, null);
         document.getElementById('detailSectionSep').style.display      = 'none';
         document.getElementById('sideDetailSpecificWrap').style.display = 'none';
@@ -126,10 +139,10 @@ import { pushUndo } from './undo-redo.js';
       const posYEl = document.getElementById('annPosY');
       const wEl    = document.getElementById('annWidth');
       const hEl    = document.getElementById('annHeight');
-      if (posXEl) posXEl.value = Math.round(internalToRealPx(parseFloat(box.style.left)   || 0, 'x'));
-      if (posYEl) posYEl.value = Math.round(internalToRealPx(parseFloat(box.style.top)    || 0, 'y'));
-      if (wEl)    wEl.value    = Math.round(internalToRealPx(parseFloat(box.style.width)  || 0, 'x'));
-      if (hEl)    hEl.value    = Math.round(internalToRealPx(parseFloat(box.style.height) || 0, 'y'));
+      setPosFieldValue(posXEl, Math.round(internalToRealPx(parseFloat(box.style.left)   || 0, 'x')));
+      setPosFieldValue(posYEl, Math.round(internalToRealPx(parseFloat(box.style.top)    || 0, 'y')));
+      setPosFieldValue(wEl,    Math.round(internalToRealPx(parseFloat(box.style.width)  || 0, 'x')));
+      setPosFieldValue(hEl,    Math.round(internalToRealPx(parseFloat(box.style.height) || 0, 'y')));
     }
 
 
@@ -664,6 +677,13 @@ import { pushUndo } from './undo-redo.js';
         if (el) {
           el.addEventListener('input', () => applyLiveUpdate(type));
           el.addEventListener('change', () => applyLiveUpdate(type));
+          // 入力中はフォーカス中の欄への書き戻しを抑止している（setPosFieldValue）ため、
+          // フォーカスが外れた時点で実際の配置（紙面外クランプ後の値）へ表示を揃える。
+          el.addEventListener('blur', () => {
+            const targets = getSelectedObjects();
+            if (targets.length >= 2)      updateAlignPanel();
+            else if (targets.length === 1) refreshPosFieldsLive(targets[0]);
+          });
         }
       });
       const colElForLive = document.getElementById('annColor');
@@ -756,14 +776,28 @@ import { pushUndo } from './undo-redo.js';
         // 'existing'（LIBRO由来の「既存カラー」選択）は色を持たない指定のため、色の適用対象外とする
         const applyColor    = !!multiColorEl && multiColorEl.value !== 'existing';
 
-        const prevX = applyLiveUpdate._prevX ?? x;
-        const prevY = applyLiveUpdate._prevY ?? y;
-        const prevW = applyLiveUpdate._prevW ?? w;
-        const prevH = applyLiveUpdate._prevH ?? h;
-        const dx = x - prevX;
-        const dy = y - prevY;
-        const dw = w - prevW;
-        const dh = h - prevH;
+        // デルタの基準は「現在の外接矩形（#selectionBoundingBox）」＝サイドパネルに表示中の値。
+        // 以前は applyLiveUpdate._prevX 等のキャッシュを基準にしていたが、ドラッグ移動・リサイズ・
+        // ズーム・Undo/Redo・紙面外クランプでは入力欄だけが更新されキャッシュは据え置かれるため、
+        // 基準値と表示値がずれた状態で次の入力を受けると「Yだけ変えたのにXも動く」
+        // 「一定以上値を変えられない」不具合になっていた。
+        // 外接矩形から都度求めれば基準は常に実際の配置と一致し、ずれが蓄積しない。
+        const selBox = document.getElementById('selectionBoundingBox');
+        const curX = parseFloat(selBox?.style.left)   || 0;
+        const curY = parseFloat(selBox?.style.top)    || 0;
+        const curW = parseFloat(selBox?.style.width)  || 0;
+        const curH = parseFloat(selBox?.style.height) || 0;
+        // 入力欄の表示値は実寸pxで Math.round() 済みのため、差分も実寸pxで取ってから内部pxへ
+        // 換算する（内部pxのまま引くと丸め誤差が毎回デルタとして残り、無操作の軸まで動く）。
+        const rawX = parseFloat(document.getElementById('annPosX')?.value)   || 0;
+        const rawY = parseFloat(document.getElementById('annPosY')?.value)   || 0;
+        const rawW = parseFloat(document.getElementById('annWidth')?.value)  || 0;
+        const rawH = parseFloat(document.getElementById('annHeight')?.value) || 0;
+        // 外接矩形が未生成のとき（想定外）は動かさない
+        const dx = selBox ? realToInternalPx(rawX - Math.round(internalToRealPx(curX, 'x')), 'x') : 0;
+        const dy = selBox ? realToInternalPx(rawY - Math.round(internalToRealPx(curY, 'y')), 'y') : 0;
+        const dw = selBox ? realToInternalPx(rawW - Math.round(internalToRealPx(curW, 'x')), 'x') : 0;
+        const dh = selBox ? realToInternalPx(rawH - Math.round(internalToRealPx(curH, 'y')), 'y') : 0;
 
         allTargets.forEach(target => {
           // 位置をデルタ分移動
@@ -822,8 +856,8 @@ import { pushUndo } from './undo-redo.js';
         const clamped  = allTargets[0];
         const posXEl   = document.getElementById('annPosX');
         const posYEl   = document.getElementById('annPosY');
-        if (posXEl) posXEl.value = Math.round(internalToRealPx(parseFloat(clamped.style.left) || 0, 'x'));
-        if (posYEl) posYEl.value = Math.round(internalToRealPx(parseFloat(clamped.style.top)  || 0, 'y'));
+        setPosFieldValue(posXEl, Math.round(internalToRealPx(parseFloat(clamped.style.left) || 0, 'x')));
+        setPosFieldValue(posYEl, Math.round(internalToRealPx(parseFloat(clamped.style.top)  || 0, 'y')));
         // 大問ボタングループの選択枠を数値入力にも追従させる
         // （updateAlignPanel() は sideDetailActive の dataset.mode を消す副作用があるため直接呼ぶ）
         updateDaimonGroupHighlight();
@@ -832,11 +866,6 @@ import { pushUndo } from './undo-redo.js';
         clampGroupIntoPage(allTargets);
         updateAlignPanel();
       }
-      // 次回デルタ計算のために現在値を保持
-      applyLiveUpdate._prevX = x;
-      applyLiveUpdate._prevY = y;
-      applyLiveUpdate._prevW = w;
-      applyLiveUpdate._prevH = h;
       // 入力確定時にUndo積み直しを許可
       setTimeout(() => { applyLiveUpdate._undoPushed = false; }, 0);
     }
@@ -1679,11 +1708,6 @@ import { pushUndo } from './undo-redo.js';
       // これが無いと、複数選択→単一選択→再び複数選択と切り替えたとき、
       // refreshMultiSelectionPanelがフォーム骨格を作り直すべきタイミングを見誤る可能性がある。
       document.getElementById('sideDetailActive').dataset.mode = 'single';
-      // デルタ計算の基準値をリセット（新たな選択に備える）
-      applyLiveUpdate._prevX = undefined;
-      applyLiveUpdate._prevY = undefined;
-      applyLiveUpdate._prevW = undefined;
-      applyLiveUpdate._prevH = undefined;
       const cfg = ANNOTATION_TYPE_CONFIG[type];
       document.getElementById('dialogTitle').textContent = cfg.label + '設定';
 

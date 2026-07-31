@@ -1,4 +1,3 @@
-import { applyLiveUpdate } from './annotation-dialog.js';
 import { checkAndPromptRestoreForBook } from './autosave.js';
 import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
@@ -773,11 +772,6 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
       document.getElementById('sideDetailEmpty').style.visibility = '';
       // 選択が解除されたタイミングでバウンディングボックスを即削除
       updateAlignPanel();
-      // デルタ計算の基準値をクリア
-      applyLiveUpdate._prevX = undefined;
-      applyLiveUpdate._prevY = undefined;
-      applyLiveUpdate._prevW = undefined;
-      applyLiveUpdate._prevH = undefined;
     }
 
 

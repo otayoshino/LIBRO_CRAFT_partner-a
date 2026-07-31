@@ -1,5 +1,5 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { applyLiveUpdate, openAnnotationSettingsDialog, realToInternalPx } from './annotation-dialog.js';
+import { openAnnotationSettingsDialog } from './annotation-dialog.js';
 import { scheduleAutoSave } from './autosave.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, UNDO_MAX, renderAnnObjectContent, renderAnnImageContent } from './config.js';
@@ -16,17 +16,6 @@ import { showToast, updateStatus } from './ui-common.js';
     ============================ */
 
 
-    /**
-     * 入力欄の文字列値（実寸px、undefinedの可能性あり）を、applyLiveUpdate._prevX等の
-     * キャッシュ用に内部pxへ変換する。値が無い場合はNaNのまま返す
-     * （元コードの `parseFloat(...) ?? undefined` と同じく、未入力時はNaNのまま保持する）。
-     * @param {string|undefined} value - input.valueの生値
-     * @param {'x'|'y'} axis
-     * @returns {number} 内部px値（NaNの場合あり）
-     */
-    function realToInternalPxOrUndefined(value, axis) {
-      return realToInternalPx(parseFloat(value), axis);
-    }
 
     /**
      * Undo スタックに操作を積む。
@@ -175,12 +164,6 @@ import { showToast, updateStatus } from './ui-common.js';
               el.style.left = prevLeft + 'px';
               el.style.top  = prevTop  + 'px';
             });
-            // Undo直後のapplyLiveUpdateキャッシュをリセット
-            // 入力欄の値（実寸px）を、applyLiveUpdate側のデルタ計算基準（内部px）に合わせて変換する
-            applyLiveUpdate._prevX = realToInternalPxOrUndefined(document.getElementById('annPosX')?.value,  'x');
-            applyLiveUpdate._prevY = realToInternalPxOrUndefined(document.getElementById('annPosY')?.value,  'y');
-            applyLiveUpdate._prevW = realToInternalPxOrUndefined(document.getElementById('annWidth')?.value,  'x');
-            applyLiveUpdate._prevH = realToInternalPxOrUndefined(document.getElementById('annHeight')?.value, 'y');
             // 選択中のオブジェクトがあればサイドメニューを最新状態で再描画
             const selected = getSelectedObjects?.();
             if (selected && selected.length === 1) {
@@ -228,12 +211,6 @@ import { showToast, updateStatus } from './ui-common.js';
             } else {
               restoreOne(op);
             }
-            // Undo直後のapplyLiveUpdateキャッシュをリセット
-            // 入力欄の値（実寸px）を、applyLiveUpdate側のデルタ計算基準（内部px）に合わせて変換する
-            applyLiveUpdate._prevX = realToInternalPxOrUndefined(document.getElementById('annPosX')?.value,  'x');
-            applyLiveUpdate._prevY = realToInternalPxOrUndefined(document.getElementById('annPosY')?.value,  'y');
-            applyLiveUpdate._prevW = realToInternalPxOrUndefined(document.getElementById('annWidth')?.value,  'x');
-            applyLiveUpdate._prevH = realToInternalPxOrUndefined(document.getElementById('annHeight')?.value, 'y');
             break;
           }
           // --- グループ化/解除の取り消し ---
@@ -446,11 +423,6 @@ import { showToast, updateStatus } from './ui-common.js';
       updateAnnotationVisibility();
       updateStatus();
       updateAlignPanel();
-      // Redo直後のapplyLiveUpdateキャッシュをサイドメニュー入力欄の値で初期化
-      applyLiveUpdate._prevX = parseFloat(document.getElementById('annPosX')?.value)  ?? undefined;
-      applyLiveUpdate._prevY = parseFloat(document.getElementById('annPosY')?.value)  ?? undefined;
-      applyLiveUpdate._prevW = parseFloat(document.getElementById('annWidth')?.value)  ?? undefined;
-      applyLiveUpdate._prevH = parseFloat(document.getElementById('annHeight')?.value) ?? undefined;
       // 選択中のオブジェクトがあればサイドメニューを最新状態で再描画
       const selected = getSelectedObjects?.();
       if (selected && selected.length === 1) {
