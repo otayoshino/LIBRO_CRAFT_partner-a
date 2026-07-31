@@ -1,6 +1,6 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
-import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getPageBaseSize, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel } from './annotation-interaction.js';
+import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getPageBaseSize, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel, updateDaimonGroupHighlight } from './annotation-interaction.js';
 import { applyDaimonImageAspect, generatePressedVariant, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { validateJstreamCorpId, validateJstreamDir, validateJstreamVideoId } from './jstream-validate.js';
 import { mediaBlobs, state } from './state.js';
@@ -806,6 +806,9 @@ import { pushUndo } from './undo-redo.js';
         const posYEl   = document.getElementById('annPosY');
         if (posXEl) posXEl.value = Math.round(internalToRealPx(parseFloat(clamped.style.left) || 0, 'x'));
         if (posYEl) posYEl.value = Math.round(internalToRealPx(parseFloat(clamped.style.top)  || 0, 'y'));
+        // 大問ボタングループの選択枠を数値入力にも追従させる
+        // （updateAlignPanel() は sideDetailActive の dataset.mode を消す副作用があるため直接呼ぶ）
+        updateDaimonGroupHighlight();
       } else {
         // 複数選択：個別にクランプすると相対位置が崩れるため、グループごと引き戻す
         clampGroupIntoPage(allTargets);

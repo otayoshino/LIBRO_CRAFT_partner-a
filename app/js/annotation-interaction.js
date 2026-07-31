@@ -1051,6 +1051,8 @@ import { pushUndo } from './undo-redo.js';
             }
             // サイドパネルの位置・サイズ表示をリアルタイム更新
             refreshPosFieldsLive(el);
+            // 大問ボタングループの選択枠をリサイズに追従させる
+            updateDaimonGroupHighlight();
           };
 
           const onUp = () => {
@@ -1599,6 +1601,8 @@ import { pushUndo } from './undo-redo.js';
           target.style.top  = (startTop  + dy) + 'px';
           // サイドパネルの位置表示をリアルタイム更新（単一選択・Altコピー複製先どちらも対象）
           refreshPosFieldsLive(target);
+          // 大問ボタングループの選択枠を移動に追従させる
+          updateDaimonGroupHighlight();
         };
         const onUp = () => {
           document.removeEventListener('mousemove', onMove);
@@ -1798,6 +1802,8 @@ import { pushUndo } from './undo-redo.js';
             box.style.height = newHeight + 'px';
             // サイドパネルの外接矩形表示をリアルタイム更新（updateAlignPanel全体は呼ばず軽量に）
             refreshMultiSelectionPanel(box);
+            // 大問ボタングループの選択枠をスケーリングに追従させる
+            updateDaimonGroupHighlight();
           };
 
           const onUp = () => {
@@ -2084,8 +2090,13 @@ import { pushUndo } from './undo-redo.js';
      * 選択数に応じて整列パネルの有効/グレーアウトを切り替え、
      * 複数選択時は外接バウンディングボックスを #pageLeft 上に描画する。
      * 選択が2件未満の場合はボックスを削除する。
+     *
+     * 大問ボタングループの選択枠も併せて更新する。単一選択時にも枠は表示されるため、
+     * count < 2 の早期returnより前（関数の先頭）で呼ぶ必要がある。
      */
     export function updateAlignPanel() {
+      // 大問ボタングループの選択枠を更新（選択・移動・リサイズ・ズームの全経路で追従させる）
+      updateDaimonGroupHighlight();
       updateStickyOpsPanel();
       const panel = document.getElementById('alignPanel');
       if (!panel) return;
@@ -2144,16 +2155,31 @@ import { pushUndo } from './undo-redo.js';
      * 大問ボタンまたはその配下の付箋・証明ボタン等を選択しているとき、
      * 同一 daimonId を共有するグループ全体を囲む枠を #pageLeft 上に描画する。
      * 該当グループが選択されていない場合は既存の枠をすべて削除する。
+     *
+     * ドラッグ移動・リサイズ中の mousemove からも毎フレーム呼ばれるため、
+     * 枠は全削除→再生成ではなく「daimonId ごとに既存要素を再利用し、
+     * 不要になったものだけ削除する」方式にしている（#selectionBoundingBox と同じ考え方）。
+     *
+     * 枠の識別には data-group-for を使う。data-daimon-id を枠自身に付けると
+     * member 収集の querySelectorAll('[data-daimon-id="..."]') が枠自身にマッチし、
+     * 外接矩形が自己参照で膨張し続けるため使ってはならない。
      */
     export function updateDaimonGroupHighlight() {
       const pageEl = document.getElementById('pageLeft');
-      document.querySelectorAll('.daimon-group-box').forEach(b => b.remove());
-      if (!pageEl) return;
+      if (!pageEl) {
+        document.querySelectorAll('.daimon-group-box').forEach(b => b.remove());
+        return;
+      }
 
       const daimonIds = new Set();
       getSelectedObjects().forEach(el => {
         const did = el.dataset.daimonId;
         if (did) daimonIds.add(did);
+      });
+
+      // 選択から外れたグループの枠を削除する（残った枠だけを以降で更新する）
+      pageEl.querySelectorAll('.daimon-group-box').forEach(b => {
+        if (!daimonIds.has(b.dataset.groupFor)) b.remove();
       });
       if (daimonIds.size === 0) return;
 
@@ -2163,7 +2189,11 @@ import { pushUndo } from './undo-redo.js';
       daimonIds.forEach(did => {
         const members = [...pageEl.querySelectorAll(`[data-daimon-id="${did}"]`)]
           .filter(el => !el.classList.contains('ann-hidden-page'));
-        if (members.length === 0) return;
+        const existing = pageEl.querySelector(`.daimon-group-box[data-group-for="${did}"]`);
+        if (members.length === 0) {
+          if (existing) existing.remove();
+          return;
+        }
 
         const rects = members.map(el => {
           const cr = el.getBoundingClientRect();
@@ -2179,13 +2209,18 @@ import { pushUndo } from './undo-redo.js';
         const maxR = Math.max(...rects.map(r => r.r));
         const maxB = Math.max(...rects.map(r => r.b));
 
-        const box = document.createElement('div');
-        box.className = 'daimon-group-box';
+        // getBoundingClientRectの値は視覚座標のため、
+        // #pageLeftの子要素として配置する際はscaleで除してベース座標に変換する。
+        const box = existing || document.createElement('div');
+        if (!existing) {
+          box.className = 'daimon-group-box';
+          box.dataset.groupFor = did;
+        }
         box.style.left   = minL / scale + 'px';
         box.style.top    = minT / scale + 'px';
         box.style.width  = (maxR - minL) / scale + 'px';
         box.style.height = (maxB - minT) / scale + 'px';
-        pageEl.appendChild(box);
+        if (!existing) pageEl.appendChild(box);
       });
     }
 

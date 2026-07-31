@@ -1,4 +1,4 @@
-import { updateAlignPanel, updateDaimonGroupHighlight } from './annotation-interaction.js';
+import { updateAlignPanel } from './annotation-interaction.js';
 import { state } from './state.js';
 
     /** トースト非表示用タイマー */
@@ -80,7 +80,6 @@ import { state } from './state.js';
 
     export function updateStatus() {
       // 選択数に応じて整列パネルの活性状態を更新
+      // （大問ボタングループの選択枠も updateAlignPanel() 内で更新される）
       updateAlignPanel();
-      // 大問ボタングループの選択枠を更新
-      updateDaimonGroupHighlight();
     }
