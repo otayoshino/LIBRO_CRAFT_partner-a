@@ -1686,12 +1686,17 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, g
       filename: closedFile,
       rect,
       _oldId: m.closedId,
-      // 「開削除」：閉側は自己クリックでの「開く」動作を許可しないため actions を持たせない。
+      // 「開削除」：閉側は自己クリックでの「開く」動作を許可しないため actions キー自体を
+      // 出力しない。空配列 [] だとLIBRO+側でクリック可能領域が生成され、動作はしないのに
+      // マウスカーソルだけが反応する（LIBRO+はactionsキーの無いannotを受動表示専用＝
+      // クリック不可として扱う。JSON仕様書1-7節で確認済み）。
       // 「閉じる」動作（開側のactions）には影響しない。
-      actions: m.openLocked ? [] : [
-        { action: 'Hide', targets: closedIds },
-        { action: 'Show', targets: openIds },
-      ],
+      ...(m.openLocked ? {} : {
+        actions: [
+          { action: 'Hide', targets: closedIds },
+          { action: 'Show', targets: openIds },
+        ],
+      }),
       [CRAFT_META_KEY]: closedMeta,
     };
     const openAnnot = {
