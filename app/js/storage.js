@@ -471,13 +471,18 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
       // グループIDの衝突自体は復元時のカウンタ引き上げ（syncStickyGroupCounterFromDom）で
       // 防いでいるが、既存データに衝突が残っていても書き出しがページを跨がないようにする。
       const groupBuckets = new Map(); // `${pageNum}::${gid}` -> { pageNum, gid, members: HTMLElement[] }
+      // 単独付箋（data-group-idなし）に振る合成idの連番。従来は `__solo-${dataset.id}` として
+      // いたが、dataset.id が重複した付箋（複製由来）があると単独付箋どうしが同じバケットへ
+      // 集約され、書き出したbookを再読込した際に1グループとして誤って復元される。
+      // 書き出し1回の中で必ず一意になる連番を使う。
+      let soloSeq = 0;
       page.querySelectorAll('.sticky-note').forEach(el => {
         // 証明ボタン（shomei）紐付き付箋は、shomeiボタン自体がLIBRO+書き出し未対応のため
         // 「開閉するボタンの無い付箋」を出力しないよう、暫定的に書き出しから除外する
         // （解答は露出するが破損はしない。shomei正式対応時に本除外を撤去する）。
         if (el.dataset.shomeiId) return;
         const pageNum = parseInt(el.dataset.page, 10) || 1;
-        const gid = el.dataset.groupId || `__solo-${el.dataset.id}`;
+        const gid = el.dataset.groupId || `__solo-${++soloSeq}`;
         const key = `${pageNum}::${gid}`;
         if (!groupBuckets.has(key)) groupBuckets.set(key, { pageNum, gid, members: [] });
         groupBuckets.get(key).members.push(el);
@@ -548,6 +553,11 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
           // 「開削除」設定（3-2-4/3-2-5節でクラス反映済み）をLIBRO書き出し側へ伝える。
           // .libro-toggle付箋は常にこのクラスが付かないため、既存書き出し（reuseモード）は無変更。
           desc.openLocked = el.classList.contains('sticky-open-locked');
+          // 大問ボタン・答ボタンとの紐付けを libro-craft-meta へ明示記録するための情報。
+          // 値は convertDaimonButtonToLibroAnnots へ渡す groupId（`daimon-${did}` / `kotae-${kid}`）と
+          // 同一形式にし、再インポート時に renderTogglePairs がボタン要素へ突き合わせられるようにする。
+          if (el.dataset.daimonId) desc.btnDaimonGroupId = `daimon-${el.dataset.daimonId}`;
+          if (el.dataset.kotaeId)  desc.btnKotaeGroupId  = `kotae-${el.dataset.kotaeId}`;
           stickyIdsByEl.set(el, { closedId, openId });
           return desc;
         });
