@@ -156,11 +156,13 @@ import { updateStatus } from './ui-common.js';
      * 独立した関数としてexportする（updateTocButtonStateと同じ理由）。
      */
     export function updateNavButtonStates() {
-      const navBtns = document.querySelectorAll('.blk.page-nav .nav-btn');
-      const firstBtn = navBtns[0];
-      const prevBtn  = navBtns[1];
-      const nextBtn  = navBtns[2];
-      const lastBtn  = navBtns[3];
+      // 以前は .blk.page-nav .nav-btn のインデックスで取得していたが、同ブロック先頭に
+      // 目次ボタン(#tocBtn)も .nav-btn として含まれるため参照が1つずつズレていた。
+      // ボタン追加・並び替えの影響も受けないよう、ID指定で取得する。
+      const firstBtn = document.getElementById('firstPageBtn');
+      const prevBtn  = document.getElementById('prevPageBtn');
+      const nextBtn  = document.getElementById('nextPageBtn');
+      const lastBtn  = document.getElementById('lastPageBtn');
       const slideNavPrev = document.getElementById('slideNavPrev');
       const slideNavNext = document.getElementById('slideNavNext');
 
@@ -410,9 +412,22 @@ import { updateStatus } from './ui-common.js';
       // 複数選択バウンディングボックスを更新
       updateAlignPanel();
 
+      // ズーム限界到達で拡大・縮小ボタンの活性状態を更新
+      updateZoomButtonStates();
+
       // ズームが止まってから300ms後に高解像度で再描画する（連続ホイール操作中は再描画を遅延）
       clearTimeout(state._reRenderTimer);
       state._reRenderTimer = setTimeout(() => renderPage(state.currentPage), 300);
+    }
+
+    /**
+     * ズーム限界（上限400% / 下限50%）到達時に header の拡大・縮小ボタンを非活性にする。
+     * state.zoomLevel を書き換えるのは applyZoomChange() と setFit() の2箇所のみのため、
+     * その両方から呼び出せば全経路（ボタン・ホイールズーム・フィット変更）をカバーできる。
+     */
+    export function updateZoomButtonStates() {
+      document.getElementById('zoomInBtn')?.classList.toggle('disabled', state.zoomLevel >= 400);
+      document.getElementById('zoomOutBtn')?.classList.toggle('disabled', state.zoomLevel <= 50);
     }
 
 
@@ -531,6 +546,9 @@ import { updateStatus } from './ui-common.js';
 
       // フィット変更後にページサイズが変わるため book を再描画してcanvasサイズを合わせる
       if (state.bookPages) renderPage(state.currentPage);
+
+      // ズームが100%にリセットされるため拡大・縮小ボタンの活性状態を更新
+      updateZoomButtonStates();
 
       updateAlignPanel();
       updateStatus();

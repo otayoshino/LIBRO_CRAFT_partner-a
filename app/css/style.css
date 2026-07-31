@@ -308,6 +308,13 @@
       width: 100%;
     }
 
+    /* X/Y/W/H ラベルは header の暗い背景（#353c47）上に載るためホワイトにする。
+       ダブルクリック編集ポップアップ（.quick-popup、明るい背景）は .hdr-inline 配下では
+       ないため、既定色（.pos-row span の #555）のまま維持される。 */
+    .hdr-inline .pos-row span {
+      color: #fff;
+    }
+
     /* --- 1920px以上＝インライン（5章相当） --- */
     @media (min-width: 1920px) {
       .blk.detail-group > .nav-btn,
@@ -2262,13 +2269,6 @@
       align-items: center;
       gap: 6px;
       margin-bottom: 6px;
-    }
-    .align-row-label {
-      width: 28px;
-      font-size: 10px;
-      color: #99a;
-      flex-shrink: 0;
-      text-align: center;
     }
     .align-btns {
       display: flex;
