@@ -3,7 +3,7 @@ import { confirmAnnotation, openAnnotationSettingsDialog, openQuickCreateDialog,
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { selectedStickySet, state } from './state.js';
-import { addStickyClickHandler } from './sticky.js';
+import { addStickyClickHandler, applyStickyOpenMode } from './sticky.js';
 import { closeDialog } from './storage.js';
 import { showToast, updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
@@ -1905,15 +1905,20 @@ import { pushUndo } from './undo-redo.js';
             });
           }
         }
-        // 答ボタン削除に伴う付箋の kotaeId・背景色変化を記録
+        // 答ボタン削除に伴う付箋の kotaeId・背景色・開閉方式の変化を記録
         if (btn.classList.contains('kotae-btn')) {
           const kid = btn.dataset.kotaeId;
           if (kid) {
             document.querySelectorAll(`.sticky-note[data-kotae-id="${kid}"]`).forEach(n => {
+              let nSd = {};
+              try { nSd = JSON.parse(n.dataset.savedData || '{}'); } catch (_) {}
               linkedStickyChanges.push({
                 el: n, kotaeId: kid,
                 kotaeOrigBg: n.dataset.kotaeOrigBg,
                 background:  n.style.background,
+                // 削除実行で「紐付け前の開閉方式」へ戻すため、Undo用に削除前の値を控える
+                openMode:          nSd.annStickyOpenMode === '1' ? '1' : '0',
+                kotaeOrigOpenMode: n.dataset.kotaeOrigOpenMode,
               });
             });
           }
@@ -1963,7 +1968,7 @@ import { pushUndo } from './undo-redo.js';
         deleted++;
       });
 
-      // 選択中の答ボタンを削除（紐付き付箋の元色を復元）
+      // 選択中の答ボタンを削除（紐付き付箋の元色・開閉方式を復元）
       document.querySelectorAll('.kotae-btn.is-selected').forEach(btn => {
         const kid = btn.dataset.kotaeId;
         if (kid) {
@@ -1971,6 +1976,16 @@ import { pushUndo } from './undo-redo.js';
             if (n.dataset.kotaeOrigBg !== undefined) {
               n.style.background = n.dataset.kotaeOrigBg;
               delete n.dataset.kotaeOrigBg;
+            }
+            // 答ボタン作成時に既定適用した「表示ボタン削除」を紐付け前の設定へ戻す
+            // （答ボタンが無くなった付箋が永久に開けなくなるのを防ぐ）。
+            // 【H-1】ZIP/book読み込みで復元された答ボタンは createKotaeButton() を通っていないため
+            // dataset.kotaeOrigOpenMode を持たない。その場合は既定値（通常開閉）へ戻す。
+            if (n.dataset.kotaeOrigOpenMode !== undefined) {
+              applyStickyOpenMode(n, n.dataset.kotaeOrigOpenMode);
+              delete n.dataset.kotaeOrigOpenMode;
+            } else if (n.classList.contains('sticky-open-locked')) {
+              applyStickyOpenMode(n, '0');
             }
             delete n.dataset.kotaeId;
           });

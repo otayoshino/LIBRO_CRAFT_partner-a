@@ -61,6 +61,8 @@ import { showToast } from './ui-common.js';
           daimonId: el.dataset.daimonId,
           kotaeId: el.dataset.kotaeId,
           kotaeOrigBg: el.dataset.kotaeOrigBg,
+          // 答ボタン削除時に開閉方式を戻すための元値（開閉方式自体は className／savedData で保存済み）
+          kotaeOrigOpenMode: el.dataset.kotaeOrigOpenMode,
           shomeiId: el.dataset.shomeiId,
           shomeiOrigBg: el.dataset.shomeiOrigBg,
           shomeiOutline: el.dataset.shomeiOutline,
@@ -92,16 +94,25 @@ import { showToast } from './ui-common.js';
       return Array.from(page.querySelectorAll('.sticky-note.libro-toggle'))
         .filter(el => el.dataset.kotaeId || el.dataset.daimonId || el.dataset.shomeiId ||
                       el.dataset.stickyColorOverride || el.dataset.groupId)
-        .map(el => ({
-          page:     el.dataset.page,
-          closedId: el.dataset.closedId,
-          kotaeId:  el.dataset.kotaeId,
-          kotaeOrigBg: el.dataset.kotaeOrigBg,
-          daimonId: el.dataset.daimonId,
-          shomeiId: el.dataset.shomeiId,
-          groupId:  el.dataset.groupId,
-          stickyColorOverride: el.dataset.stickyColorOverride,
-        }));
+        .map(el => {
+          let sd = {};
+          try { sd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
+          return {
+            page:     el.dataset.page,
+            closedId: el.dataset.closedId,
+            kotaeId:  el.dataset.kotaeId,
+            kotaeOrigBg: el.dataset.kotaeOrigBg,
+            daimonId: el.dataset.daimonId,
+            shomeiId: el.dataset.shomeiId,
+            groupId:  el.dataset.groupId,
+            stickyColorOverride: el.dataset.stickyColorOverride,
+            // 答ボタン紐付けで既定適用される開閉方式と、その復帰用の元値。
+            // .libro-toggle付箋はbook読込のたび renderTogglePairs() が再描画するため、
+            // ここで保存しないと復元時に「表示ボタン削除」が失われる。
+            stickyOpenMode:    sd.annStickyOpenMode,
+            kotaeOrigOpenMode: el.dataset.kotaeOrigOpenMode,
+          };
+        });
     }
 
     /**

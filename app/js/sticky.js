@@ -173,6 +173,24 @@ import { pushUndo, redo } from './undo-redo.js';
     }
 
 
+    /**
+     * 付箋の開閉方式（savedData.annStickyOpenMode）を設定し、見た目・書き出し判定に使う
+     * .sticky-open-locked クラスへ反映する。
+     * 答ボタン紐付け時の既定適用・紐付け解除時の復帰・そのUndo/Redoで同じ処理を使うため関数化している。
+     * @param {HTMLElement} el   - 対象の .sticky-note 要素
+     * @param {string}      mode - '1'＝表示ボタン削除 / それ以外＝通常開閉
+     */
+    export function applyStickyOpenMode(el, mode) {
+      if (!el) return;
+      const value = mode === '1' ? '1' : '0';
+      let sd = {};
+      try { sd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
+      sd.annStickyOpenMode = value;
+      el.dataset.savedData = JSON.stringify(sd);
+      el.classList.toggle('sticky-open-locked', value === '1');
+    }
+
+
     export function toggleStickyGroup() {
       if (selectedStickySet.size === 0) {
         showToast('付箋を選択してください。');

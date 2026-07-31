@@ -2,6 +2,7 @@ import { openEditPopup } from './annotation-dialog.js';
 import { clampElementToPage, makeDraggable, makeResizable } from './annotation-interaction.js';
 import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, DAIMON_DEFAULT_ASPECT, DAIMON_DEFAULT_MIN_WIDTH_PX, DAIMON_DEFAULT_WIDTH_RATIO } from './config.js';
 import { mediaBlobs, selectedStickySet, state } from './state.js';
+import { applyStickyOpenMode } from './sticky.js';
 import { showToast, updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
 
@@ -458,12 +459,30 @@ import { pushUndo } from './undo-redo.js';
 
       const kid = `kotae-${++state.kotaeCounter}`;
 
+      // 紐付け前の開閉方式（savedData.annStickyOpenMode）を先に控える。
+      // 下のループで '1'（表示ボタン削除）へ上書きするため、Undo用の復帰値は
+      // 上書き前のこのタイミングでしか取得できない。
+      const prevOpenModes = new Map();
+      stickies.forEach(note => {
+        let sd = {};
+        try { sd = JSON.parse(note.dataset.savedData || '{}'); } catch (_) {}
+        prevOpenModes.set(note, sd.annStickyOpenMode === '1' ? '1' : '0');
+      });
+
       // 選択中の付箋に答IDを付与し、背景色を白に変更（元色を保存）
       stickies.forEach(note => {
         note.dataset.kotaeId = kid;
         if (!note.dataset.kotaeOrigBg) {
           note.dataset.kotaeOrigBg = note.style.background || note.style.backgroundColor || '';
         }
+        // 開閉は答ボタンが担うため、紐付き付箋には「表示ボタン削除」を既定で適用する
+        // （適用後も付箋の設定ダイアログで「通常開閉」へ戻せる）。
+        // 答ボタン削除時に戻せるよう、紐付け前の開閉方式を dataset へ退避する
+        // （既に別の答ボタンへ紐付いていた場合は最初の退避値を維持する）。
+        if (note.dataset.kotaeOrigOpenMode === undefined) {
+          note.dataset.kotaeOrigOpenMode = prevOpenModes.get(note) || '0';
+        }
+        applyStickyOpenMode(note, '1');
         // LIBRO由来の既存付箋（.libro-toggle）は見た目が閉/開2枚のPNGで、ラッパのインライン背景は
         // 閉状態では閉画像に隠れて効かず、開状態では逆に残って解答を覆ってしまう。
         // 紙色表示はCSS（.sticky-note.libro-toggle[data-kotae-id]）側で行うため背景は触らない。
@@ -502,7 +521,13 @@ import { pushUndo } from './undo-redo.js';
       pushUndo({
         type: 'kotae-create',
         btn: el,
-        linkedStickies: stickies.map(n => ({ el: n, prevKotaeId: n.dataset.kotaeId === kid ? undefined : n.dataset.kotaeId, prevBackground: n.dataset.kotaeOrigBg || '' }))
+        linkedStickies: stickies.map(n => ({
+          el: n,
+          prevKotaeId: n.dataset.kotaeId === kid ? undefined : n.dataset.kotaeId,
+          prevBackground: n.dataset.kotaeOrigBg || '',
+          // 開閉方式の復帰値は上書き前に控えた prevOpenModes から引く
+          prevOpenMode: prevOpenModes.get(n) || '0',
+        }))
       });
 
       updateStatus();

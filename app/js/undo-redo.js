@@ -6,7 +6,7 @@ import { ANNOTATION_TYPE_CONFIG, UNDO_MAX, renderAnnObjectContent, renderAnnImag
 import { deselectAllObjects, getSelectedObjects, makeDraggable, makeResizable, reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { updateAnnotationVisibility } from './page-view.js';
 import { redoStack, undoStack } from './state.js';
-import { addStickyClickHandler, applyStickyHideUndo } from './sticky.js';
+import { addStickyClickHandler, applyStickyHideUndo, applyStickyOpenMode } from './sticky.js';
 import { closeDialog } from './storage.js';
 import { showToast, updateStatus } from './ui-common.js';
 
@@ -138,7 +138,7 @@ import { showToast, updateStatus } from './ui-common.js';
             // 削除時に解除した daimonId / kotaeId / shomeiId を付箋に再付与
             if (op.linkedStickyChanges) {
               op.linkedStickyChanges.forEach(change => {
-                const { el, daimonId, kotaeId, kotaeOrigBg, shomeiId, shomeiOrigBg, shomeiOutline, background, outline } = change;
+                const { el, daimonId, kotaeId, kotaeOrigBg, shomeiId, shomeiOrigBg, shomeiOutline, background, outline, openMode, kotaeOrigOpenMode } = change;
                 // Redo用に変更後（=削除実行後）の現在値をこのエントリへ記録しておく
                 change.afterDaimonId     = el.dataset.daimonId;
                 change.afterKotaeId      = el.dataset.kotaeId;
@@ -148,6 +148,12 @@ import { showToast, updateStatus } from './ui-common.js';
                 change.afterShomeiOutline = el.dataset.shomeiOutline;
                 change.afterBackground   = el.style.background;
                 change.afterOutline      = el.style.outline;
+                change.afterKotaeOrigOpenMode = el.dataset.kotaeOrigOpenMode;
+                {
+                  let afterSd = {};
+                  try { afterSd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
+                  change.afterOpenMode = afterSd.annStickyOpenMode === '1' ? '1' : '0';
+                }
                 if (daimonId    !== undefined) el.dataset.daimonId    = daimonId;
                 if (kotaeId     !== undefined) el.dataset.kotaeId     = kotaeId;
                 if (kotaeOrigBg !== undefined) el.dataset.kotaeOrigBg = kotaeOrigBg;
@@ -156,6 +162,9 @@ import { showToast, updateStatus } from './ui-common.js';
                 if (shomeiOutline !== undefined) el.dataset.shomeiOutline = shomeiOutline;
                 if (background  !== undefined) el.style.background   = background;
                 if (outline     !== undefined) el.style.outline      = outline;
+                // 答ボタン削除で戻した開閉方式を、削除前の状態へ復帰させる
+                if (openMode !== undefined) applyStickyOpenMode(el, openMode);
+                if (kotaeOrigOpenMode !== undefined) el.dataset.kotaeOrigOpenMode = kotaeOrigOpenMode;
               });
             }
             break;
@@ -251,11 +260,14 @@ import { showToast, updateStatus } from './ui-common.js';
           // --- 答ボタン作成の取り消し ---
           case 'kotae-create': {
             op.btn.remove();
-            op.linkedStickies.forEach(({ el, prevKotaeId, prevBackground }) => {
+            op.linkedStickies.forEach(({ el, prevKotaeId, prevBackground, prevOpenMode }) => {
               if (prevKotaeId === undefined) delete el.dataset.kotaeId;
               else                           el.dataset.kotaeId = prevKotaeId;
               delete el.dataset.kotaeOrigBg;
               el.style.background = prevBackground;
+              // 「表示ボタン削除」の既定適用を取り消し、紐付け前の開閉方式へ戻す
+              applyStickyOpenMode(el, prevOpenMode || '0');
+              delete el.dataset.kotaeOrigOpenMode;
             });
             break;
           }
@@ -320,7 +332,7 @@ import { showToast, updateStatus } from './ui-common.js';
           });
           // 紐付き付箋のdaimonId/kotaeId/shomeiId・元色・outlineを削除実行後の状態へ再適用
           if (op.linkedStickyChanges) {
-            op.linkedStickyChanges.forEach(({ el, afterDaimonId, afterKotaeId, afterKotaeOrigBg, afterShomeiId, afterShomeiOrigBg, afterShomeiOutline, afterBackground, afterOutline }) => {
+            op.linkedStickyChanges.forEach(({ el, afterDaimonId, afterKotaeId, afterKotaeOrigBg, afterShomeiId, afterShomeiOrigBg, afterShomeiOutline, afterBackground, afterOutline, afterOpenMode, afterKotaeOrigOpenMode }) => {
               if (afterDaimonId === undefined) delete el.dataset.daimonId; else el.dataset.daimonId = afterDaimonId;
               if (afterKotaeId === undefined) delete el.dataset.kotaeId; else el.dataset.kotaeId = afterKotaeId;
               if (afterKotaeOrigBg === undefined) delete el.dataset.kotaeOrigBg; else el.dataset.kotaeOrigBg = afterKotaeOrigBg;
@@ -329,6 +341,9 @@ import { showToast, updateStatus } from './ui-common.js';
               if (afterShomeiOutline === undefined) delete el.dataset.shomeiOutline; else el.dataset.shomeiOutline = afterShomeiOutline;
               el.style.background = afterBackground;
               el.style.outline    = afterOutline;
+              if (afterOpenMode !== undefined) applyStickyOpenMode(el, afterOpenMode);
+              if (afterKotaeOrigOpenMode === undefined) delete el.dataset.kotaeOrigOpenMode;
+              else el.dataset.kotaeOrigOpenMode = afterKotaeOrigOpenMode;
             });
           }
           deselectAllObjects();
@@ -394,9 +409,12 @@ import { showToast, updateStatus } from './ui-common.js';
         // --- 答ボタン作成の再適用 ---
         case 'kotae-create': {
           page.appendChild(op.btn);
-          op.linkedStickies.forEach(({ el, prevBackground }) => {
+          op.linkedStickies.forEach(({ el, prevBackground, prevOpenMode }) => {
             el.dataset.kotaeId    = op.btn.dataset.kotaeId;
             el.dataset.kotaeOrigBg = prevBackground;
+            // 「表示ボタン削除」の既定適用を再現する（createKotaeButton と同じ扱い）
+            el.dataset.kotaeOrigOpenMode = prevOpenMode || '0';
+            applyStickyOpenMode(el, '1');
             // LIBRO由来の既存付箋は紙色表示をCSS側で行うため背景を触らない
             // （createKotaeButton と同じ理由。触ると開状態で白い矩形が解答を覆う）
             if (el.dataset.libroToggle !== '1') el.style.background = '#ffffff';

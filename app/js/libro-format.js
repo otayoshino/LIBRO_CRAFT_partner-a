@@ -1117,6 +1117,12 @@ export function renderTogglePairs(togglePairs) {
       const openLocked = tp.craftMeta['open-locked'] === true;
       wrap.dataset.savedData = JSON.stringify({ annStickyOpenMode: openLocked ? '1' : '0' });
       wrap.classList.toggle('sticky-open-locked', openLocked);
+      // 答ボタン紐付け前の開閉方式（答ボタン削除時の復帰値）。旧bookには無いキーのため
+      // 未定義のときは何もしない（削除時は既定値へ戻すフォールバックが働く）。
+      const kotaeOrigOpenMode = tp.craftMeta['kotae-orig-open-mode'];
+      if (kotaeOrigOpenMode !== undefined) {
+        wrap.dataset.kotaeOrigOpenMode = kotaeOrigOpenMode === '1' ? '1' : '0';
+      }
       // 大問／答ボタンとの紐付け（数値idに依存しないメタ由来の情報）
       const daimonGroupId = tp.craftMeta['daimon-group-id'];
       const kotaeGroupId  = tp.craftMeta['kotae-group-id'];
@@ -1669,6 +1675,11 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, g
     const closedMeta = { type: 'sticky', role: 'closed', 'group-id': groupId, ...linkMeta };
     // 「開削除」：閉側は自己クリックでの「開く」動作を許可しない印
     if (m.openLocked) closedMeta['open-locked'] = true;
+    // 答ボタン紐付け前の開閉方式（答ボタン削除時の復帰値）。値が無ければキー自体を出さない
+    // （旧bookとの後方互換：読み込み側は未定義なら既定値へ戻すフォールバックに落ちる）。
+    if (m.kotaeOrigOpenMode !== undefined) {
+      closedMeta['kotae-orig-open-mode'] = m.kotaeOrigOpenMode === '1' ? '1' : '0';
+    }
     const openMeta = { type: 'sticky', role: 'open', 'group-id': groupId, ...linkMeta };
 
     const closedAnnot = {

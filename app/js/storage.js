@@ -123,6 +123,7 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
                 if (obj.daimonId) el.dataset.daimonId = obj.daimonId;
                 if (obj.kotaeId) el.dataset.kotaeId = obj.kotaeId;
                 if (obj.kotaeOrigBg) el.dataset.kotaeOrigBg = obj.kotaeOrigBg;
+                if (obj.kotaeOrigOpenMode !== undefined) el.dataset.kotaeOrigOpenMode = obj.kotaeOrigOpenMode;
                 if (obj.shomeiId) el.dataset.shomeiId = obj.shomeiId;
                 if (obj.shomeiOrigBg) el.dataset.shomeiOrigBg = obj.shomeiOrigBg;
                 if (obj.shomeiOutline) el.dataset.shomeiOutline = obj.shomeiOutline;
@@ -206,6 +207,17 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
         if (obj.daimonId)   el.dataset.daimonId   = obj.daimonId;
         if (obj.shomeiId)   el.dataset.shomeiId   = obj.shomeiId;
         if (obj.groupId)    el.dataset.groupId    = obj.groupId;
+        // 開閉方式（答ボタン紐付けで既定適用される「表示ボタン削除」）を savedData とクラスの
+        // 両方へ復元する。applyStickyOpenMode() と同じ処理だが、storage.js から sticky.js への
+        // 新規インポートを避けるためここではインラインで書く。
+        if (obj.stickyOpenMode !== undefined) {
+          let sd = {};
+          try { sd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) {}
+          sd.annStickyOpenMode = obj.stickyOpenMode === '1' ? '1' : '0';
+          el.dataset.savedData = JSON.stringify(sd);
+          el.classList.toggle('sticky-open-locked', obj.stickyOpenMode === '1');
+        }
+        if (obj.kotaeOrigOpenMode !== undefined) el.dataset.kotaeOrigOpenMode = obj.kotaeOrigOpenMode;
         if (obj.stickyColorOverride !== undefined) {
           // 色上書き（設定ダイアログで色を選び直した状態）は、閉側プレビュー用の
           // オーバーレイ要素とセットで復元する（confirmAnnotation と同じ構成）
@@ -551,13 +563,18 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
             desc = { closedId, openId, closedMode: 'color', openMode: 'transparent', color, style };
           }
           // 「開削除」設定（3-2-4/3-2-5節でクラス反映済み）をLIBRO書き出し側へ伝える。
-          // .libro-toggle付箋は常にこのクラスが付かないため、既存書き出し（reuseモード）は無変更。
+          // 答ボタン紐付き付箋には作成時に既定適用されるため .libro-toggle付箋にも付きうるが、
+          // 紐付き付箋はもともと closedMode:'color' ＋紙色で書き出されるため閉側の見た目は変わらず、
+          // 変わるのは閉側 annot の actions が空になる（自己クリックで開かない）点だけ。
           desc.openLocked = el.classList.contains('sticky-open-locked');
           // 大問ボタン・答ボタンとの紐付けを libro-craft-meta へ明示記録するための情報。
           // 値は convertDaimonButtonToLibroAnnots へ渡す groupId（`daimon-${did}` / `kotae-${kid}`）と
           // 同一形式にし、再インポート時に renderTogglePairs がボタン要素へ突き合わせられるようにする。
           if (el.dataset.daimonId) desc.btnDaimonGroupId = `daimon-${el.dataset.daimonId}`;
           if (el.dataset.kotaeId)  desc.btnKotaeGroupId  = `kotae-${el.dataset.kotaeId}`;
+          // 答ボタン紐付け前の開閉方式。答ボタンを削除したときの復帰値としてメタへ往復させる
+          // （これが無いと再読込後の答ボタン削除で一律「通常開閉」に戻ってしまう）。
+          if (el.dataset.kotaeOrigOpenMode !== undefined) desc.kotaeOrigOpenMode = el.dataset.kotaeOrigOpenMode;
           stickyIdsByEl.set(el, { closedId, openId });
           return desc;
         });

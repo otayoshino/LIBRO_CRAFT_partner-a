@@ -840,7 +840,17 @@ import { pushUndo } from './undo-redo.js';
         // 開閉方式の変更（閉側の白画像再生成）を提供しない（既存付箋カラー選択と同じ制約）。
         // ただしCRAFT自身が書き出した付箋を再読込した場合（dataset.libroToggleCraft==='1'）は
         // 開閉方式欄自体は表示してよい（openEditPopupのisLibroToggleStickyと同じ判定基準）。
-        if (existingEl?.dataset.libroToggle === '1' && existingEl.dataset.libroToggleCraft !== '1') return;
+        if (existingEl?.dataset.libroToggle === '1' && existingEl.dataset.libroToggleCraft !== '1') {
+          // 開閉方式の選択UIは出せないが、答ボタン紐付けで既定適用された annStickyOpenMode が
+          // 編集確定（confirmAnnotation のフォーム総なめ）で脱落しないよう hidden で持ち回る
+          // （btnLabel / btnPreset と同じパターン）。
+          const hiddenOpenMode = document.createElement('input');
+          hiddenOpenMode.type  = 'hidden';
+          hiddenOpenMode.id    = 'annStickyOpenMode';
+          hiddenOpenMode.value = savedData.annStickyOpenMode || '0';
+          form.appendChild(hiddenOpenMode);
+          return;
+        }
         const openMode = savedData.annStickyOpenMode || '0';
         form.appendChild(_buildRadioDt('開閉方式'));
         form.appendChild(_buildRadioDD('annStickyOpenMode', 'annStickyOpenModeRadio', openMode, [
@@ -1792,7 +1802,11 @@ import { pushUndo } from './undo-redo.js';
           savedData.annPosY = parseInt(existingEl.style.top,  10) || 0;
 
           const openLocked = savedData.annStickyOpenMode === '1';
-          if (isLibroToggleNote && openLocked) {
+          // 答ボタン紐付き付箋（data-kotae-id あり）は紙色表示をCSS
+          // （.sticky-note.libro-toggle[data-kotae-id] .libro-toggle-closed）が担うため、
+          // ここでオーバーレイ（dataset.stickyColorOverride）を作らない。作ってしまうと
+          // 答ボタン削除後も元の閉画像へ戻らなくなる。
+          if (isLibroToggleNote && openLocked && !existingEl.dataset.kotaeId) {
             // 「表示ボタン削除」：.libro-toggle付箋は<img>が背景を覆うためbackground:#fff !important
             // が反映されない。色選択と同じオーバーレイ機構で白（STICKY_COLOR_MAP[3]）を強制表示する。
             existingEl.dataset.stickyColorOverride = '3';
