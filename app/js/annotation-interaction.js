@@ -1,7 +1,7 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { confirmAnnotation, openAnnotationSettingsDialog, openQuickCreateDialog, refreshMultiSelectionPanel, refreshPosFieldsLive } from './annotation-dialog.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, makeDaimonResizable, renderButtonVisual } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, renderAnnObjectContent, renderAnnImageContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { selectedStickySet, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
 import { closeDialog } from './storage.js';
@@ -113,6 +113,9 @@ import { pushUndo } from './undo-redo.js';
           background: el.style.background || '',
           groupId:    el.dataset.groupId,
           daimonId:   el.dataset.daimonId,
+          // コピー元のページ番号。大問／答ボタンとの紐付けを引き継いでよいか
+          // （＝同一ページへの貼り付けか）の判定に使う。
+          page:       el.dataset.page,
         };
         // 証明ボタン：shomeiId と紐付き付箋のスナップショットを保存
         if (el.classList.contains('shomei-btn') && el.dataset.shomeiId) {
@@ -147,6 +150,19 @@ import { pushUndo } from './undo-redo.js';
         // 付箋が kotae-btn と一緒にコピーされた場合、kotaeId を保存（重複排除用）
         if (el.classList.contains('sticky-note') && el.dataset.kotaeId) {
           snap.kotaeId = el.dataset.kotaeId;
+        }
+        // LIBRO由来の付箋（.sticky-note.libro-toggle）は、見た目を子要素の閉/開2枚のPNG
+        // （<img class="libro-toggle-closed"> / <img class="libro-toggle-open">）で表しており
+        // style.background を持たない。従来はその事実を無視して background:'' をそのまま
+        // 貼り付けていたため、貼り付け結果が「背景色も画像も無い完全に透明な矩形」になっていた
+        // （.sticky-note に背景色の既定値が無いため）。
+        // 貼り付け先は通常のCRAFT付箋（単色）として作り直すので、ここではLIBRO由来である
+        // ことと、復元すべき色の手がかり（色上書き指定）だけを保存する。
+        if (el.classList.contains('sticky-note') && el.dataset.libroToggle === '1') {
+          snap.fromLibroToggle = true;
+          if (el.dataset.stickyColorOverride !== undefined) {
+            snap.stickyColorOverride = el.dataset.stickyColorOverride;
+          }
         }
         return snap;
       });
@@ -343,16 +359,49 @@ import { pushUndo } from './undo-redo.js';
           // 「開閉方式：表示ボタン削除」（annStickyOpenMode）はコピー元の状態を維持する。
           // sticky-open-lockedクラスがCSS側の紙色強制・クリック無効化の適用条件のため、
           // savedDataの値から復元する。
-          let stickyOpenLocked = false;
-          try { stickyOpenLocked = JSON.parse(snap.savedData || '{}').annStickyOpenMode === '1'; } catch (_) {}
+          let stickySd = {};
+          try { stickySd = JSON.parse(snap.savedData || '{}'); } catch (_) {}
+          const stickyOpenLocked = stickySd.annStickyOpenMode === '1';
+
+          // 貼り付け結果は常に通常のCRAFT付箋（単色）として作る。コピー元がLIBRO由来付箋
+          // （.libro-toggle）だった場合、その見た目は子要素のPNGで表されていて
+          // style.background が空のため、従来はそのまま `background:;`（無効宣言）となり
+          // 完全に透明な矩形が生成されていた。
+          // 書き出し側（storage.jsの新規付箋経路）は savedData.annColor から単色PNGを生成する
+          // ため、DOMの見た目と書き出し結果を一致させる目的で annColor を明示的に補う。
+          // 色は「コピー元の色上書き指定 → 環境設定のデフォルト付箋色」の順で決める
+          // （元PNGの絵柄そのものは引き継がない。単色付箋になる）。
+          let stickyBg = snap.background;
+          if (snap.fromLibroToggle) {
+            const colorIdx = snap.stickyColorOverride !== undefined
+              ? snap.stickyColorOverride
+              : (state.settingsStickyDefaultColor ?? '0');
+            stickySd.annColor = String(colorIdx);
+            el.dataset.savedData = JSON.stringify(stickySd);
+            stickyBg = STICKY_COLOR_MAP[parseInt(stickySd.annColor, 10)] ?? STICKY_COLOR_MAP[0];
+          }
+
           el.className = 'sticky-note state-visible' + (stickyOpenLocked ? ' sticky-open-locked' : '');
           el.style.cssText = [
             `left:${newLeft}px`,
             `top:${newTop}px`,
             `width:${snap.width}px`,
             `height:${snap.height}px`,
-            `background:${snap.background}`,
+            `background:${stickyBg}`,
           ].join('; ') + ';';
+
+          // 大問／答ボタンとの紐付けを引き継ぐ。Alt+ドラッグ複製（cloneNode(true)でdatasetごと
+          // 複製するため紐付けが維持される）と挙動を揃えるための復元で、従来のペーストは
+          // groupIdしか復元しておらず複製先がボタン配下から外れていた。
+          // ただしコピー元と同じページへ貼り付ける場合に限る。書き出し時、ボタンの紐付き付箋は
+          // document.querySelectorAll('.sticky-note[data-daimon-id="..."]') でページを区別せず
+          // 引かれるため、別ページへ紐付けを持ち込むとボタンのHide/Show targetsが他ページの
+          // 付箋を指してしまう。
+          if (String(snap.page ?? '') === String(state.currentPage)) {
+            if (snap.daimonId) el.dataset.daimonId = snap.daimonId;
+            if (snap.kotaeId)  el.dataset.kotaeId  = snap.kotaeId;
+          }
+
           addStickyClickHandler(el);
           makeDraggable(el);
           makeResizable(el);
@@ -1070,6 +1119,56 @@ import { pushUndo } from './undo-redo.js';
       }
     }
 
+    /**
+     * Alt+ドラッグで複製したLIBRO由来付箋（.sticky-note.libro-toggle）のクローンを、
+     * 通常のCRAFT付箋（単色）へ作り替える。
+     *
+     * LIBRO由来付箋の見た目は子要素の閉/開2枚のPNG（.libro-toggle-closed /
+     * .libro-toggle-open）で表されており style.background を持たない。さらに
+     * dataset.closedId / openId / closedFile / openFile は元bookのannotそのものを指す。
+     * cloneNode(true) はこれらをすべて複製するため、そのまま複製すると「同一idかつ
+     * 同一PNGファイル名のannotがページ内に複数出現する」状態になり、書き出し時に
+     * Hide/Show targetsが潰れて大問ボタンとの紐付けが失われる。
+     *
+     * そこでコピー＆ペースト（pasteClipboard）と同じ方針で、複製先はLIBRO由来の属性を
+     * 落とした通常のCRAFT付箋として作り直す。書き出し側（storage.jsの新規付箋経路）が
+     * savedData.annColor から単色PNGを生成するため、DOMの見た目と書き出し結果が一致する。
+     * 元PNGの絵柄は引き継がない（単色付箋になる）。
+     * @param {HTMLElement} clone - cloneNode(true) 直後のクローン要素（DOM挿入前でよい）
+     */
+    function convertLibroStickyCloneToCraft(clone) {
+      // 色は「コピー元の色上書き指定 → 環境設定のデフォルト付箋色」の順で決める
+      const colorIdx = clone.dataset.stickyColorOverride !== undefined
+        ? clone.dataset.stickyColorOverride
+        : (state.settingsStickyDefaultColor ?? '0');
+      let sd = {};
+      try { sd = JSON.parse(clone.dataset.savedData || '{}'); } catch (_) {}
+      sd.annColor = String(colorIdx);
+      clone.dataset.savedData = JSON.stringify(sd);
+      const bg = STICKY_COLOR_MAP[parseInt(sd.annColor, 10)] ?? STICKY_COLOR_MAP[0];
+
+      // LIBRO由来の見た目（閉/開PNG・色上書きオーバーレイ）を取り除く。
+      // .resize-handle は直後の reinitElement → makeResizable が張り直すため触らない。
+      clone.querySelectorAll('.libro-toggle-closed, .libro-toggle-open, .libro-toggle-color-override')
+        .forEach(n => n.remove());
+
+      // 元bookのannotを指すID系datasetを落とす（複製先で重複させない）
+      clone.classList.remove('libro-toggle');
+      delete clone.dataset.libroToggle;
+      delete clone.dataset.libroToggleCraft;
+      delete clone.dataset.closedId;
+      delete clone.dataset.openId;
+      delete clone.dataset.closedFile;
+      delete clone.dataset.openFile;
+      delete clone.dataset.stickyColorOverride;
+
+      clone.style.background = bg;
+      // 答ボタンとの紐付けを解除したときに戻す背景色（buttons.jsが記録するもの）。
+      // 複製元では空文字（LIBRO由来付箋は背景色を持たない）のため、そのまま引き継ぐと
+      // 解除時に透明へ戻ってしまう。新しい単色へ付け替える。
+      if (clone.dataset.kotaeId) clone.dataset.kotaeOrigBg = bg;
+      else delete clone.dataset.kotaeOrigBg;
+    }
 
     /**
      * 要素をドラッグで移動可能にする。
@@ -1098,10 +1197,19 @@ import { pushUndo } from './undo-redo.js';
         const selectedAll      = getSelectedObjects();
         const isInMultiSel     = selectedAll.length > 1 && selectedAll.includes(el);
 
-        if (e.altKey && isInMultiSel && el.dataset.libroToggle !== '1') {
-          // LIBRO由来の既存付箋（.libro-toggle）は複製に新規PNGが必要になり「新規作成」と等価なため
-          // コピー対象から除外する（位置移動自体は通常ドラッグ／複数選択移動で引き続き可能）
-          const cloneableSelected = selectedAll.filter(n => n.dataset.libroToggle !== '1');
+        // LIBRO由来（dataset.libroToggle==='1'）のうち複製できるのは付箋のみ。
+        // 付箋は convertLibroStickyCloneToCraft() で通常のCRAFT付箋（単色）へ作り替えて複製する。
+        // LIBRO+製の大問／答ボタン（.daimon-btn.libro-toggle / .kotae-btn.libro-toggle）は
+        // 生データを無変更で書き戻すpassthrough対象で、複製するとページ内に同一annotが
+        // 二重出力されるため従来どおり除外する（位置移動は引き続き可能）。
+        const cloneableSelected = (e.altKey && isInMultiSel)
+          ? selectedAll.filter(n => n.dataset.libroToggle !== '1' || n.classList.contains('sticky-note'))
+          : [];
+
+        // 従来はドラッグの起点要素がLIBRO由来だとこの分岐へ入らず、選択内に複製可能な
+        // 要素があっても一切コピーされなかった。起点要素の種別では分岐せず、
+        // 複製対象が1つ以上あるかどうかだけで判定する。
+        if (e.altKey && isInMultiSel && cloneableSelected.length > 0) {
           // shomei-btn を含む場合は事前に新 ID を採番してリマップ表を作成
           const shomeiIdMap = new Map();
           const kotaeIdMap  = new Map();
@@ -1120,6 +1228,10 @@ import { pushUndo } from './undo-redo.js';
             const clone = orig.cloneNode(true);
             clone.dataset.id = ++state.annIdCounter;
             clone.classList.remove('is-selected');
+            // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
+            if (orig.dataset.libroToggle === '1' && clone.classList.contains('sticky-note')) {
+              convertLibroStickyCloneToCraft(clone);
+            }
             // shomei-btn / 付箋 の shomeiId を新 ID にリマップ
             if (clone.classList.contains('shomei-btn') && clone.dataset.shomeiId) {
               const mapped = shomeiIdMap.get(clone.dataset.shomeiId);
@@ -1158,6 +1270,8 @@ import { pushUndo } from './undo-redo.js';
               noteClone.dataset.id       = ++state.annIdCounter;
               noteClone.dataset.shomeiId = newId;
               noteClone.classList.remove('is-selected');
+              // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
+              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone);
               origNote.parentNode.appendChild(noteClone);
               makeDraggable(noteClone, excludeSelector);
               reinitElement(noteClone);
@@ -1179,6 +1293,8 @@ import { pushUndo } from './undo-redo.js';
               noteClone.dataset.id      = ++state.annIdCounter;
               noteClone.dataset.kotaeId = newId;
               noteClone.classList.remove('is-selected');
+              // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
+              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone);
               origNote.parentNode.appendChild(noteClone);
               makeDraggable(noteClone, excludeSelector);
               reinitElement(noteClone);
@@ -1249,6 +1365,11 @@ import { pushUndo } from './undo-redo.js';
           const onUpMulti = () => {
             document.removeEventListener('mousemove', onMoveMulti);
             document.removeEventListener('mouseup',   onUpMulti);
+            // 直後のclickでクローンへ移した選択が畳まれないよう抑止する（H-2と同じ理由）。
+            // 現状はポインタ直下がクローン＝mouseupとmousedownの対象要素が食い違うため
+            // clickは#pageLeftで発火し実害は無いが、要素構成の変更に備えて予防的に立てる。
+            state.suppressObjectClick = true;
+            setTimeout(() => { state.suppressObjectClick = false; }, 0);
             // オリジナルの選択を解除し、クローンに選択を移す
             selectedStickySet.forEach(n => n.classList.remove('is-selected'));
             selectedStickySet.clear();
@@ -1336,6 +1457,13 @@ import { pushUndo } from './undo-redo.js';
           const onUpM = () => {
             document.removeEventListener('mousemove', onMoveM);
             document.removeEventListener('mouseup',   onUpM);
+            // 実際にドラッグした場合のみ、直後に発火するclickでの選択リセットを抑止する
+            // （複数選択を解除するまで維持するため）。動かしていない＝単なるクリックのときは
+            // 抑止せず、従来どおり「クリックした1件だけを選択」に絞り込む挙動を残す。
+            if (hasMoved) {
+              state.suppressObjectClick = true;
+              setTimeout(() => { state.suppressObjectClick = false; }, 0);
+            }
             // 移動が実際に行われた場合のみ Undo スタックに積む
             const movedTargets = multiTargets.filter(({ el: t, startLeft, startTop }) =>
               parseInt(t.style.left, 10) !== startLeft || parseInt(t.style.top, 10) !== startTop
@@ -1355,10 +1483,17 @@ import { pushUndo } from './undo-redo.js';
         let altExtraClones = []; // 追加複製された要素（Undo 用）
 
         // Alt+ドラッグ（単体）：クローンを作成してドラッグ（オリジナルは元の位置に残る）
-        if (e.altKey) {
+        // LIBRO+製の大問／答ボタン（passthrough書き戻し対象）だけは複製せず、
+        // 従来どおり通常の移動になる（複数選択時の除外条件と同じ）。
+        const altCopyBlocked = el.dataset.libroToggle === '1' && !el.classList.contains('sticky-note');
+        if (e.altKey && !altCopyBlocked) {
           const clone = el.cloneNode(true);
           clone.dataset.id = ++state.annIdCounter;
           clone.classList.remove('is-selected');
+          // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
+          if (el.dataset.libroToggle === '1' && clone.classList.contains('sticky-note')) {
+            convertLibroStickyCloneToCraft(clone);
+          }
           // shomei-btn の場合：新 shomeiId を採番し、紐付き付箋も複製
           if (clone.classList.contains('shomei-btn') && clone.dataset.shomeiId) {
             const oldShomeiId = clone.dataset.shomeiId;
@@ -1369,6 +1504,8 @@ import { pushUndo } from './undo-redo.js';
               noteClone.dataset.id       = ++state.annIdCounter;
               noteClone.dataset.shomeiId = newShomeiId;
               noteClone.classList.remove('is-selected');
+              // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
+              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone);
               origNote.parentNode.appendChild(noteClone);
               makeDraggable(noteClone, excludeSelector);
               reinitElement(noteClone);
@@ -1385,6 +1522,8 @@ import { pushUndo } from './undo-redo.js';
               noteClone.dataset.id      = ++state.annIdCounter;
               noteClone.dataset.kotaeId = newKotaeId;
               noteClone.classList.remove('is-selected');
+              // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
+              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone);
               origNote.parentNode.appendChild(noteClone);
               makeDraggable(noteClone, excludeSelector);
               reinitElement(noteClone);
