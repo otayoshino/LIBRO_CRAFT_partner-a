@@ -744,7 +744,18 @@ import { pushUndo } from './undo-redo.js';
           target.style.background = bgColor;
         }
       } else {
-        // 複数選択：位置・サイズはデルタで全対象に適用し個々の状態を保持、塗り色は絶対値で適用
+        // 複数選択：位置・サイズはデルタで全対象に適用し個々の状態を保持する。
+        // 塗り色は「サイドパネルに色選択欄がある場合のみ」適用する。
+        // refreshMultiSelectionPanel() は buildCommonFields(form, null, ...) で組み立てるため
+        // 複数選択パネルには #annColor が生成されない。無条件に適用すると colorIdx が常に 0 となり、
+        // 位置やサイズを1つ変えただけで選択中の全オブジェクトが既定色へ塗り替わってしまう。
+        // #annColor は編集ポップアップ（#quickCreatePopup）にも同じidで生成されうるため、
+        // 必ず #sideDetailActive を起点に取得する。
+        const multiColorEl  = document.querySelector('#sideDetailActive #annColor');
+        const multiColorIdx = parseInt(multiColorEl?.value || '0', 10);
+        // 'existing'（LIBRO由来の「既存カラー」選択）は色を持たない指定のため、色の適用対象外とする
+        const applyColor    = !!multiColorEl && multiColorEl.value !== 'existing';
+
         const prevX = applyLiveUpdate._prevX ?? x;
         const prevY = applyLiveUpdate._prevY ?? y;
         const prevW = applyLiveUpdate._prevW ?? w;
@@ -765,13 +776,16 @@ import { pushUndo } from './undo-redo.js';
           }
           const isSticky = target.classList.contains('sticky-note');
           if (isSticky) {
-            // 付箋：サイズをデルタ分変更（最小10px）、塗り色は絶対値適用
-            const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+            // 付箋：サイズをデルタ分変更（最小10px）。塗り色は色選択欄がある場合のみ適用し、
+            // 無い場合（複数選択パネル）は各付箋の元の色をそのまま維持する
             if (dw !== 0) target.style.width  = Math.max(10, (parseFloat(target.style.width)  || 0) + dw) + 'px';
             if (dh !== 0) target.style.height = Math.max(10, (parseFloat(target.style.height) || 0) + dh) + 'px';
-            target.style.background = color;
+            if (applyColor) {
+              target.style.background = STICKY_COLOR_MAP[multiColorIdx] ?? STICKY_COLOR_MAP[0];
+            }
           } else if (target.classList.contains('ann-icon-obj')) {
-            // アイコン型：常に 1:1（正方形）を保ったままサイズをデルタ分変更し、背景色も適用する
+            // アイコン型：常に 1:1（正方形）を保ったままサイズをデルタ分変更する。
+            // 背景色は色選択欄がある場合のみ適用（無い場合は元の色を維持）
             const ICON_MIN = 14;
             const curW = parseFloat(target.style.width)  || target.offsetWidth;
             const curH = parseFloat(target.style.height) || target.offsetHeight;
@@ -780,17 +794,21 @@ import { pushUndo } from './undo-redo.js';
               target.style.width  = size + 'px';
               target.style.height = size + 'px';
             }
-            target.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
+            if (applyColor) {
+              target.style.background = ICON_COLOR_OPTIONS[multiColorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
+            }
           } else if (target.classList.contains('ann-image-obj')) {
             // 画像アイコン型：サイズのみデルタ分変更（背景色は適用しない）
             if (dw !== 0) target.style.width  = Math.max(10, (parseFloat(target.style.width)  || 0) + dw) + 'px';
             if (dh !== 0) target.style.height = Math.max(10, (parseFloat(target.style.height) || 0) + dh) + 'px';
           } else {
-            // マーカー型：サイズをデルタ分変更（最小10px）、塗り色は絶対値適用
-            const bgColor = ANN_COLOR_OPTIONS[colorIdx]?.value ?? ANN_COLOR_OPTIONS[0].value;
+            // マーカー型・紙面カラー型：サイズをデルタ分変更（最小10px）。
+            // 塗り色は色選択欄がある場合のみ適用（無い場合は元の色・透明のまま維持）
             if (dw !== 0) target.style.width  = Math.max(10, (parseFloat(target.style.width)  || 0) + dw) + 'px';
             if (dh !== 0) target.style.height = Math.max(10, (parseFloat(target.style.height) || 0) + dh) + 'px';
-            target.style.background = bgColor;
+            if (applyColor) {
+              target.style.background = ANN_COLOR_OPTIONS[multiColorIdx]?.value ?? ANN_COLOR_OPTIONS[0].value;
+            }
           }
         });
 
