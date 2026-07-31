@@ -485,7 +485,16 @@ function applyCraftMetaDisplayType(k, meta) {
  * @returns {{ known: Array<Object>, unknown: Array<Object>, togglePairs: Array<Object>, daimonPassthrough: Array<Object>, networks: Array<Object>, maxId: number }}
  */
 function convertPageAnnotations(pageJson, pageNum) {
-  const annots = (pageJson.annots || []).map(a => {
+  // LIBRO+ビューアはHide/Showのtargetsを「annot-range[0] + annots配列内の位置」で解決する
+  // 位置ベースモデルのため（buildLibroBookExportのID正規化と同じ前提）、内部IDの_idも
+  // 位置ベースで採る。ファイル名（annots/XXXX.png）はあくまで画像素材の参照であり、
+  // 数値がIDと一致する保証はない（重複・ずれのあるbookではファイル名由来の_idが重複し、
+  // 付箋の解決先取り違え・書き出し時のtargets潰れを引き起こす）。
+  // annot-rangeを持たないページ（旧データ・想定外構造）のみ従来のファイル名由来へフォールバックする。
+  const range = pageJson['annot-range'];
+  const rangeBase = Array.isArray(range) ? range[0] : null;
+  const annots = (pageJson.annots || []).map((a, idx) => {
+    if (rangeBase != null) return { ...a, _id: rangeBase + idx };
     const idMatch = (a.filename || '').match(/(\d+)\.\w+$/);
     return { ...a, _id: idMatch ? parseInt(idMatch[1], 10) : null };
   });
@@ -995,12 +1004,20 @@ export function renderTogglePairs(togglePairs) {
   const base = getPageBaseSize();
   const pageRect = { width: base.w, height: base.h };
   const wrapByKey = new Map(); // `${pageNum}:${id}` -> 要素（closedId・openId両方をキーに登録。答ボタンリンク解決用）
+  // 書き出し時のボタンgroup-id（libro-craft-metaのgroup-id）-> 復元したボタン要素
+  const btnElByMetaGroupId = new Map();
+  // メタに紐付け先ボタンのgroup-idを持つ付箋。ボタン要素の生成順に依存しないよう
+  // 全要素の生成後にまとめて解決する。
+  const stickyLinkRequests = [];
 
   // groupIdごとのメンバー数を数え、複数メンバーのグループのみdataset.groupIdを設定する
   // （ソロ付箋のgroup-idはCRAFT側のgrp-N形式と衝突しない合成値のため、単独では設定不要）
+  // `__solo-` プレフィックスは書き出し側が単独付箋へ振る合成idであり、定義上グループには
+  // なり得ない。過去データにはこの合成idの重複（複製付箋がdataset.idを共有していた時期の
+  // もの）が残っており、そのまま数えると無関係な単独付箋どうしが1グループへ誤結合される。
   const groupMemberCounts = new Map();
   togglePairs.forEach(tp => {
-    if (!tp.groupId) return;
+    if (!tp.groupId || tp.groupId.startsWith('__solo-')) return;
     groupMemberCounts.set(tp.groupId, (groupMemberCounts.get(tp.groupId) || 0) + 1);
   });
 
@@ -1071,6 +1088,9 @@ export function renderTogglePairs(togglePairs) {
 
       wrapByKey.set(`${tp.pageNum}:${tp.closedId}`, el);
       wrapByKey.set(`${tp.pageNum}:${tp.openId}`,   el);
+      // メタ由来の紐付け解決用（付箋側の daimon-group-id / kotae-group-id と突き合わせる）
+      const metaGroupId = meta?.['group-id'];
+      if (metaGroupId) btnElByMetaGroupId.set(metaGroupId, el);
       page.appendChild(el);
       return;
     }
@@ -1097,6 +1117,12 @@ export function renderTogglePairs(togglePairs) {
       const openLocked = tp.craftMeta['open-locked'] === true;
       wrap.dataset.savedData = JSON.stringify({ annStickyOpenMode: openLocked ? '1' : '0' });
       wrap.classList.toggle('sticky-open-locked', openLocked);
+      // 大問／答ボタンとの紐付け（数値idに依存しないメタ由来の情報）
+      const daimonGroupId = tp.craftMeta['daimon-group-id'];
+      const kotaeGroupId  = tp.craftMeta['kotae-group-id'];
+      if (daimonGroupId || kotaeGroupId) {
+        stickyLinkRequests.push({ el: wrap, daimonGroupId, kotaeGroupId });
+      }
     }
     wrap.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
 
@@ -1133,6 +1159,17 @@ export function renderTogglePairs(togglePairs) {
       const followerWrap = wrapByKey.get(`${tp.pageNum}:${gid}`);
       if (followerWrap && followerWrap !== leaderEl) followerWrap.dataset[linkKey] = did;
     });
+  });
+
+  // libro-craft-meta に明示記録された紐付け先ボタンのgroup-idから、付箋と大問／答ボタンの
+  // 関係を復元する。Hide/Show targetsの数値idに一切依存しないため、ID正規化・ファイル名の
+  // ずれ・ページ内順序変更の影響を受けない。上のtargets由来リンクより後に実行し、
+  // メタの内容を優先させる。対応するボタンが書き出されていない場合は何もしない。
+  stickyLinkRequests.forEach(({ el, daimonGroupId, kotaeGroupId }) => {
+    const daimonEl = daimonGroupId ? btnElByMetaGroupId.get(daimonGroupId) : null;
+    if (daimonEl && daimonEl.dataset.daimonId) el.dataset.daimonId = daimonEl.dataset.daimonId;
+    const kotaeEl = kotaeGroupId ? btnElByMetaGroupId.get(kotaeGroupId) : null;
+    if (kotaeEl && kotaeEl.dataset.kotaeId) el.dataset.kotaeId = kotaeEl.dataset.kotaeId;
   });
 }
 
@@ -1539,6 +1576,7 @@ async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeigh
   const closedAnnot = {
     filename: closedFile,
     rect,
+    _oldId: closedId,
     actions: [
       { action: 'Hide', targets: [...memberClosedIds, closedId] },
       { action: 'Show', targets: [...memberOpenIds, openId] },
@@ -1551,6 +1589,7 @@ async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeigh
     filename: openFile,
     rect,
     hidden: true,
+    _oldId: openId,
     actions: [
       { action: 'Hide', targets: [...memberOpenIds, openId] },
       { action: 'Show', targets: [...memberClosedIds, closedId] },
@@ -1588,7 +1627,11 @@ async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeigh
  * 描き込まれている可能性があり再生成できないため、closedMode/openModeを独立させ、
  * 既存付箋の色だけを変更した場合は「開」画像を無変更のまま維持できるようにする。
  * @param {Array<{closedId:number, openId:number, closedFile?:string, openFile?:string, style:string,
- *   closedMode:'reuse'|'color', openMode:'reuse'|'transparent', color?:string}>} members
+ *   closedMode:'reuse'|'color', openMode:'reuse'|'transparent', color?:string,
+ *   btnDaimonGroupId?:string, btnKotaeGroupId?:string}>} members
+ *   - btnDaimonGroupId/btnKotaeGroupId: 紐付く大問／答ボタンのgroup-id（storage.jsが解決）。
+ *     libro-craft-metaへ daimon-group-id / kotae-group-id として埋め込み、再インポート時に
+ *     Hide/Show targetsの数値idに依存せず紐付けを復元できるようにする。
  *   - style: 現在のDOM位置から算出した "left:x%;top:y%;width:w%;height:h%;" 形式
  *   - closedMode/openMode='reuse': closedFile/openFileの画像をそのまま再利用（新規PNG生成なし）
  *   - closedMode='color': colorをもとに新規PNGを生成（「閉」のみ）
@@ -1615,28 +1658,41 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, g
     const closedFile = m.closedFile || libroMarkerFilename(m.closedId);
     const openFile   = m.openFile   || libroMarkerFilename(m.openId);
 
+    // 大問ボタン・答ボタンとの紐付けは、従来 Hide/Show targets の数値id経由でしか
+    // 復元できなかった（renderTogglePairsのtp.groupIds経路）。ID正規化・ファイル名重複・
+    // ページ内順序変更のいずれかでtargetsが壊れると紐付けが失われるため、
+    // 付箋グループの group-id と同じく、紐付け先ボタンのgroup-idをメタへ明示記録する。
+    const linkMeta = {};
+    if (m.btnDaimonGroupId) linkMeta['daimon-group-id'] = m.btnDaimonGroupId;
+    if (m.btnKotaeGroupId)  linkMeta['kotae-group-id']  = m.btnKotaeGroupId;
+
+    const closedMeta = { type: 'sticky', role: 'closed', 'group-id': groupId, ...linkMeta };
+    // 「開削除」：閉側は自己クリックでの「開く」動作を許可しない印
+    if (m.openLocked) closedMeta['open-locked'] = true;
+    const openMeta = { type: 'sticky', role: 'open', 'group-id': groupId, ...linkMeta };
+
     const closedAnnot = {
       filename: closedFile,
       rect,
+      _oldId: m.closedId,
       // 「開削除」：閉側は自己クリックでの「開く」動作を許可しないため actions を持たせない。
       // 「閉じる」動作（開側のactions）には影響しない。
       actions: m.openLocked ? [] : [
         { action: 'Hide', targets: closedIds },
         { action: 'Show', targets: openIds },
       ],
-      [CRAFT_META_KEY]: m.openLocked
-        ? { type: 'sticky', role: 'closed', 'group-id': groupId, 'open-locked': true }
-        : { type: 'sticky', role: 'closed', 'group-id': groupId },
+      [CRAFT_META_KEY]: closedMeta,
     };
     const openAnnot = {
       filename: openFile,
       rect,
       hidden: true,
+      _oldId: m.openId,
       actions: [
         { action: 'Hide', targets: openIds },
         { action: 'Show', targets: closedIds },
       ],
-      [CRAFT_META_KEY]: { type: 'sticky', role: 'open', 'group-id': groupId },
+      [CRAFT_META_KEY]: openMeta,
     };
 
     if (m.closedMode === 'color') {
@@ -1743,7 +1799,10 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
   if (sd.annColor !== undefined && sd.annColor !== '') craftMeta['color-index'] = String(sd.annColor);
   if ((sd.annLabel || '').trim()) craftMeta.label = sd.annLabel.trim();
 
-  return { annotJson: { filename, rect, actions, [CRAFT_META_KEY]: craftMeta }, newPngBytes };
+  // _oldId：ID正規化（buildLibroBookExport）が「このannotが旧IDいくつだったか」を
+  // ファイル名から推測せず一意に決められるようにするための内部フィールド。
+  // ページ処理の最後に必ず削除してから書き出す。
+  return { annotJson: { filename, rect, actions, _oldId: domData.id, [CRAFT_META_KEY]: craftMeta }, newPngBytes };
 }
 
 
@@ -1853,13 +1912,19 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     const pageWidth  = pageJson.width;
     const pageHeight = pageJson.height;
 
-    // 未知アノテーションの生データは無変更のまま書き戻す（内部管理用の_idは除去）。
+    // 未知アノテーションの生データは無変更のまま書き戻す（内部管理用の_idは_oldIdへ移す）。
     // state.libroUnknownAnnotations/libroDaimonPassthrough/libroNetworkPassthrough等の
     // state上のオブジェクトを直接参照しているため、後段のID正規化で書き換える前提として
     // deep copyする（{_id,...clean}の分割は浅いコピーでactions配列等は元オブジェクトと
     // 共有されたままのため、そのままでは再エクスポート時に二重変換されてしまう）。
+    // _oldId は「このannotが読込時に持っていた位置ベースID」で、ID正規化の同一性キーに使う
+    // （出力直前に削除する）。
     const passthrough = (passthroughByPage.get(pageNum) || [])
-      .map(({ _id, ...clean }) => JSON.parse(JSON.stringify(clean)));
+      .map(({ _id, ...clean }) => {
+        const copy = JSON.parse(JSON.stringify(clean));
+        if (_id != null) copy._oldId = _id;
+        return copy;
+      });
 
     // 各アノテーションのfilenameは既存のdata-idベースで一意に決まっており、
     // 変換処理も互いに独立しているため並列実行する。
@@ -1941,11 +2006,18 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     const origIndexByAnnot = new Map(legacyOrderAnnots.map((a, idx) => [a, idx]));
     const rangeBase0 = originalRange ? originalRange[0] : 0;
 
-    // ユニットの並び替えキー＝ユニット内の最小「旧ID」（数値filename由来）。
-    // 数値filenameを持たないユニット（単独annotのみ）は originalRange[0]+元の配列位置 とする。
+    // 各annotの「旧ID」＝ _oldId（DOM側／読込時の実ID。targetsが参照するのと同じ値）。
+    // 従来はfilenameの数値を旧IDとみなしていたが、targetsに書かれるのはDOM側のidであり
+    // 二重基準になっていた。ファイル名が重複・ずれているbook（過去のCRAFT書き出し由来）では
+    // 旧IDが潰れてtargetsが壊れ、大問ボタンと付箋の紐付けが失われる原因になっていた。
+    // _oldIdが無い想定外annotのみ、従来どおりfilename→配列位置の順にフォールバックする。
+    const oldIdOf = (annot) =>
+      annot._oldId ?? filenameToNumericId(annot) ?? (rangeBase0 + (origIndexByAnnot.get(annot) ?? 0));
+
+    // ユニットの並び替えキー＝ユニット内の最小「旧ID」。
     const unitKey = (unit) => {
-      const numericIds = unit.map(filenameToNumericId).filter(id => id != null);
-      if (numericIds.length) return Math.min(...numericIds);
+      const ids = unit.map(oldIdOf).filter(id => id != null);
+      if (ids.length) return Math.min(...ids);
       return rangeBase0 + (origIndexByAnnot.get(unit[0]) ?? 0);
     };
 
@@ -1961,26 +2033,30 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     const blockSize = indexJson.configs?.['annot-id-block-size'] ?? 300;
     const base = originalRange ? originalRange[0] : (pageNum === 1 ? 1 : (pageNum - 1) * blockSize);
 
-    // 旧ID→新IDのマップを構築する。数値filenameが無いannotの「旧ID」は
-    // rangeBase0+元の配列位置という合成値だが、Hide/Show targetsからは参照され得ない
-    // （見開きページ等はGoTo単体のためtargetsを持たない）ため実害はない。
+    // 旧ID→新IDのマップを構築する。旧IDが重複した場合（想定外のDOM状態）は先勝ちで採用し、
+    // 警告のみ出す（後勝ちにすると先に現れたannotのtargetsが黙って壊れるため）。
     const oldToNewId = new Map();
     sortedAnnots.forEach((annot, idx) => {
-      const newId = base + idx;
-      const oldId = filenameToNumericId(annot) ?? (rangeBase0 + (origIndexByAnnot.get(annot) ?? 0));
-      oldToNewId.set(oldId, newId);
+      const oldId = oldIdOf(annot);
+      if (oldId == null) return;
+      if (oldToNewId.has(oldId)) {
+        console.warn(`LIBRO書き出し: page ${pageNum} で旧ID ${oldId} が重複しています（先に現れたannotを優先します）`);
+        return;
+      }
+      oldToNewId.set(oldId, base + idx);
     });
 
-    // filenameの改名対象（数値filenameを持ち、かつIDが変わるannotのみ）を洗い出す。
+    // filenameの改名対象（数値filenameを持ち、かつ最終IDと一致しないannot）を洗い出す。
+    // 判定は「新IDから決まる正規ファイル名と現filenameが違うか」で行う（従来の
+    // 「旧ID===新IDならスキップ」はファイル名重複時に不整合を温存してしまうため）。
+    // annots/ffff.png のような数値でないfilenameは従来どおり改名対象外（共有素材のため）。
     // 実際のzip読み書き・削除はここでは行わず、annot.filenameの更新と内容ソースの記録のみ行う
     // （実際の読み書き・削除はループの外で全ページ分まとめて行う。クロスページ衝突対策）。
-    sortedAnnots.forEach(annot => {
-      const oldId = filenameToNumericId(annot);
-      if (oldId == null) return;
-      const newId = oldToNewId.get(oldId);
-      if (newId === oldId) return;
+    sortedAnnots.forEach((annot, idx) => {
+      if (filenameToNumericId(annot) == null) return;
+      const newFilename = libroMarkerFilename(base + idx);
+      if (annot.filename === newFilename) return;
       const oldPath = baseDir + annot.filename;
-      const newFilename = libroMarkerFilename(newId);
       allOldPaths.add(oldPath);
       // 別オーサリングツール由来などで元々暗号化されていなかったファイル（unencryptedAssetPaths）を
       // リネームする場合は、書き出し末尾の強制暗号化パスが新パスを見つけられるよう付け替える。
@@ -2005,6 +2081,9 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
         });
       });
     });
+
+    // 内部管理用フィールドは出力JSONへ混入させない
+    sortedAnnots.forEach(annot => { delete annot._oldId; });
 
     pageJson.annots = sortedAnnots;
     sortedAnnots.forEach(a => allFinalPaths.add(baseDir + a.filename));
