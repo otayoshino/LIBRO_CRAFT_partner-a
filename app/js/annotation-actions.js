@@ -232,6 +232,8 @@ import { showToast, updateStatus } from './ui-common.js';
       const type = ann.dataset.type;
       const cfg  = ANNOTATION_TYPE_CONFIG[type];
       ann.addEventListener('click', (e) => {
+        // 複数選択のドラッグ移動直後に発火したclickは選択操作として扱わない（H-4と同じ理由）
+        if (state.suppressObjectClick) { state.suppressObjectClick = false; return; }
         // 閲覧モード時：実際の挙動を実行
         if (document.body.classList.contains('is-view-mode')) {
           fireAnnotationAction(ann);

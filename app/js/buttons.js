@@ -372,6 +372,8 @@ import { pushUndo } from './undo-redo.js';
       btn.addEventListener('dblclick', btn._daimonDblclickHandler);
 
       btn._daimonClickHandler = (e) => {
+        // 複数選択のドラッグ移動直後に発火したclickは選択操作として扱わない（H-4と同じ理由）
+        if (state.suppressObjectClick) { state.suppressObjectClick = false; return; }
         if (!document.body.classList.contains('is-view-mode')) {
           // 編集モード：選択処理
           if (e.shiftKey) {
@@ -521,6 +523,8 @@ import { pushUndo } from './undo-redo.js';
         openEditPopup(btn);
       });
       btn.addEventListener('click', (e) => {
+        // 複数選択のドラッグ移動直後に発火したclickは選択操作として扱わない（H-4と同じ理由）
+        if (state.suppressObjectClick) { state.suppressObjectClick = false; return; }
         if (!document.body.classList.contains('is-view-mode')) {
           // 編集モード：選択処理
           if (e.shiftKey) {
@@ -640,6 +644,8 @@ import { pushUndo } from './undo-redo.js';
         openEditPopup(btn);
       });
       btn.addEventListener('click', (e) => {
+        // 複数選択のドラッグ移動直後に発火したclickは選択操作として扱わない（H-4と同じ理由）
+        if (state.suppressObjectClick) { state.suppressObjectClick = false; return; }
         if (!document.body.classList.contains('is-view-mode')) {
           // 編集モード：選択処理
           if (e.shiftKey) {

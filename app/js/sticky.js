@@ -221,6 +221,9 @@ import { pushUndo, redo } from './undo-redo.js';
               openEditPopup(note);
             });
       note.addEventListener('click', (e) => {
+        // 複数選択のドラッグ移動直後に発火したclickは選択操作として扱わない
+        // （選択を1件へ畳まず、複数選択を維持する。state.suppressObjectClickの説明を参照）
+        if (state.suppressObjectClick) { state.suppressObjectClick = false; return; }
         // 編集モード時
         if (!document.body.classList.contains('is-view-mode')) {
           if (e.shiftKey) {
