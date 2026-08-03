@@ -917,6 +917,8 @@ import { pushUndo } from './undo-redo.js';
         handle.dataset.corner = corner;
 
         handle.addEventListener('mousedown', (e) => {
+          // Spaceパンモード中はリサイズを行わない（#viewArea のパンへ委譲）
+          if (state.isSpaceHeld) return;
           if (document.body.classList.contains('is-view-mode')) return;
           e.preventDefault();
           e.stopPropagation();
@@ -1190,6 +1192,10 @@ import { pushUndo } from './undo-redo.js';
       if (el._draggableInit) return;
       el._draggableInit = true;
       el.addEventListener('mousedown', (e) => {
+        // Spaceパンモード中はオブジェクト移動を行わない。
+        // stopPropagation せずに抜けることで #viewArea のパンリスナーへ委譲する
+        // （preventDefault もパンリスナー側で行われる）。
+        if (state.isSpaceHeld) return;
         if (document.body.classList.contains('is-view-mode')) return; // 閲覧モードはドラッグ無効
         if (excludeSelector && e.target.matches(excludeSelector)) return;
         e.preventDefault();
@@ -1660,6 +1666,8 @@ import { pushUndo } from './undo-redo.js';
         handle.dataset.corner = corner;
 
         handle.addEventListener('mousedown', (e) => {
+          // Spaceパンモード中はリサイズを行わない（#viewArea のパンへ委譲）
+          if (state.isSpaceHeld) return;
           if (document.body.classList.contains('is-view-mode')) return;
           e.preventDefault();
           e.stopPropagation();

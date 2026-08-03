@@ -215,6 +215,24 @@ import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, loadSetting
     });
 
     /**
+     * Spaceパンモード中は紙面上のオブジェクト操作（選択・設定ダイアログ表示・
+     * 付箋の開閉トグルなど）を非活性にする。
+     * click / dblclick はオブジェクト側（annotation-actions.js / sticky.js / buttons.js）で
+     * 9か所に分散して登録されているため、document の capture 段階でまとめて抑止する。
+     * パン自体は mousedown / mousemove / mouseup で完結しており click を使わないため、
+     * ここで止めてもパン操作には影響しない。
+     * 対象は #pageLeft 配下のみ（ヘッダー等のUI操作は妨げない）。
+     */
+    ['click', 'dblclick'].forEach(type => {
+      document.addEventListener(type, (e) => {
+        if (!state.isSpaceHeld) return;
+        if (!e.target.closest?.('#pageLeft')) return;
+        e.preventDefault();
+        e.stopPropagation();
+      }, true);
+    });
+
+    /**
      * 右クリックメニュー表示時にドラッグ選択をキャンセルする。
      * 右クリックは mouseup が発火しないブラウザがあるため contextmenu で補完する。
      */
@@ -228,6 +246,11 @@ import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, loadSetting
      */
     window.addEventListener('blur', () => {
       cancelDragSelect();
+      // Space を押したまま別アプリへ切り替えると keyup が発火せず isSpaceHeld が
+      // true のまま固着し、オブジェクト操作が一切できなくなるためリセットする。
+      state.isSpaceHeld = false;
+      state.isPanning   = false;
+      document.getElementById('viewArea').classList.remove('space-pan-mode', 'is-panning');
     });
 
     /**
