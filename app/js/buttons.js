@@ -1,8 +1,9 @@
-import { openEditPopup } from './annotation-dialog.js';
+import { openAnnotationSettingsDialog, openEditPopup } from './annotation-dialog.js';
 import { clampElementToPage, makeDraggable, makeResizable } from './annotation-interaction.js';
 import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, DAIMON_DEFAULT_ASPECT, DAIMON_DEFAULT_MIN_WIDTH_PX, DAIMON_DEFAULT_WIDTH_RATIO } from './config.js';
 import { mediaBlobs, selectedStickySet, state } from './state.js';
 import { applyStickyOpenMode } from './sticky.js';
+import { closeDialog } from './storage.js';
 import { showToast, updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
 
@@ -389,6 +390,17 @@ import { pushUndo } from './undo-redo.js';
           }
           const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
                       + selectedStickySet.size;
+          // header詳細設定パネルを選択状態へ追従させる。
+          // 従来はここで何もしておらず、大問/答/証明ボタンだけを選択しても
+          // パネルがグレーアウト（#sideDetailEmpty）のままだった。
+          // 呼び出し順は annotation-actions.js の addAnnClickHandler() と同じで、
+          // 2件以上選択されている場合は直後の updateStatus() → updateAlignPanel() →
+          // refreshMultiSelectionPanel() が複数選択パネルへ上書きする（確認済み）。
+          if (count === 0) {
+            closeDialog();
+          } else if (btn.classList.contains('is-selected')) {
+            openAnnotationSettingsDialog('daimon', btn);
+          }
           updateStatus();
           return;
         }
@@ -563,6 +575,12 @@ import { pushUndo } from './undo-redo.js';
           }
           const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
                       + selectedStickySet.size;
+          // header詳細設定パネルを選択状態へ追従させる（addDaimonClickHandlerと同じ理由）
+          if (count === 0) {
+            closeDialog();
+          } else if (btn.classList.contains('is-selected')) {
+            openAnnotationSettingsDialog('kotae', btn);
+          }
           updateStatus();
           return;
         }
@@ -684,6 +702,12 @@ import { pushUndo } from './undo-redo.js';
           }
           const count = document.querySelectorAll('.ann-object.is-selected, .ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected').length
                       + selectedStickySet.size;
+          // header詳細設定パネルを選択状態へ追従させる（addDaimonClickHandlerと同じ理由）
+          if (count === 0) {
+            closeDialog();
+          } else if (btn.classList.contains('is-selected')) {
+            openAnnotationSettingsDialog('shomei', btn);
+          }
           updateStatus();
           return;
         }

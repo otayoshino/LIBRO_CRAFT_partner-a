@@ -13,6 +13,18 @@ import { pushUndo } from './undo-redo.js';
     /** 大問/答/証明ボタンのtype一覧（共通判定に使用） */
     const BUTTON_TYPES = new Set(['daimon', 'kotae', 'shomei']);
 
+    /**
+     * 大問/答/証明ボタンのサイズを変更してよい要素かを判定する。
+     * ページ座標系サイズをインラインstyleで持つ .is-sized のもののみ対象で、
+     * LIBRO由来（dataset.libroToggle === '1'）とCSS固定サイズの旧ボタンは対象外。
+     * makeDaimonResizable()（buttons.js）が紙面上のリサイズハンドルを付ける条件と
+     * 同一にしてあり、「紙面で変えられないものはheaderからも変えられない」を保つ。
+     * @param {HTMLElement|null} el
+     * @returns {boolean}
+     */
+    function isButtonResizable(el) {
+      return !!el && el.classList.contains('is-sized') && el.dataset.libroToggle !== '1';
+    }
 
     /** 連続作成モード用：前回使用した設定を種別ごとに保存 */
     const lastNewAnnData = {};
@@ -334,6 +346,14 @@ import { pushUndo } from './undo-redo.js';
         });
         closeQuickCreateDialog();
         confirmAnnotation(type, el, savedData);
+        // headerの詳細パネルはポップアップの確定では作り直されないため、
+        // 表示タイプ・塗り色を変えると共通セクションのミラー欄が古いままになる。
+        // 単一選択でパネルを開いている場合のみ、更新後の値で作り直す。
+        // （複数選択パネル表示中は refreshMultiSelectionPanel の管轄なので触らない）
+        const activePanel = document.getElementById('sideDetailActive');
+        if (activePanel.dataset.mode !== 'multi' && activePanel.style.display !== 'none') {
+          openAnnotationSettingsDialog(type, el);
+        }
       };
 
       document.getElementById('qcCancelBtn').onclick = closeQuickCreateDialog;
@@ -558,8 +578,12 @@ import { pushUndo } from './undo-redo.js';
     function buildCommonFields(form, type, savedData, initRect, existingEl = null) {
       const px = initRect ? Math.round(initRect.x) : (parseInt(savedData.annPosX,   10) || 0);
       const py = initRect ? Math.round(initRect.y) : (parseInt(savedData.annPosY,   10) || 0);
-      const pw = initRect ? Math.round(initRect.w) : (parseInt(savedData.annWidth,  10) || 100);
-      const ph = initRect ? Math.round(initRect.h) : (parseInt(savedData.annHeight, 10) || 100);
+      // 大問/答/証明ボタンは dataset.savedData に annWidth/annHeight を持たないことがあり
+      // （openAnnotationSettingsDialogが style.width のあるときだけ設定するため）、
+      // 取得できない場合は実レイアウトサイズへフォールバックする。
+      // 従来はここで一律 100 になり、変形欄に実サイズと無関係な値が表示されていた。
+      const pw = initRect ? Math.round(initRect.w) : (parseInt(savedData.annWidth,  10) || existingEl?.offsetWidth  || 100);
+      const ph = initRect ? Math.round(initRect.h) : (parseInt(savedData.annHeight, 10) || existingEl?.offsetHeight || 100);
       // px/py/pw/phは内部px（#pageLeftのベースサイズ基準）。入力欄にはLIBROページ実寸pxで
       // 表示する（フィットモード・ウィンドウ幅を変えても同じ値になるようにするため）。
       const dispX = Math.round(internalToRealPx(px, 'x'));
@@ -583,11 +607,11 @@ import { pushUndo } from './undo-redo.js';
       posDd.appendChild(posRow);
       form.appendChild(posDd);
 
-      // 大問/答/証明ボタンは固定サイズCSS＋プリセット選択式のため、
-      // 汎用の「変形」(W/H)・「塗り」行は生成しない（buildSpecificFieldsの専用フィールドに置き換える）
+      // 「変形」行は種別を問わず常に生成する（種別ごとにheaderの行構成＝幅が変わるのを防ぐため）。
+      // 大問/答/証明ボタンのうち、紙面上でリサイズできないもの（LIBRO由来・CSS固定サイズの
+      // 旧ボタン）だけを非活性表示にする。
       const isButtonType = BUTTON_TYPES.has(type);
 
-      if (!isButtonType) {
       // --- 変形 ---
       const szDt = document.createElement('dt');
       szDt.textContent = '変形';
@@ -605,6 +629,14 @@ import { pushUndo } from './undo-redo.js';
       });
       szDd.appendChild(szRow);
       form.appendChild(szDd);
+      if (isButtonType && !isButtonResizable(existingEl)) {
+        // LIBRO由来（.libro-toggle）・CSS固定サイズの旧ボタンは紙面上でもリサイズできないため、
+        // headerからも変更できないよう表示したまま非活性にする。
+        // .is-field-disabled が pointer-events:none を付けるためスピンボタンも操作できない。
+        szDt.classList.add('is-field-disabled');
+        szDd.classList.add('is-field-disabled');
+        szDd.querySelectorAll('input, button').forEach(el => { el.disabled = true; });
+      }
 
       // --- 塗り色（付箋のみ。それ以外の種別は buildSpecificFields 側の「表示タイプ」直下に生成する） ---
       if (type === 'sticky') {
@@ -644,13 +676,53 @@ import { pushUndo } from './undo-redo.js';
       form.appendChild(colDt);
       form.appendChild(colDd);
       }
+
+      // --- 塗り（付箋以外：header共通セクション用のミラー欄） ---
+      // 付箋以外の塗り色の実体は buildSpecificFields() 側の #annColor だが、
+      // 種別設定セクション（#sideDetailSpecificWrap）はheaderでは常に非表示のため、
+      // そのままではheaderから塗り色を変更できない。ここに複製欄を置き、
+      // syncCommonFillMirror() で実体と双方向同期する。
+      // - idを付けないため confirmAnnotation の `input[id], select[id], textarea[id]` 収集には
+      //   拾われず、#annColor の重複も発生しない（確認済み）
+      // - クイック作成／編集ポップアップ（#qcFormCommon）には生成しない。ポップアップでは
+      //   種別設定セクションが表示され実体を直接操作できるため（＝ラベルの二重表示にならない）
+      // - 初期状態は非活性。使える状況かどうかは syncCommonFillMirror() が判定する
+      if (form.id === 'dialogFormCommon' && type !== 'sticky') {
+        const mirDt = document.createElement('dt');
+        mirDt.textContent = '塗り';
+        mirDt.dataset.fieldGroup = 'fill';
+        mirDt.dataset.role = 'fill-mirror-dt';
+        mirDt.classList.add('is-field-disabled');
+        form.appendChild(mirDt);
+        const mirDd = document.createElement('dd');
+        mirDd.className = 'color-row is-field-disabled';
+        mirDd.dataset.fieldGroup = 'fill';
+        mirDd.dataset.role = 'fill-mirror-dd';
+        const mirWrap = document.createElement('div');
+        mirWrap.className = 'd-select-wrap';
+        const mirSel = document.createElement('select');
+        mirSel.className = 'd-select';
+        mirSel.dataset.role = 'fill-mirror';
+        mirSel.disabled = true;
+        const mirOpt = document.createElement('option');
+        mirOpt.textContent = '—';
+        mirSel.appendChild(mirOpt);
+        mirWrap.appendChild(mirSel);
+        mirDd.appendChild(mirWrap);
+        form.appendChild(mirDd);
       }
 
-      // アイコン型・画像アイコン型：W/H入力時に縦横比を維持して反対軸を自動更新（applyLiveUpdateより先に登録して先行実行させる）
-      const _selectedIconObj = document.querySelector('.ann-icon-obj.is-selected, .ann-image-obj.is-selected');
-      if (_selectedIconObj) {
-        // アイコン型（.ann-icon-obj）は常に 1:1。画像アイコン型（.ann-image-obj）は元画像の
-        // 縦横比をそのまま維持するため実測値を使う。
+      // アイコン型・画像アイコン型・大問/答/証明ボタン：W/H入力時に縦横比を維持して反対軸を
+      // 自動更新（applyLiveUpdateより先に登録して先行実行させる）
+      const _selectedIconObj = document.querySelector('.ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected');
+      // ボタン系はサイズ変更を許可した要素（.is-sized かつLIBRO由来でない）だけをペアリング対象にする
+      const _isPairBtn = !!_selectedIconObj && (
+        _selectedIconObj.classList.contains('daimon-btn') ||
+        _selectedIconObj.classList.contains('kotae-btn')  ||
+        _selectedIconObj.classList.contains('shomei-btn'));
+      if (_selectedIconObj && (!_isPairBtn || isButtonResizable(_selectedIconObj))) {
+        // アイコン型（.ann-icon-obj）は常に 1:1。画像アイコン型（.ann-image-obj）と
+        // 大問/答/証明ボタンは、パネルを開いた時点の矩形の縦横比を実測して維持する。
         const _initAspect = _selectedIconObj.classList.contains('ann-icon-obj')
           ? 1
           : (_selectedIconObj.offsetWidth / (_selectedIconObj.offsetHeight || 1));
@@ -738,7 +810,16 @@ import { pushUndo } from './undo-redo.js';
         target.style.left = x + 'px';
         target.style.top  = y + 'px';
         if (isButtonEl(target)) {
-          // ボタン系：位置のみ変更、背景・サイズは変更しない
+          // ボタン系：位置に加えてサイズも変更する（背景はプリセット/画像素材で決まるため変更しない）。
+          // 縦横比はW/H入力欄のペアリング（buildCommonFields内）で既に相手軸へ反映済みのため、
+          // ここでは入力値をそのまま適用すればよい（ペアリングのリスナーが先に登録されており
+          // 先行実行される＝確認済み）。
+          // サイズ変更を許可しないボタンは「変形」欄自体が非活性だが、二重に守るため条件を付ける。
+          if (isButtonResizable(target)) {
+            const BTN_MIN = 14;
+            if (w > 0) target.style.width  = Math.max(BTN_MIN, w) + 'px';
+            if (h > 0) target.style.height = Math.max(BTN_MIN, h) + 'px';
+          }
         } else if (type === 'sticky') {
           const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
           if (w > 0) target.style.width  = w + 'px';
@@ -1695,6 +1776,76 @@ import { pushUndo } from './undo-redo.js';
       ddEl.appendChild(zone);
     }
 
+    /**
+     * header共通セクションに置いた「塗り」ミラー欄（data-role="fill-mirror"）を、
+     * 種別設定セクションの実体（#dialogFormSpecific #annColor）と同期させる。
+     *
+     * - 実体が存在し、その dd が表示中（display:none でない）→ ミラーを活性化し、
+     *   選択肢と現在値をコピーして双方向同期する
+     * - 実体が無い／非表示（ボタン種別・表示タイプが「画像」「紙面カラー」・複数選択）
+     *   → 選択肢を「—」に戻して非活性にする
+     *
+     * 表示タイプのラジオ変更で実体の表示/非表示が切り替わるため、ラジオのchangeでも呼び直す。
+     * buildSpecificFields() 内で先に登録されているラジオリスナー（dd の display 切替）より
+     * あとに登録するため、実行順は「display切替 → 本関数」になる（確認済み）。
+     *
+     * ミラー欄・実体はいずれも openAnnotationSettingsDialog() の innerHTML='' で毎回作り直される
+     * ため、_fillMirrorBound フラグはパネル再構築のたびに自然にリセットされる（確認済み）。
+     */
+    function syncCommonFillMirror() {
+      const commonForm = document.getElementById('dialogFormCommon');
+      const mirSel = commonForm?.querySelector('[data-role="fill-mirror"]');
+      if (!mirSel) return;
+      const mirDt = commonForm.querySelector('[data-role="fill-mirror-dt"]');
+      const mirDd = commonForm.querySelector('[data-role="fill-mirror-dd"]');
+      const specificForm = document.getElementById('dialogFormSpecific');
+      const realSel = specificForm?.querySelector('#annColor');
+      const realDd  = realSel?.closest('dd');
+      const usable  = !!realSel && realDd?.style.display !== 'none';
+
+      const setDisabled = (flag) => {
+        mirSel.disabled = flag;
+        mirDt?.classList.toggle('is-field-disabled', flag);
+        mirDd?.classList.toggle('is-field-disabled', flag);
+      };
+
+      if (!usable) {
+        mirSel.innerHTML = '';
+        const opt = document.createElement('option');
+        opt.textContent = '—';
+        mirSel.appendChild(opt);
+        setDisabled(true);
+        return;
+      }
+
+      // 選択肢は種別・表示タイプで構成が変わる（「既存ページリンクカラー」の有無など）ため、
+      // 呼ばれるたびに実体から作り直す
+      mirSel.innerHTML = '';
+      Array.from(realSel.options).forEach(o => {
+        const c = document.createElement('option');
+        c.value = o.value;
+        c.textContent = o.textContent;
+        mirSel.appendChild(c);
+      });
+      mirSel.value = realSel.value;
+      setDisabled(false);
+
+      // 双方向同期。実体側のchangeには applyLiveUpdate(type) が既に紐づいているため、
+      // ミラー側の変更は実体へ書き戻したうえで change を発火させて反映させる。
+      if (!mirSel._fillMirrorBound) {
+        mirSel._fillMirrorBound = true;
+        mirSel.addEventListener('change', () => {
+          const cur = document.getElementById('dialogFormSpecific')?.querySelector('#annColor');
+          if (!cur) return;
+          cur.value = mirSel.value;
+          cur.dispatchEvent(new Event('change'));
+        });
+      }
+      if (!realSel._fillMirrorBound) {
+        realSel._fillMirrorBound = true;
+        realSel.addEventListener('change', () => { mirSel.value = realSel.value; });
+      }
+    }
 
     /**
      * アノテーション設定ダイアログを開く。
@@ -1750,6 +1901,15 @@ import { pushUndo } from './undo-redo.js';
       const specificEl = document.getElementById('sideDetailSpecificWrap');
       sepEl.style.display      = 'none';
       specificEl.style.display = 'none';
+
+      // 共通セクションの「塗り」ミラー欄を、種別設定側の実体（#annColor）と同期する（付箋以外）。
+      // 種別設定セクションはheaderでは常に非表示のため、headerから塗り色を変更する唯一の入口が
+      // このミラー欄になる。表示タイプの切替で実体の表示/非表示が変わるため、ラジオのchangeでも
+      // 同期し直す（ラジオはこの specificForm 内のものだけに限定してスコープする）。
+      syncCommonFillMirror();
+      specificForm.querySelectorAll('input[name="annDisplayTypeRadio"]').forEach(radio => {
+        radio.addEventListener('change', syncCommonFillMirror);
+      });
 
       // ダイアログ削除ボタンは常に非表示（削除はDeleteキーで行う）
       const dialogDeleteBtn = document.querySelector('.dialog-btn.delete-btn');
@@ -1937,6 +2097,15 @@ import { pushUndo } from './undo-redo.js';
 
         if (savedData.annPosX !== undefined) existingEl.style.left = parseInt(savedData.annPosX, 10) + 'px';
         if (savedData.annPosY !== undefined) existingEl.style.top  = parseInt(savedData.annPosY, 10) + 'px';
+        // サイズ変更を許可したボタン（.is-sized かつLIBRO由来でない）のみW/Hを反映する。
+        // savedData.annWidth/annHeight は 1805〜1808行目付近で実寸px→内部pxへ変換済みのため、
+        // ここで再変換してはならない（確認済み）。
+        if (isButtonResizable(existingEl)) {
+          const btnW = parseInt(savedData.annWidth,  10) || 0;
+          const btnH = parseInt(savedData.annHeight, 10) || 0;
+          if (btnW > 0) existingEl.style.width  = Math.max(14, btnW) + 'px';
+          if (btnH > 0) existingEl.style.height = Math.max(14, btnH) + 'px';
+        }
         // 紙面外への配置を禁止：クランプ後の実位置を savedData にも反映してから保存する
         clampElementToPage(existingEl);
         savedData.annPosX = parseInt(existingEl.style.left, 10) || 0;

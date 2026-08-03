@@ -2258,7 +2258,7 @@
       pointer-events: none;
       cursor: default;
     }
-    /* アイコン型オブジェクト選択時に変形・塗りフィールドをグレーアウト */
+    /* 詳細パネルの行を「表示したまま非活性」にする（ボタン種別の変形行・塗りミラー欄で使用） */
     .is-field-disabled {
       opacity: 0.35;
       pointer-events: none;
