@@ -712,17 +712,20 @@ import { pushUndo } from './undo-redo.js';
         form.appendChild(mirDd);
       }
 
-      // アイコン型・画像アイコン型・大問/答/証明ボタン：W/H入力時に縦横比を維持して反対軸を
-      // 自動更新（applyLiveUpdateより先に登録して先行実行させる）
-      const _selectedIconObj = document.querySelector('.ann-icon-obj.is-selected, .ann-image-obj.is-selected, .daimon-btn.is-selected, .kotae-btn.is-selected, .shomei-btn.is-selected');
-      // ボタン系はサイズ変更を許可した要素（.is-sized かつLIBRO由来でない）だけをペアリング対象にする
-      const _isPairBtn = !!_selectedIconObj && (
-        _selectedIconObj.classList.contains('daimon-btn') ||
-        _selectedIconObj.classList.contains('kotae-btn')  ||
-        _selectedIconObj.classList.contains('shomei-btn'));
-      if (_selectedIconObj && (!_isPairBtn || isButtonResizable(_selectedIconObj))) {
-        // アイコン型（.ann-icon-obj）は常に 1:1。画像アイコン型（.ann-image-obj）と
-        // 大問/答/証明ボタンは、パネルを開いた時点の矩形の縦横比を実測して維持する。
+      // アイコン型・画像アイコン型：W/H入力時に縦横比を維持して反対軸を自動更新
+      // （applyLiveUpdateより先に登録して先行実行させる）。
+      //
+      // 大問/答/証明ボタンはペアリング対象に含めない。headerの「変形」欄からW・Hを独立に
+      // 指定できることが仕様（2026-07-31_fix_header詳細パネル… の項目C）であり、ここで
+      // ペアリングすると W欄を変えただけで H欄まで追従して縦横比が固定されてしまうため。
+      // - 紙面上のリサイズハンドルによるドラッグは buttons.js の makeDaimonResizable() が
+      //   別経路で扱うため、画像素材ありのボタンの縦横比ロックは従来どおり維持される（確認済み）
+      // - サイズ変更を許可しないボタン（LIBRO由来・CSS固定サイズ）は「変形」欄自体を
+      //   非活性にしているため、ペアリングの有無によらず影響を受けない（確認済み）
+      const _selectedIconObj = document.querySelector('.ann-icon-obj.is-selected, .ann-image-obj.is-selected');
+      if (_selectedIconObj) {
+        // アイコン型（.ann-icon-obj）は常に 1:1。画像アイコン型（.ann-image-obj）は
+        // パネルを開いた時点の矩形の縦横比を実測して維持する。
         const _initAspect = _selectedIconObj.classList.contains('ann-icon-obj')
           ? 1
           : (_selectedIconObj.offsetWidth / (_selectedIconObj.offsetHeight || 1));
@@ -811,9 +814,8 @@ import { pushUndo } from './undo-redo.js';
         target.style.top  = y + 'px';
         if (isButtonEl(target)) {
           // ボタン系：位置に加えてサイズも変更する（背景はプリセット/画像素材で決まるため変更しない）。
-          // 縦横比はW/H入力欄のペアリング（buildCommonFields内）で既に相手軸へ反映済みのため、
-          // ここでは入力値をそのまま適用すればよい（ペアリングのリスナーが先に登録されており
-          // 先行実行される＝確認済み）。
+          // W/H入力欄の縦横比ペアリング（buildCommonFields内）はボタン系には登録しないため、
+          // W欄・H欄の入力値をそれぞれ独立にそのまま適用する（縦横比は維持しない）。
           // サイズ変更を許可しないボタンは「変形」欄自体が非活性だが、二重に守るため条件を付ける。
           if (isButtonResizable(target)) {
             const BTN_MIN = 14;
