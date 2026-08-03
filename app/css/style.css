@@ -2275,26 +2275,23 @@
       gap: 4px;
       flex: 1;
     }
+    /* 背景・枠線は持たせず、SVGアイコンのみを表示する。
+       表示領域（高さ30px・flexによる横幅等分割）は維持し、クリック範囲を変えない。 */
     .align-btn {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
       height: 30px;
-      background: #2a3040;
-      border: 1px solid #4a5468;
-      border-radius: 4px;
       color: #9ab;
       cursor: pointer;
-      transition: background 0.12s, border-color 0.12s;
+      transition: color 0.12s;
     }
     .align-btn:hover {
-      background: #364055;
-      border-color: #6898d8;
       color: #cde;
     }
     .align-btn:active {
-      background: #1e2a40;
+      color: #6898d8;
     }
 
     /* アノテーションラベルテキスト */
