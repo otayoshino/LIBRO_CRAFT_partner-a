@@ -1290,38 +1290,47 @@ import { pushUndo } from './undo-redo.js';
         ]));
 
       } else if (type === 'video') {
-        // 内部ファイル(annVideoSrc:'0')は2026-07-21にLIBRO+実機でのtoMovieBNR関連
-        // TypeErrorを理由に新規作成不可へ一時無効化していたが、真因はLIBRO+側
-        // ModalWindowにtoMovieBNRが未実装だったことによるものと確定した(2026-07-22)。
-        // LIBRO+側での実装完了を確認できたため再有効化する(2026-07-28)。
+        // 内部ファイル(annVideoSrc:'0')は2026-07-28にいったん再有効化したが、LIBRO+実機での
+        // 動作が確認できておらず機能として死んでいるため、新規作成できないようUI選択肢を
+        // 再度非表示にする(2026-08-04)。今後の再有効化に備えコード・データ構造は削除せず、
+        // 「外部動画をタグで追加」と同じ非表示化パターンに揃える。既存の内部ファイル指定
+        // アノテーションは引き続き編集・保存・削除できる（編集ブロックは行わない）。
         // 経緯: docs/plans/archive/2026-07-21_fix_動画内部ファイル機能の無効化.md
-        //       docs/plans/archive/2026-07-21_feat_内部ファイル動画の編集ブロック.md
-        //       docs/plans/2026-07-28_feat_動画内部ファイル機能の再有効化.md
-        const videoSrc = savedData.annVideoSrc || '0';
-        form.appendChild(_buildRadioDt('動画ファイル'));
+        //       docs/plans/archive/2026-07-28_feat_動画内部ファイル機能の再有効化.md
+        //       docs/plans/2026-08-04_fix_動画内部ファイル設定の非表示化.md
+        const videoSrc = savedData.annVideoSrc || '2';
+        form.appendChild(_buildRadioDt('動画ファイル（J-stream）'));
         const srcDD = _buildRadioDD('annVideoSrc', 'annVideoSrcRadio', videoSrc, [
           { value: '0', label: '内部ファイル' },
           { value: '1', label: '外部動画をタグで追加' },
-          { value: '2', label: 'J-stream' },
         ]);
-        // 「外部動画をタグで追加」は非表示化(機能・データは残す、本計画のスコープ外)。
-        // 既存アノテーションが '1' の場合のみ、選択中ラジオが見えるよう表示する。
-        if (videoSrc !== '1') {
-          srcDD.querySelector('input[name="annVideoSrcRadio"][value="1"]')
-            .closest('label').style.display = 'none';
-        }
+        // 「内部ファイル」「外部動画をタグで追加」は非表示化(機能・データは残す)。
+        // 既存アノテーションがその値の場合のみ、選択中ラジオが見えるよう表示する。
+        ['0', '1'].forEach(hiddenVal => {
+          if (videoSrc !== hiddenVal) {
+            srcDD.querySelector(`input[name="annVideoSrcRadio"][value="${hiddenVal}"]`)
+              .closest('label').style.display = 'none';
+          }
+        });
+        // 新規作成できる動画はJ-stream固定のため、ラジオ行自体は既存の内部ファイル・
+        // 外部タグデータを編集する場合のみ表示する。ただしDOMからは外さず display:none で
+        // 隠すだけにすること。srcDD内のhidden input（#annVideoSrc）がform配下に無いと、
+        // confirmAnnotation のフォーム走査（input[id]を舐めてsavedDataを組み立てる処理）と
+        // validateQuickPopupJstream の判定で annVideoSrc を拾えず、書き出し時に
+        // アノテーションごとサイレントに消える（2026-07-23確認）。
+        if (videoSrc !== '0' && videoSrc !== '1') srcDD.style.display = 'none';
         form.appendChild(srcDD);
 
         // --- 内部ファイル/外部タグ用フィールド(annVideoSrc: '0'/'1') ---
         // 内部ファイルは書き出し時に toMovieBNR("ファイル名",表示モード) へ変換され、動画本体は
-        // video/in/<ファイル名>.mp4 としてzipへ格納される(libro-format.js)。
-        // 表示モード(0=ページ内/モーダル、1=別タブ)はユーザー選択値をそのまま書き出す
-        // (libro-format.js側は無変更。詳細は本計画末尾「5. toMovieBNR仕様調査」を参照)。
+        // video/in/<ファイル名>.mp4 としてzipへ格納される(libro-format.js)。非表示化済みのため、
+        // このフィールド群は既存の内部ファイル指定アノテーションを編集する場合のみ表示される。
         const fileDt = _buildTextDt('ファイル名');
         const fileDd = _buildTextDD('annFile', savedData.annFile || '', 'ファイル名を入力');
         fileDd.querySelector('input').insertAdjacentHTML('afterend',
           '<p class="field-note">※ファイル名の拡張子「.mp4」は除く</p>' +
-          '<p class="field-note">※LIBRO+上では常に別タブで再生されます（「表示方法」の選択はCRAFT内プレビューにのみ適用されます）</p>');
+          '<p class="field-note">※LIBRO+上では常に別タブで再生されます（「表示方法」の選択はCRAFT内プレビューにのみ適用されます）</p>' +
+          '<p class="field-note">※現在この方式は新規作成できません（既存設定の編集のみ可能）</p>');
         const showMode = savedData.annShowMode || '0';
         const modeDt = _buildRadioDt('表示方法');
         const modeDd = _buildRadioDD('annShowMode', 'annShowModeRadio', showMode, [
