@@ -1,4 +1,4 @@
-    import { mediaBlobs } from './state.js';
+    import { mediaBlobs, state } from './state.js';
 
     export const UNDO_MAX  = 50;
 
@@ -141,13 +141,11 @@
      * ID920/921 ペア、rect [309, 666, 194, 116]、ページ画像 4960×7015px）に合わせる。
      * 全sample_books走査でも 194×116 が最多出現（52件）で、大問ボタンの標準寸法とみなせる。
      *
-     * ページ画像の縦横比に依存しないよう「ページ幅に対する比率」＋「ボタン自身の縦横比」で保持し、
-     * 実px への変換は buttons.js の getDaimonDefaultSizePx() が #pageLeft.offsetWidth を基準に行う。
+     * 「ページ画像実寸pxでの寸法」として保持する。実px への変換は buttons.js の
+     * getDaimonDefaultSizePx() が #pageLeft.offsetWidth と「表示中ページの画像実寸幅」の比で行う。
+     * pageWidth: 4960 は state.bookPages が無い（book未読込）ときのフォールバック用の基準幅。
      */
     export const DAIMON_DEFAULT_REF_RECT = { pageWidth: 4960, width: 194, height: 116 };
-
-    /** 大問ボタン既定幅のページ幅比（194 / 4960 ≒ 0.0391） */
-    export const DAIMON_DEFAULT_WIDTH_RATIO = DAIMON_DEFAULT_REF_RECT.width / DAIMON_DEFAULT_REF_RECT.pageWidth;
 
     /** 大問ボタン既定の縦横比 W:H（194 / 116 ≒ 1.6724） */
     export const DAIMON_DEFAULT_ASPECT = DAIMON_DEFAULT_REF_RECT.width / DAIMON_DEFAULT_REF_RECT.height;
@@ -166,14 +164,12 @@
      * ただしその帯の高さ（192）は正方形アイコンの一辺（192）と一致しており、
      * どちらの解釈でも 192 に収束する。
      *
-     * ページ画像の縦横比に依存しないよう「ページ幅に対する比率」で保持し、
-     * 実px への変換は getIconDefaultSizePx() が #pageLeft.offsetWidth を基準に行う
+     * 「ページ画像実寸pxでの寸法」として保持し、実px への変換は getIconDefaultSizePx() が
+     * #pageLeft.offsetWidth と「表示中ページの画像実寸幅」の比で行う
      * （DAIMON_DEFAULT_REF_RECT と同じ方式）。
+     * pageWidth: 4960 は state.bookPages が無い（book未読込）ときのフォールバック用の基準幅。
      */
     export const ICON_DEFAULT_REF_RECT = { pageWidth: 4960, size: 192 };
-
-    /** アイコン既定サイズのページ幅比（192 / 4960 ≒ 0.0387） */
-    export const ICON_DEFAULT_SIZE_RATIO = ICON_DEFAULT_REF_RECT.size / ICON_DEFAULT_REF_RECT.pageWidth;
 
     /** アイコン既定サイズの下限（極小ページ表示時にクリック不能になるのを防ぐ） */
     export const ICON_DEFAULT_MIN_SIZE_PX = 20;
@@ -189,13 +185,19 @@
      * （#pageLeft の offsetWidth）に対する px 値として算出する。offsetWidth はCSS transform
      * （ズーム）の影響を受けない基準サイズであり、アノテーションの style.left/top/width/height と
      * 同じ座標系になる。種別によらず共通で、1:1 を保証するため width/height の双方にこの値を使う。
+     *
+     * 分母は「表示中ページの画像実寸幅」。A4固定の 4960 で割ると、紙面が広いページ
+     * （見開き等）ほど既定サイズが紙面幅に比例して大きくなり、書き出しrectが紙面サイズごとに
+     * ばらつく。実寸幅で割ることで、rect が紙面サイズによらず常に 192×192px になる。
      * @returns {number} 既定サイズ（px・小数を含む）
      */
     export function getIconDefaultSizePx() {
       const page = document.getElementById('pageLeft');
       const baseWidth = page?.offsetWidth || 0;
       if (!baseWidth) return ICON_DEFAULT_SIZE_PX;
+      // book未読込・width欠落時は従来どおり基準幅（4960）へフォールバックする
+      const realWidth = state.bookPages?.[state.currentPage - 1]?.width || ICON_DEFAULT_REF_RECT.pageWidth;
       // 整数pxに丸めず小数のまま返す（getDaimonDefaultSizePx と同じ理由：
       // 書き出しrectを実データ寸法へ近づけるため。読み手はいずれも parseFloat）。
-      return Math.max(ICON_DEFAULT_MIN_SIZE_PX, baseWidth * ICON_DEFAULT_SIZE_RATIO);
+      return Math.max(ICON_DEFAULT_MIN_SIZE_PX, baseWidth * ICON_DEFAULT_REF_RECT.size / realWidth);
     }

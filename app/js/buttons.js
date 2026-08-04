@@ -1,6 +1,6 @@
 import { openAnnotationSettingsDialog, openEditPopup } from './annotation-dialog.js';
 import { clampElementToPage, makeDraggable, makeResizable } from './annotation-interaction.js';
-import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, DAIMON_DEFAULT_ASPECT, DAIMON_DEFAULT_MIN_WIDTH_PX, DAIMON_DEFAULT_WIDTH_RATIO } from './config.js';
+import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, DAIMON_DEFAULT_ASPECT, DAIMON_DEFAULT_MIN_WIDTH_PX, DAIMON_DEFAULT_REF_RECT } from './config.js';
 import { mediaBlobs, selectedStickySet, state } from './state.js';
 import { applyStickyOpenMode } from './sticky.js';
 import { closeDialog } from './storage.js';
@@ -19,15 +19,22 @@ import { pushUndo } from './undo-redo.js';
      * 新規大問ボタンの既定サイズを、現在のページ基準サイズ（#pageLeft の offsetWidth）に対する
      * px 値として算出する。offsetWidth はCSS transform（ズーム）の影響を受けない基準サイズであり、
      * アノテーションの style.left/top/width/height と同じ座標系になる。
+     *
+     * 分母は「表示中ページの画像実寸幅」。A4固定の 4960 で割ると、紙面が広いページ
+     * （A4見開き 9920px・B5見開き等）ほど既定サイズが紙面幅に比例して大きくなり、
+     * 同じbook内でもページごとにボタンの物理サイズがばらつく。実寸幅で割ることで、
+     * 書き出しrectが紙面サイズによらず常に 194×116px になる。
      * @returns {{width:number, height:number}} 既定サイズ（px・小数を含む）
      */
     export function getDaimonDefaultSizePx() {
       const page = document.getElementById('pageLeft');
       const baseWidth = page?.offsetWidth || 0;
+      // book未読込・width欠落時は従来どおり基準幅（4960）へフォールバックする
+      const realWidth = state.bookPages?.[state.currentPage - 1]?.width || DAIMON_DEFAULT_REF_RECT.pageWidth;
       // 整数pxに丸めると、ページ表示が小さいとき（例：幅696pxで 27×16px）に書き出しrectが
       // 194×116 ではなく 192×114 になる。小数pxのまま保持して実データとの一致精度を上げる
       // （scaleAnnotations / copySelectedObjects / 書き出しはいずれも parseFloat で読むため小数で問題ない）。
-      const width  = Math.max(DAIMON_DEFAULT_MIN_WIDTH_PX, baseWidth * DAIMON_DEFAULT_WIDTH_RATIO);
+      const width  = Math.max(DAIMON_DEFAULT_MIN_WIDTH_PX, baseWidth * DAIMON_DEFAULT_REF_RECT.width / realWidth);
       const height = Math.max(1, width / DAIMON_DEFAULT_ASPECT);
       return { width, height };
     }
