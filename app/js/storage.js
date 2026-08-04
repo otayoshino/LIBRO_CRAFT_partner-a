@@ -323,8 +323,7 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
         state.currentBookId = bookId;
         updateAuthoringPanelState();
         restoreAnnotationsFromArray(arr);
-        const mediaCount = Object.keys(mediaBlobs).length;
-        showToast(`ZIPから復元しました（メディア: ${mediaCount}件）`);
+        showToast(`${file.name} を読み込みました`);
         await checkAndPromptRestoreForBook(bookId);
       } catch (e) {
         showToast('ZIP読込エラー: ファイルが壊れているか形式が正しくありません');
@@ -341,9 +340,10 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
      * オブジェクトとして復元し、未知のアノテーションは編集UIに出さず内部に保持するのみとする
      * （書き出しは現段階では未対応）。
      * @param {JSZip} zip - JSZip.loadAsync 済みのZIPオブジェクト
-     * @param {string} fallbackName - book folder名が空の場合に使うbook識別子（元zipファイル名）
+     * @param {string} zipFileName - ユーザーが選択したzipファイル名。完了トーストの表示に使うほか、
+     *                               book folder名が空の場合のbook識別子フォールバックにも使う
      */
-    async function handleLibroBookZip(zip, fallbackName) {
+    async function handleLibroBookZip(zip, zipFileName) {
       // 別bookの同名ファイル（"0001.mp3"等）のBlobURLが誤って再利用されないよう、
       // 既存BlobURLを解放してmediaBlobsを初期化する
       Object.values(mediaBlobs).forEach(url => URL.revokeObjectURL(url));
@@ -384,14 +384,15 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
       updateLibroBookBtnStates();
       // book識別子：LIBRO book folder名（baseDir）。folder無し（index.jsonがzipルート直下）の場合は
       // 元zipファイル名にフォールバックする
-      const bookId = baseDir || fallbackName;
+      const bookId = baseDir || zipFileName;
       state.currentBookId = bookId;
       updateAuthoringPanelState();
 
+      // 未暗号化ファイルの検出は保存時の挙動に関わるため、読み込み完了トーストに併記する
       const unencryptedNote = unencryptedAssetPaths.size > 0
-        ? `、未暗号化ファイル${unencryptedAssetPaths.size}件を検出（保存時に暗号化します）`
+        ? `（未暗号化ファイル${unencryptedAssetPaths.size}件を検出。保存時に暗号化します）`
         : '';
-      showToast(`LIBRO bookを読み込みました（${pages.length}ページ、未知アノテーション${unknownAnnotations.length}件${unencryptedNote}）`);
+      showToast(`${zipFileName} を読み込みました${unencryptedNote}`);
       await checkAndPromptRestoreForBook(bookId);
     }
 
