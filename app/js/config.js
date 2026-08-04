@@ -136,14 +136,25 @@
     export const DAIMON_PRESSED_COLOR = '#666666';
 
     /**
-     * 新規作成する大問ボタンの既定サイズの基準値。
+     * 既定サイズの基準値（DAIMON_DEFAULT_REF_RECT / ICON_DEFAULT_REF_RECT）が前提とするページ解像度。
+     * LIBRO実データはページ画像pxで寸法を持つため、DPIが違うbookでは同じpx値が別の物理サイズになる。
+     * 基準値を「600dpi時のpx」と定義し、libroRefPxToInternalPx() が表示中ページのdpiで換算する。
+     */
+    export const LIBRO_REF_DPI = 600;
+
+    /**
+     * 新規作成する大問ボタンの既定サイズの基準値（LIBRO_REF_DPI＝600dpi のページ画像における px）。
      * LIBRO実データ（sample_books/8a24127cb94d4a158ae43954184af569/p0004.json の
-     * ID920/921 ペア、rect [309, 666, 194, 116]、ページ画像 4960×7015px）に合わせる。
+     * ID920/921 ペア、rect [309, 666, 194, 116]、ページ画像 4960×7015px・600dpi）に合わせる。
      * 全sample_books走査でも 194×116 が最多出現（52件）で、大問ボタンの標準寸法とみなせる。
      *
-     * 「ページ画像実寸pxでの寸法」として保持する。実px への変換は buttons.js の
-     * getDaimonDefaultSizePx() が #pageLeft.offsetWidth と「表示中ページの画像実寸幅」の比で行う。
-     * pageWidth: 4960 は state.bookPages が無い（book未読込）ときのフォールバック用の基準幅。
+     * LIBRO+は大問ボタンを「物理サイズ一定」で配置している（別bookの300dpi・B5見開きページでは
+     * 99×60px＝8.38×5.08mm、上記600dpiデータは 194×116px＝8.21×4.91mm で一致。
+     * ページ幅比では 3.911% / 2.368% と一致しない）。この基準値も物理サイズとして扱う。
+     *
+     * 実px への変換は buttons.js の getDaimonDefaultSizePx() が libroRefPxToInternalPx() 経由で行う。
+     * pageWidth: 4960 は dpi・実寸幅が取れない（book未読込・独自ZIP形式）ときにページ幅比方式へ
+     * フォールバックするための基準幅。
      */
     export const DAIMON_DEFAULT_REF_RECT = { pageWidth: 4960, width: 194, height: 116 };
 
@@ -164,10 +175,10 @@
      * ただしその帯の高さ（192）は正方形アイコンの一辺（192）と一致しており、
      * どちらの解釈でも 192 に収束する。
      *
-     * 「ページ画像実寸pxでの寸法」として保持し、実px への変換は getIconDefaultSizePx() が
-     * #pageLeft.offsetWidth と「表示中ページの画像実寸幅」の比で行う
+     * 「LIBRO_REF_DPI（600dpi）のページ画像における px」として保持し、実px への変換は
+     * getIconDefaultSizePx() が libroRefPxToInternalPx() 経由で行う
      * （DAIMON_DEFAULT_REF_RECT と同じ方式）。
-     * pageWidth: 4960 は state.bookPages が無い（book未読込）ときのフォールバック用の基準幅。
+     * pageWidth: 4960 は dpi・実寸幅が取れないときのページ幅比フォールバック用の基準幅。
      */
     export const ICON_DEFAULT_REF_RECT = { pageWidth: 4960, size: 192 };
 
@@ -181,23 +192,49 @@
     export const ICON_DEFAULT_SIZE_PX = 48;
 
     /**
+     * LIBRO実データ基準の寸法（LIBRO_REF_DPI＝600dpi のページ画像における px）を、
+     * 表示中ページの内部px（#pageLeft の offsetWidth を基準とする座標系。アノテーションの
+     * style.left/top/width/height と同じ）へ変換する。
+     *
+     * 変換は2段階：
+     *  1. 物理サイズを保つよう、表示中ページのdpiでページ画像px へ換算する（refPx * dpi / 600）。
+     *     LIBRO+は大問ボタン等を物理サイズ一定で配置しているため、dpiの異なるbook間でも
+     *     この換算により見た目の実寸が揃う。
+     *  2. ページ画像px を内部px へ（baseWidth / ページ画像実寸幅 の比を掛ける）。
+     *
+     * dpi または実寸幅が取れない場合（book未読込・独自ZIP形式の読み込み）は、従来どおり
+     * 「基準ページ幅（4960）に対する比率」方式へフォールバックする。
+     *
+     * 整数pxに丸めず小数のまま返す（書き出しrectを実データ寸法へ近づけるため。
+     * scaleAnnotations / copySelectedObjects / 書き出しはいずれも parseFloat で読む）。
+     * @param {number} refPx - LIBRO_REF_DPI における寸法（px）
+     * @param {number} fallbackPageWidth - フォールバック時に使う基準ページ幅（px）
+     * @returns {number|null} 内部px。#pageLeft が無い／幅0の場合は null
+     */
+    export function libroRefPxToInternalPx(refPx, fallbackPageWidth) {
+      const page = document.getElementById('pageLeft');
+      const baseWidth = page?.offsetWidth || 0;
+      if (!baseWidth) return null;
+      const pageData  = state.bookPages?.[state.currentPage - 1];
+      const realWidth = pageData?.width;
+      const dpi       = pageData?.dpi;
+      if (!realWidth || !dpi) return baseWidth * refPx / fallbackPageWidth;
+      return baseWidth * (refPx * dpi / LIBRO_REF_DPI) / realWidth;
+    }
+
+
+    /**
      * アイコン表示形式（.ann-icon-obj）の新規作成時の既定サイズを、現在のページ基準サイズ
      * （#pageLeft の offsetWidth）に対する px 値として算出する。offsetWidth はCSS transform
      * （ズーム）の影響を受けない基準サイズであり、アノテーションの style.left/top/width/height と
      * 同じ座標系になる。種別によらず共通で、1:1 を保証するため width/height の双方にこの値を使う。
      *
-     * 分母は「表示中ページの画像実寸幅」。A4固定の 4960 で割ると、紙面が広いページ
-     * （見開き等）ほど既定サイズが紙面幅に比例して大きくなり、書き出しrectが紙面サイズごとに
-     * ばらつく。実寸幅で割ることで、rect が紙面サイズによらず常に 192×192px になる。
+     * 換算はページのdpiを見る libroRefPxToInternalPx() に委譲する。600dpiのページでは
+     * 書き出しrectが 192×192px、300dpiのページでは 96×96px（＝同じ物理サイズ 約8.1mm四方）になる。
      * @returns {number} 既定サイズ（px・小数を含む）
      */
     export function getIconDefaultSizePx() {
-      const page = document.getElementById('pageLeft');
-      const baseWidth = page?.offsetWidth || 0;
-      if (!baseWidth) return ICON_DEFAULT_SIZE_PX;
-      // book未読込・width欠落時は従来どおり基準幅（4960）へフォールバックする
-      const realWidth = state.bookPages?.[state.currentPage - 1]?.width || ICON_DEFAULT_REF_RECT.pageWidth;
-      // 整数pxに丸めず小数のまま返す（getDaimonDefaultSizePx と同じ理由：
-      // 書き出しrectを実データ寸法へ近づけるため。読み手はいずれも parseFloat）。
-      return Math.max(ICON_DEFAULT_MIN_SIZE_PX, baseWidth * ICON_DEFAULT_REF_RECT.size / realWidth);
+      const px = libroRefPxToInternalPx(ICON_DEFAULT_REF_RECT.size, ICON_DEFAULT_REF_RECT.pageWidth);
+      if (px === null) return ICON_DEFAULT_SIZE_PX;
+      return Math.max(ICON_DEFAULT_MIN_SIZE_PX, px);
     }

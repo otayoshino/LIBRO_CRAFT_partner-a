@@ -812,7 +812,9 @@ export async function parseLibroBookZip(zip) {
         imageUrl = URL.createObjectURL(new Blob([imageBytes], { type: 'image/jpeg' }));
       }
     }
-    pages.push({ pageNum, width: pageWidth, height: pageHeight, imageUrl, jsonPath: pageMeta.json });
+    // dpi はページ画像px↔物理サイズの換算に使う(新規ボタン・アイコンの既定サイズ算出)。
+    // p####.json / index.json の pages[] のどちらにも入っているため width/height と同じ優先順で拾う。
+    pages.push({ pageNum, width: pageWidth, height: pageHeight, dpi: pageJson.dpi || pageMeta.dpi, imageUrl, jsonPath: pageMeta.json });
 
     // 参照されている音声ファイルをPbve2000復号してmediaBlobsへキャッシュ
     // （resolveMediaSrc は "ファイル名.mp3" 形式のキーを参照するため、拡張子込みで格納する。

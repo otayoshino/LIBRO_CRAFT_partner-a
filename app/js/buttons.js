@@ -1,6 +1,6 @@
 import { openAnnotationSettingsDialog, openEditPopup } from './annotation-dialog.js';
 import { clampElementToPage, makeDraggable, makeResizable } from './annotation-interaction.js';
-import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, DAIMON_DEFAULT_ASPECT, DAIMON_DEFAULT_MIN_WIDTH_PX, DAIMON_DEFAULT_REF_RECT } from './config.js';
+import { BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, DAIMON_DEFAULT_ASPECT, DAIMON_DEFAULT_MIN_WIDTH_PX, DAIMON_DEFAULT_REF_RECT, libroRefPxToInternalPx } from './config.js';
 import { mediaBlobs, selectedStickySet, state } from './state.js';
 import { applyStickyOpenMode } from './sticky.js';
 import { closeDialog } from './storage.js';
@@ -20,21 +20,16 @@ import { pushUndo } from './undo-redo.js';
      * px 値として算出する。offsetWidth はCSS transform（ズーム）の影響を受けない基準サイズであり、
      * アノテーションの style.left/top/width/height と同じ座標系になる。
      *
-     * 分母は「表示中ページの画像実寸幅」。A4固定の 4960 で割ると、紙面が広いページ
-     * （A4見開き 9920px・B5見開き等）ほど既定サイズが紙面幅に比例して大きくなり、
-     * 同じbook内でもページごとにボタンの物理サイズがばらつく。実寸幅で割ることで、
-     * 書き出しrectが紙面サイズによらず常に 194×116px になる。
+     * 換算はページのdpiを見る libroRefPxToInternalPx() に委譲する。LIBRO+は大問ボタンを
+     * 物理サイズ一定（約8.2×4.9mm）で配置しているため、600dpiのページでは書き出しrectが
+     * 194×116px、300dpiのページでは 97×58px となり、紙面サイズ・dpiによらず実寸が揃う。
+     * libroRefPxToInternalPx() が null（#pageLeft 未取得・幅0）を返す場合は、従来どおり
+     * 下限値（DAIMON_DEFAULT_MIN_WIDTH_PX）が適用される。
      * @returns {{width:number, height:number}} 既定サイズ（px・小数を含む）
      */
     export function getDaimonDefaultSizePx() {
-      const page = document.getElementById('pageLeft');
-      const baseWidth = page?.offsetWidth || 0;
-      // book未読込・width欠落時は従来どおり基準幅（4960）へフォールバックする
-      const realWidth = state.bookPages?.[state.currentPage - 1]?.width || DAIMON_DEFAULT_REF_RECT.pageWidth;
-      // 整数pxに丸めると、ページ表示が小さいとき（例：幅696pxで 27×16px）に書き出しrectが
-      // 194×116 ではなく 192×114 になる。小数pxのまま保持して実データとの一致精度を上げる
-      // （scaleAnnotations / copySelectedObjects / 書き出しはいずれも parseFloat で読むため小数で問題ない）。
-      const width  = Math.max(DAIMON_DEFAULT_MIN_WIDTH_PX, baseWidth * DAIMON_DEFAULT_REF_RECT.width / realWidth);
+      const px = libroRefPxToInternalPx(DAIMON_DEFAULT_REF_RECT.width, DAIMON_DEFAULT_REF_RECT.pageWidth);
+      const width  = Math.max(DAIMON_DEFAULT_MIN_WIDTH_PX, px === null ? 0 : px);
       const height = Math.max(1, width / DAIMON_DEFAULT_ASPECT);
       return { width, height };
     }
@@ -317,7 +312,7 @@ import { pushUndo } from './undo-redo.js';
       const minTop  = Math.min(...posEls.map(n => parseFloat(n.style.top)  || 0));
 
       const page = document.getElementById('pageLeft');
-      // 既定サイズはLIBRO実データ（194×116 / ページ4960px幅）基準のページ相対値。
+      // 既定サイズはLIBRO実データ（194×116 / 600dpi）基準。表示中ページのdpiで換算される。
       // is-sized クラスは「ページ座標系のサイズをインラインstyleで持つ大問ボタン」の目印で、
       // CSSの固定サイズ打ち消し・フィット変更時の追従・保存復元時のサイズ復元の判定に使う。
       const { width: defW, height: defH } = getDaimonDefaultSizePx();
@@ -514,7 +509,7 @@ import { pushUndo } from './undo-redo.js';
       const minTop  = Math.min(...stickies.map(n => parseFloat(n.style.top)  || 0));
 
       const page = document.getElementById('pageLeft');
-      // 既定サイズは大問ボタンと同じLIBRO実データ基準（194×116 / ページ4960px幅）のページ相対値。
+      // 既定サイズは大問ボタンと同じLIBRO実データ基準（194×116 / 600dpi）。表示中ページのdpiで換算される。
       const { width: defW, height: defH } = getDaimonDefaultSizePx();
       const el = document.createElement('div');
       el.className        = 'kotae-btn is-sized';
@@ -642,7 +637,7 @@ import { pushUndo } from './undo-redo.js';
       const minTop  = Math.min(...stickies.map(n => parseFloat(n.style.top)  || 0));
 
       const page = document.getElementById('pageLeft');
-      // 既定サイズは大問ボタンと同じLIBRO実データ基準（194×116 / ページ4960px幅）のページ相対値。
+      // 既定サイズは大問ボタンと同じLIBRO実データ基準（194×116 / 600dpi）。表示中ページのdpiで換算される。
       const { width: defW, height: defH } = getDaimonDefaultSizePx();
       const el = document.createElement('div');
       el.className        = 'shomei-btn is-sized';
