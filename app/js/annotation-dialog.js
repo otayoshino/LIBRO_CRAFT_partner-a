@@ -1260,15 +1260,16 @@ import { pushUndo } from './undo-redo.js';
         // 表示方法は toAppendix("ディレクトリ名",表示モード) の第2引数として書き出される。
         // '0'＝ページ内（LIBRO+ではモーダル表示のためCRAFTプレビューでも移動不可）、
         // '1'＝別タブ、'2'＝フローティング（移動可）。
+        // 表示順は音声・動画と揃え、入力対象（ディレクトリ名）→表示挙動（表示方法）とする。
         const showMode = savedData.annShowMode || '0';
+        form.appendChild(_buildTextDt('ディレクトリ名'));
+        form.appendChild(_buildTextDD('annFile', savedData.annFile || '', ''));
         form.appendChild(_buildRadioDt('表示方法'));
         form.appendChild(_buildRadioDD('annShowMode', 'annShowModeRadio', showMode, [
           { value: '0', label: 'ページ内' },
           { value: '1', label: '別タブ' },
           { value: '2', label: 'フローティング' },
         ]));
-        form.appendChild(_buildTextDt('ディレクトリ名'));
-        form.appendChild(_buildTextDD('annFile', savedData.annFile || '', ''));
 
       } else if (type === 'externallink') {
         form.appendChild(_buildTextDt('リンク先URL'));
