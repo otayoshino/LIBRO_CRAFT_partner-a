@@ -257,6 +257,30 @@ import { pushUndo } from './undo-redo.js';
     }
 
 
+    /**
+     * 付箋側の開閉操作に、紐付く答ボタンの押下見た目を追従させる。
+     * 対象付箋が持つ data-kotae-id ごとに、その答ボタン配下の付箋を集め、
+     * 1件でも開（state-hidden）なら押下見た目、すべて閉なら通常（初期）見た目へ戻す。
+     * 答ボタン自身のクリック（addKotaeClickHandler）と同じ「開＝押下」の対応を保つため、
+     * 判定はクラスの実態のみを見る（ボタン側に開閉状態は保持しない）。
+     * @param {Array<HTMLElement>|NodeList} stickies - 開閉操作を行った .sticky-note 要素
+     */
+    export function syncKotaeButtonPressedByStickies(stickies) {
+      const kotaeIds = new Set();
+      [...stickies].forEach(n => {
+        const kid = n?.dataset?.kotaeId;
+        if (kid) kotaeIds.add(kid);
+      });
+      kotaeIds.forEach(kid => {
+        const btn = document.querySelector(`.kotae-btn[data-kotae-id="${kid}"]`);
+        if (!btn) return;
+        const targets = [...document.querySelectorAll(`.sticky-note[data-kotae-id="${kid}"]`)];
+        const anyOpen = targets.some(t => t.classList.contains('state-hidden'));
+        swapButtonPressedImage(btn, anyOpen);
+      });
+    }
+
+
     /** #rgb / #rrggbb / rgb(...) 形式の色文字列を反転する。解釈できない場合は null を返す。 */
     function invertColorString(colorStr) {
       if (!colorStr || colorStr === 'none') return null;

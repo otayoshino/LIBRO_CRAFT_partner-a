@@ -1,4 +1,5 @@
 import { openAnnotationSettingsDialog, openEditPopup } from './annotation-dialog.js';
+import { syncKotaeButtonPressedByStickies } from './buttons.js';
 import { STICKY_COLOR_MAP } from './config.js';
 import { makeDraggable, makeResizable } from './annotation-interaction.js';
 import { selectedStickySet, state, undoStack } from './state.js';
@@ -309,6 +310,9 @@ import { pushUndo, redo } from './undo-redo.js';
           t.classList.toggle('state-visible', !isVisible);
           t.classList.toggle('state-hidden',   isVisible);
         });
+        // 付箋側で閉じた（開いた）場合も、紐付く答ボタンの押下見た目を実態へ追従させる。
+        // 配下が全て閉になれば答ボタンは通常（初期）見た目へ戻る。
+        syncKotaeButtonPressedByStickies(targets);
         updateStatus();
       });
     }
