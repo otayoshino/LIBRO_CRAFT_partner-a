@@ -6,7 +6,7 @@ import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePa
 import { loadLibroBookPages, updateAnnotationVisibility, updateNavButtonStates, updateTocButtonState } from './page-view.js';
 import { updateLibroBookBtnStates } from './index-outline.js';
 import { mediaBlobs, state } from './state.js';
-import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateStatus } from './ui-common.js';
+import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelState, updateStatus } from './ui-common.js';
 
     /**
      * DOM上の付箋に付いている付箋グループID（`grp-N` 形式）を走査し、
@@ -812,7 +812,7 @@ import { hideLoader, showLoader, showToast, updateAuthoringPanelState, updateSta
 
       emptyDiv.innerHTML = `
         <div class="side-detail-grayed">
-          <p class="side-detail-title">${cfg?.label ?? type}設定</p>
+          <p class="side-detail-title">${escapeHtml(cfg?.label ?? type)}設定</p>
           <div class="side-detail-form"><dl>${commonRows}</dl></div>
         </div>`;
     }

@@ -1152,8 +1152,8 @@ import { pushUndo } from './undo-redo.js';
           <span style="font-size:12px; color:#555;">%</span>
           <button type="button" class="field-link-btn" id="annImageScaleReset">100%にリセット</button>
         </div>
-        <input type="hidden" id="annImageNaturalW" value="${savedData.annImageNaturalW || ''}">
-        <input type="hidden" id="annImageNaturalH" value="${savedData.annImageNaturalH || ''}">
+        <input type="hidden" id="annImageNaturalW" value="${escapeHtml(savedData.annImageNaturalW || '')}">
+        <input type="hidden" id="annImageNaturalH" value="${escapeHtml(savedData.annImageNaturalH || '')}">
       `;
       form.appendChild(scaleDd);
       const scaleInputEl = scaleDd.querySelector('#annImageScale');
@@ -1250,7 +1250,7 @@ import { pushUndo } from './undo-redo.js';
         dd.innerHTML = `
           <div style="display:flex; align-items:center; gap:6px;">
             <input type="number" class="d-input d-input-sm" id="annTarget" min="1"
-              value="${savedData.annTarget || ''}" placeholder="0">
+              value="${escapeHtml(savedData.annTarget || '')}" placeholder="0">
             <span style="font-size:12px; color:#555;">ページ目</span>
           </div>
           <p class="field-note">※目次を兼ねたページを指定してください。</p>`;

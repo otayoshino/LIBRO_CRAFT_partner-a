@@ -8,7 +8,7 @@ import { updateAnnotationVisibility } from './page-view.js';
 import { redoStack, undoStack } from './state.js';
 import { addStickyClickHandler, applyStickyHideUndo, applyStickyOpenMode } from './sticky.js';
 import { closeDialog } from './storage.js';
-import { showToast, updateStatus } from './ui-common.js';
+import { escapeHtml, showToast, updateStatus } from './ui-common.js';
 
 
     /* ============================
@@ -273,7 +273,7 @@ import { showToast, updateStatus } from './ui-common.js';
         // エラー内容を右下デバッグUIに表示
         const el = document.getElementById('undoDebug');
         if (el) {
-          el.innerHTML += `<br><span style='color:#ff8888'>[Undo Error] ${err && err.message ? err.message : err}</span>`;
+          el.innerHTML += `<br><span style='color:#ff8888'>[Undo Error] ${escapeHtml(err && err.message ? err.message : err)}</span>`;
           el.style.display = 'block';
         }
         throw err;

@@ -188,11 +188,11 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
             popup.id = 'audioPlayerPopup';
             popup.innerHTML = `
               <div class="audio-player-title">
-                <span style="font-size:12px;font-weight:700;">▶ ${fileName}</span>
+                <span style="font-size:12px;font-weight:700;">▶ ${escapeHtml(fileName)}</span>
                 <span id="audioPlayerClose">×</span>
               </div>
               <div class="audio-player-body">
-                <audio controls autoplay src="${src}"></audio>
+                <audio controls autoplay src="${escapeHtml(src)}"></audio>
               </div>
             `;
             document.body.appendChild(popup);
@@ -250,7 +250,7 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
             modal.innerHTML = `
               <div class="video-modal-box">
                 <div class="video-modal-title">
-                  <span>▶ ${titleText}</span>
+                  <span>▶ ${escapeHtml(titleText)}</span>
                   <span class="video-modal-close">×</span>
                 </div>
                 <div class="video-modal-body">${bodyHtml}</div>
@@ -294,7 +294,7 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
               updateStatus();
             } else {
               // モーダルで再生
-              openVideoModal(fileName, `<video controls autoplay src="${src}"></video>`);
+              openVideoModal(fileName, `<video controls autoplay src="${escapeHtml(src)}"></video>`);
               updateStatus();
             }
           }
