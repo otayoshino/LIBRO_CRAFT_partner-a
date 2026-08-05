@@ -24,3 +24,7 @@ docs/plans/
 ## serena
 .serena/
 /.serena
+
+## Node（配信用ビルド）
+node_modules/
+dist/

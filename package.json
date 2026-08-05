@@ -1,0 +1,12 @@
+{
+  "name": "libro-craft-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LIBRO＋CRAFT 配信用ビルド（コメント削除のみ。バンドル・変数名短縮は行わない）",
+  "scripts": {
+    "build": "node script/build.mjs"
+  },
+  "devDependencies": {
+    "terser": "^5.36.0"
+  }
+}
