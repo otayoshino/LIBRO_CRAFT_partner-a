@@ -233,8 +233,10 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
 
           /**
            * 動画モーダルを開くヘルパー。
-           * @param {string} titleText - タイトルバーに表示するテキスト
-           * @param {string} bodyHtml  - モーダル本体に挿入するHTML
+           * @param {string} titleText - タイトルバーに表示するテキスト（内部でエスケープする）
+           * @param {string} bodyHtml  - モーダル本体に挿入するHTML。
+           *   innerHTMLへそのまま渡すため、**開発者が管理するHTMLのみ**を渡すこと。
+           *   book由来の文字列（savedData.annFile 等）を直接渡してはならない（XSSになる）。
            */
           const openVideoModal = (titleText, bodyHtml) => {
             // 既存モーダルがあれば動画を停止してから除去
@@ -272,8 +274,16 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
           };
 
           if (videoSrc === '1') {
-            // 外部タグをモーダルで表示
-            openVideoModal('動画', fileName);
+            // 外部タグ（HTML断片）はLIBRO+側でのみ展開される。
+            // CRAFTでは描画せず「閲覧できません」を表示する（外部リンク・Plusファイルと同じ方針）。
+            // book由来の文字列をHTMLとして解釈しないことでXSSを防ぐ。
+            // なお外部タグ指定はエクスポート自体が未対応のため、書き出し結果には影響しない。
+            openVideoModal('動画', `
+              <div class="video-unavailable">
+                <p class="video-unavailable-msg">CRAFTでは閲覧できません</p>
+                <p class="video-unavailable-sub">動画ソース: 外部タグ指定</p>
+              </div>
+            `);
             updateStatus();
           } else {
             if (!fileName) { updateStatus(); break; }

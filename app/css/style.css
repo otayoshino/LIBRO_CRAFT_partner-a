@@ -2759,6 +2759,28 @@
     #videoPlayerModal .video-modal-close:hover { color: #fff; }
     #videoPlayerModal .video-modal-body { padding: 12px; }
     #videoPlayerModal video { width: 100%; display: block; border-radius: 4px; }
+    /* 外部タグ指定はCRAFTでは描画しないため、閲覧不可メッセージを表示する */
+    #videoPlayerModal .video-unavailable {
+      min-height: 180px;
+      background: #fff;
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    #videoPlayerModal .video-unavailable-msg {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: #444;
+    }
+    #videoPlayerModal .video-unavailable-sub {
+      margin: 0;
+      font-size: 13px;
+      color: #888;
+    }
 
     /* Plusファイルポップアップ */
     #plusfilePopup {
