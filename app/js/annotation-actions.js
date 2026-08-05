@@ -36,15 +36,16 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
      * 内容が固定のため1本だけ生成して使い回す（解放するとタブのリロードが
      * 失敗するため revokeObjectURL は呼ばない。数百バイトのため実害なし）。
      */
-    let _plusfileUnavailablePageUrl = null;
+    let _unavailablePageUrl = null;
 
     /**
-     * Plusファイルを「別タブ」で開いたときに表示するメッセージページのURLを返す。
+     * Plusファイル・動画を「別タブ」で開いたときに表示するメッセージページのURLを返す。
+     * CRAFTで再生・閲覧できないコンテンツの共通メッセージページ。
      * data: URL はChromeがトップレベル遷移を禁止しているため使えず、blob: を用いる。
      * @returns {string}
      */
-    function getPlusfileUnavailablePageUrl() {
-      if (_plusfileUnavailablePageUrl) return _plusfileUnavailablePageUrl;
+    function getUnavailablePageUrl() {
+      if (_unavailablePageUrl) return _unavailablePageUrl;
       const html = `<!doctype html>
 <html lang="ja">
 <head>
@@ -63,8 +64,8 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
 <p class="sub">表示方法: 別タブ</p>
 </body>
 </html>`;
-      _plusfileUnavailablePageUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
-      return _plusfileUnavailablePageUrl;
+      _unavailablePageUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      return _unavailablePageUrl;
     }
 
     /**
@@ -98,7 +99,7 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
           const showModeLabel = PLUSFILE_SHOW_MODE_LABEL[showMode] || showMode;
           if (showMode === '1') {
             // 別タブ：同じ文言のメッセージページ（BlobURL）を開く
-            window.open(getPlusfileUnavailablePageUrl(), '_blank', 'noopener');
+            window.open(getUnavailablePageUrl(), '_blank', 'noopener');
             updateStatus();
           } else {
             // ページ内（'0'）／フローティング（'2'）はどちらもポップアップで表示する。
@@ -227,7 +228,6 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
           break;
         }
         case 'video': {
-          const fileName = (saved.annFile || '').trim();
           const videoSrc = saved.annVideoSrc || '0';
           const showMode = saved.annShowMode || '0';
 
@@ -273,31 +273,58 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
             document.addEventListener('keydown', onKeyDown);
           };
 
-          if (videoSrc === '1') {
-            // 外部タグ（HTML断片）はLIBRO+側でのみ展開される。
-            // CRAFTでは描画せず「閲覧できません」を表示する（外部リンク・Plusファイルと同じ方針）。
-            // book由来の文字列をHTMLとして解釈しないことでXSSを防ぐ。
-            // なお外部タグ指定はエクスポート自体が未対応のため、書き出し結果には影響しない。
+          // CRAFTでは動画を再生できないため、入力方式によらず常に閲覧不可を表示する。
+          // 再生パス（<video>の生成）は削除した。理由は方式ごとに次のとおり。
+          //   '2' J-stream    : 外部ストリーミング。CRAFT側に再生手段が無い
+          //   '1' 外部タグ    : HTML断片。描画するとXSSになる（下記コメント参照）
+          //   '0' 内部ファイル: mp4がmediaBlobsへ入る経路がCRAFTに存在しないため常に再生不可
+          //                     （インポート・ドロップゾーン・書き出しのいずれも音声のみ対応）
+          // 動画本体をzipへ同梱する運用が将来できた場合は、'0' の分岐だけ再生へ戻せばよい。
+          let reasonLabel;
+          if (videoSrc === '2') {
+            // J-stream指定。UIから新規作成できる動画はこの方式のみ
+            // （annotation-dialog.js の入力方式ラジオを参照）。
+            reasonLabel = '動画ソース: J-stream指定';
+          } else if (videoSrc === '1') {
+            // 外部タグ指定。
+            //
+            // ★この分岐は正規経路では発生しない。機能ではなくXSS防御として存在する。★
+            //   - UIからは新規作成できない（annotation-dialog.js で選択肢を非表示化。2026-08-04）
+            //   - LIBRO bookのインポートでも生成されない（libro-format.js の toMovie/toMovieBNR
+            //     変換が作るのは annVideoSrc '0' と '2' のみ。'1' への変換先は存在しない）
+            //   - 書き出しも未対応（LIBRO側に対応actionが無い）
+            // 到達しうるのは、UI非表示化以前に作成された残存データ、過去に書き出した独自ZIPの
+            // annotations.json、IndexedDBの古いスナップショット、および細工されたデータのみ。
+            //
+            // annFile には「動画ファイル名」ではなくHTML断片が入る。これをinnerHTMLへ渡すと
+            // 任意JSが実行される（セキュリティ監査 問題1-1）。したがってCRAFTでは描画しない。
+            //
+            // 【この分岐に手を入れる人へ】動く機能だと誤解して外部タグを描画する実装に
+            // 戻さないこと。描画を復活させるとXSSが再発する。仮に将来この機能を有効化する
+            // 場合は、HTMLサニタイズ方式の設計から検討し直すこと。
+            reasonLabel = '動画ソース: 外部タグ指定';
+          } else {
+            // 内部ファイル指定（annVideoSrc欠落の古いデータもここへ来る）。
+            // LIBRO bookのインポートで toMovieBNR から生成されるため実データに存在しうるが、
+            // 動画本体を読み込む経路が無いためCRAFTでは再生できない。
+            reasonLabel = '動画ソース: 内部ファイル指定';
+          }
+
+          // 表示先は「表示方法」（annShowMode）に従う。Plusファイルと同じ方針。
+          if (showMode === '1') {
+            // 別タブ：共通の閲覧不可メッセージページを開く
+            window.open(getUnavailablePageUrl(), '_blank', 'noopener');
+          } else {
+            // ページ内：動画モーダル内に閲覧不可メッセージを表示する。
+            // bodyHtml には開発者が管理するHTMLのみを渡す（book由来の文字列を渡してはならない）。
             openVideoModal('動画', `
               <div class="video-unavailable">
                 <p class="video-unavailable-msg">CRAFTでは閲覧できません</p>
-                <p class="video-unavailable-sub">動画ソース: 外部タグ指定</p>
+                <p class="video-unavailable-sub">${escapeHtml(reasonLabel)}</p>
               </div>
             `);
-            updateStatus();
-          } else {
-            if (!fileName) { updateStatus(); break; }
-            const src = resolveMediaSrc(fileName, 'mp4');
-            if (showMode === '1') {
-              // 別タブで開く
-              window.open(src, '_blank', 'noopener');
-              updateStatus();
-            } else {
-              // モーダルで再生
-              openVideoModal(fileName, `<video controls autoplay src="${escapeHtml(src)}"></video>`);
-              updateStatus();
-            }
           }
+          updateStatus();
           break;
         }
         default:
