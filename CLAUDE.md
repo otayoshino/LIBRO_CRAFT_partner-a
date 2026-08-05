@@ -36,7 +36,7 @@ npm run build
 ### ファイル構成
 
 - [app/index.html](app/index.html)：HTML本体のみ（約400行）。`<head>` で `js/vendor/jszip.min.js`（JSZip セルフホスト版、CDN不使用）を読み込み、`<body>` 末尾で [app/js/main.js](app/js/main.js) を `type="module"` として読み込む。
-- `app/js/`：ES Modules で分割されたJavaScript本体（`main.js` / `config.js` / `state.js` / `mode.js` / `page-view.js` / `storage.js` / `autosave.js` / `undo-redo.js` / `buttons.js` / `sticky.js` / `annotation-dialog.js` / `annotation-interaction.js` / `annotation-actions.js` / `libro-format.js` / `ui-common.js`、計約8000行）。ビルドツールは使用せずブラウザネイティブのESモジュールとして読み込む。`main.js` 末尾の `Object.assign(window, {...})` で、HTML側の `onclick` などインラインハンドラから呼べる関数をグローバル公開している。
+- `app/js/`：ES Modules で分割されたJavaScript本体（`main.js` / `config.js` / `state.js` / `mode.js` / `page-view.js` / `storage.js` / `autosave.js` / `undo-redo.js` / `buttons.js` / `sticky.js` / `annotation-dialog.js` / `annotation-interaction.js` / `annotation-actions.js` / `libro-format.js` / `ui-common.js` / `index-outline.js` / `jstream-validate.js` / `settings.js`、計18ファイル・約11,800行）。開発時はビルドツールを使用せず、ブラウザネイティブのESモジュールとして読み込む（配備時のみコメント削除ビルドを通す。「開発コマンド」節を参照）。`main.js` 末尾の `Object.assign(window, {...})` で、HTML側の `onclick` などインラインハンドラから呼べる関数をグローバル公開している。
 - `app/css/style.css`：CSS本体。`app/icons/sprite.svg`：SVGアイコンスプライト。
 
 ### 状態管理
