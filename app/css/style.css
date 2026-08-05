@@ -2794,11 +2794,26 @@
       line-height: 1;
     }
     #plusfilePopup .plusfile-title .plusfile-close:hover { color: #fff; }
-    #plusfilePopup iframe {
+    #plusfilePopup .plusfile-unavailable {
       flex: 1;
-      border: none;
-      background: #fff;
       width: 100%;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    #plusfilePopup .plusfile-unavailable-msg {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: #444;
+    }
+    #plusfilePopup .plusfile-unavailable-sub {
+      margin: 0;
+      font-size: 13px;
+      color: #888;
     }
 
     /* ============================

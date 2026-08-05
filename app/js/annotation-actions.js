@@ -1,7 +1,7 @@
 import { openAnnotationSettingsDialog, openEditPopup } from './annotation-dialog.js';
 import { ANNOTATION_TYPE_CONFIG } from './config.js';
 import { updatePageDisplay } from './page-view.js';
-import { mediaBlobs, selectedStickySet, state } from './state.js';
+import { selectedStickySet, state } from './state.js';
 import { closeDialog, resolveMediaSrc } from './storage.js';
 import { escapeHtml, showToast, updateStatus } from './ui-common.js';
 
@@ -32,6 +32,42 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
     }
 
     /**
+     * 別タブ表示用「CRAFTでは閲覧できません」ページのBlobURL。
+     * 内容が固定のため1本だけ生成して使い回す（解放するとタブのリロードが
+     * 失敗するため revokeObjectURL は呼ばない。数百バイトのため実害なし）。
+     */
+    let _plusfileUnavailablePageUrl = null;
+
+    /**
+     * Plusファイルを「別タブ」で開いたときに表示するメッセージページのURLを返す。
+     * data: URL はChromeがトップレベル遷移を禁止しているため使えず、blob: を用いる。
+     * @returns {string}
+     */
+    function getPlusfileUnavailablePageUrl() {
+      if (_plusfileUnavailablePageUrl) return _plusfileUnavailablePageUrl;
+      const html = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>CRAFTでは閲覧できません</title>
+<style>
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column;
+         align-items: center; justify-content: center; gap: 8px;
+         font-family: sans-serif; background: #fff; }
+  .msg { margin: 0; font-size: 16px; font-weight: 700; color: #444; }
+  .sub { margin: 0; font-size: 13px; color: #888; }
+</style>
+</head>
+<body>
+<p class="msg">CRAFTでは閲覧できません</p>
+<p class="sub">表示方法: 別タブ</p>
+</body>
+</html>`;
+      _plusfileUnavailablePageUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      return _plusfileUnavailablePageUrl;
+    }
+
+    /**
      * 閲覧モード時のアノテーションボタンの実際の挙動。
      * @param {HTMLElement} ann
      */
@@ -55,22 +91,17 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
           const file = (saved.annFile || '').trim();
           if (!file) { updateStatus(); break; }
           const showMode = saved.annShowMode || '0';
-          // ZIPから復元されたBlobURLを優先、なければ相対パスで解決
-          const url = mediaBlobs[file] || `./${file}`;
-          // Plusファイルの実体（appendixディレクトリ）はCRAFTの管理対象外のため、
+          // Plusファイルの実体（appendixディレクトリ）はCRAFTの管理対象外で、
           // プレビューは常に空になる（仕様。詳細は docs/plans の調査メモ参照）。
-          // 設定した表示方法を閲覧モードから確認できるよう、表示方法を添えて通知する。
+          // 実体を読み込もうとせず「閲覧できません」と明示した画面を出す。
+          // 実体を一切ロードしないため、細工bookから任意HTMLを読み込ませる経路も存在しない。
           const showModeLabel = PLUSFILE_SHOW_MODE_LABEL[showMode] || showMode;
-          const notifyUnavailable = () => {
-            showToast(`CRAFTでは閲覧できません: ${file}（表示方法: ${showModeLabel}）`);
-          };
           if (showMode === '1') {
-            // 別タブで開く
-            window.open(url, '_blank', 'noopener');
-            notifyUnavailable();
+            // 別タブ：同じ文言のメッセージページ（BlobURL）を開く
+            window.open(getPlusfileUnavailablePageUrl(), '_blank', 'noopener');
             updateStatus();
           } else {
-            // ページ内（'0'）／フローティング（'2'）はどちらもiframeポップアップで表示する。
+            // ページ内（'0'）／フローティング（'2'）はどちらもポップアップで表示する。
             // ただしLIBRO+側では「ページ内」はモーダル表示でウィンドウを動かせないため、
             // CRAFTのプレビューでもタイトルバードラッグ移動を無効にする。
             // 移動できるのは「フローティング」を選択した場合のみ。
@@ -79,14 +110,15 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
             if (existing) existing.remove();
             const popup = document.createElement('div');
             popup.id = 'plusfilePopup';
-            // iframeには allow-same-origin を付けない。付けると allow-scripts との併用で
-            // サンドボックスが実質無効化され、iframe内スクリプトが親オリジンで動作できてしまう。
             popup.innerHTML = `
               <div class="plusfile-title">
                 <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${escapeHtml(file)}</span>
                 <span class="plusfile-close" id="plusfileClose">×</span>
               </div>
-              <iframe src="${escapeHtml(url)}" sandbox="allow-scripts allow-forms"></iframe>
+              <div class="plusfile-unavailable">
+                <p class="plusfile-unavailable-msg">CRAFTでは閲覧できません</p>
+                <p class="plusfile-unavailable-sub">表示方法: ${escapeHtml(showModeLabel)}</p>
+              </div>
             `;
             document.body.appendChild(popup);
             // 画面中央に配置
@@ -119,7 +151,6 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
               // （CSSの `#plusfilePopup .plusfile-title { cursor: move; }` をインラインで上書き）
               titleBar.style.cursor = 'default';
             }
-            notifyUnavailable();
             updateStatus();
           }
           break;
