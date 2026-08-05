@@ -6,7 +6,7 @@ import { validateJstreamCorpId, validateJstreamDir, validateJstreamVideoId } fro
 import { mediaBlobs, state } from './state.js';
 import { addStickyClickHandler } from './sticky.js';
 import { closeDialog, saveDialog } from './storage.js';
-import { updateStatus } from './ui-common.js';
+import { escapeHtml, updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
 
 
@@ -1451,7 +1451,7 @@ import { pushUndo } from './undo-redo.js';
       const radiosHtml = items.map(it =>
         `<label><input type="radio" name="${radioName}" value="${it.value}"${currentVal === it.value ? ' checked' : ''}> ${it.label}</label>`
       ).join('');
-      dd.innerHTML = `<div class="radio-row">${radiosHtml}</div><input type="hidden" id="${hiddenId}" value="${currentVal}">`;
+      dd.innerHTML = `<div class="radio-row">${radiosHtml}</div><input type="hidden" id="${hiddenId}" value="${escapeHtml(currentVal)}">`;
       // dd スコープ内の hidden input を直接参照することで、
       // 同一 id が複数存在する場合でも正しい要素が更新されるようにする
       const hiddenInput = dd.querySelector(`input[type="hidden"][id="${hiddenId}"]`);
@@ -1616,7 +1616,7 @@ import { pushUndo } from './undo-redo.js';
       if (hiddenInput && hiddenInput.value) {
         statusEl.textContent = `✔ ${hiddenInput.value} を使用中`;
         statusEl.className = 'drop-status is-success';
-        if (existingSrc) preview.innerHTML = `<img src="${existingSrc}" alt="">`;
+        if (existingSrc) preview.innerHTML = `<img src="${escapeHtml(existingSrc)}" alt="">`;
       }
       ddEl.appendChild(preview);
 
@@ -1687,7 +1687,7 @@ import { pushUndo } from './undo-redo.js';
           const selectedImageEl = document.querySelector('.ann-image-obj.is-selected');
           if (selectedImageEl) applyLiveUpdate(selectedImageEl.dataset.type);
 
-          preview.innerHTML = `<img src="${tempUrl}" alt="">`;
+          preview.innerHTML = `<img src="${escapeHtml(tempUrl)}" alt="">`;
           statusEl.textContent = `✔ ${file.name} を読み込みました`;
           statusEl.className = 'drop-status is-success';
         };

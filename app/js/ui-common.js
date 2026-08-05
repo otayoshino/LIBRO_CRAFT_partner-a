@@ -18,6 +18,26 @@ import { state } from './state.js';
     }
 
     /**
+     * HTML特殊文字をエスケープする。
+     * innerHTML のテンプレートリテラルへ外部データ由来の値（book由来のファイル名・
+     * ディレクトリ名・BlobURL・savedDataの保存値）を埋め込む箇所で使う。
+     * 属性値・テキストのどちらにも使える。
+     *
+     * 注意：showToast() は内部で textContent を使うため、トースト文言には適用しない。
+     * また cfg.iconSvg のような「値がマークアップそのもの」の箇所にも適用しない。
+     * @param {string} str
+     * @returns {string}
+     */
+    export function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    /**
      * ZIP読込中ローディングオーバーレイを表示する。
      */
     export function showLoader() {

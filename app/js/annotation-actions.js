@@ -3,8 +3,33 @@ import { ANNOTATION_TYPE_CONFIG } from './config.js';
 import { updatePageDisplay } from './page-view.js';
 import { mediaBlobs, selectedStickySet, state } from './state.js';
 import { closeDialog, resolveMediaSrc } from './storage.js';
-import { showToast, updateStatus } from './ui-common.js';
+import { escapeHtml, showToast, updateStatus } from './ui-common.js';
 
+
+    /** Plusファイルの表示方法（annShowMode）とUI表記の対応。設定ダイアログのラジオ表記に合わせる。 */
+    const PLUSFILE_SHOW_MODE_LABEL = { '0': 'ページ内', '1': '別タブ', '2': 'フローティング' };
+
+    /**
+     * 閲覧モードで window.open してよいURLかを判定する。
+     * http/https のみ許可し、スキーム無し（'www.example.com'）は補完せず不許可とする。
+     * javascript: / data: はこの判定で自動的に除外される。
+     *
+     * 注意：この判定はクリック時専用。保存・書き出し時には使わないこと。
+     * annUrl には LIBRO 側でeval実行される擬似関数（toFlashcard(...) 等）が
+     * 生文字列のまま入る仕様で、libro-format.js がそのまま URI へ書き戻すため、
+     * 保存時に弾くと round-trip が壊れてデータが欠損する。
+     * @param {string} url
+     * @returns {boolean}
+     */
+    function isHttpUrl(url) {
+      let parsed;
+      try {
+        parsed = new URL(url);
+      } catch (_) {
+        return false;
+      }
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    }
 
     /**
      * 閲覧モード時のアノテーションボタンの実際の挙動。
@@ -32,9 +57,17 @@ import { showToast, updateStatus } from './ui-common.js';
           const showMode = saved.annShowMode || '0';
           // ZIPから復元されたBlobURLを優先、なければ相対パスで解決
           const url = mediaBlobs[file] || `./${file}`;
+          // Plusファイルの実体（appendixディレクトリ）はCRAFTの管理対象外のため、
+          // プレビューは常に空になる（仕様。詳細は docs/plans の調査メモ参照）。
+          // 設定した表示方法を閲覧モードから確認できるよう、表示方法を添えて通知する。
+          const showModeLabel = PLUSFILE_SHOW_MODE_LABEL[showMode] || showMode;
+          const notifyUnavailable = () => {
+            showToast(`CRAFTでは閲覧できません: ${file}（表示方法: ${showModeLabel}）`);
+          };
           if (showMode === '1') {
             // 別タブで開く
             window.open(url, '_blank', 'noopener');
+            notifyUnavailable();
             updateStatus();
           } else {
             // ページ内（'0'）／フローティング（'2'）はどちらもiframeポップアップで表示する。
@@ -46,12 +79,14 @@ import { showToast, updateStatus } from './ui-common.js';
             if (existing) existing.remove();
             const popup = document.createElement('div');
             popup.id = 'plusfilePopup';
+            // iframeには allow-same-origin を付けない。付けると allow-scripts との併用で
+            // サンドボックスが実質無効化され、iframe内スクリプトが親オリジンで動作できてしまう。
             popup.innerHTML = `
               <div class="plusfile-title">
-                <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${file}</span>
+                <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${escapeHtml(file)}</span>
                 <span class="plusfile-close" id="plusfileClose">×</span>
               </div>
-              <iframe src="${url}" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+              <iframe src="${escapeHtml(url)}" sandbox="allow-scripts allow-forms"></iframe>
             `;
             document.body.appendChild(popup);
             // 画面中央に配置
@@ -84,16 +119,23 @@ import { showToast, updateStatus } from './ui-common.js';
               // （CSSの `#plusfilePopup .plusfile-title { cursor: move; }` をインラインで上書き）
               titleBar.style.cursor = 'default';
             }
+            notifyUnavailable();
             updateStatus();
           }
           break;
         }
         case 'externallink': {
           const url = (saved.annUrl || '').trim();
-          if (url) {
+          if (!url) { updateStatus(); break; }
+          // annUrl には実URLのほか、LIBRO側でeval実行される擬似関数
+          // （toFlashcard(...) / toListening(...) 等）が生文字列のまま入る。
+          // CRAFTでは開けないため、http/https以外は開かずに通知する。
+          // 設定値そのものは編集モードの設定ダイアログで確認できるため、トーストには含めない。
+          // 判定はここ（クリック時）だけで行い、保存・書き出し時は annUrl を一切加工しない。
+          if (isHttpUrl(url)) {
             window.open(url, '_blank', 'noopener');
           } else {
-            updateStatus();
+            showToast('CRAFTでは閲覧できません');
           }
           break;
         }
