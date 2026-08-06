@@ -27,4 +27,5 @@ docs/plans/
 
 ## Node（配信用ビルド）
 node_modules/
+/LIBRO_CRAFT/
 dist/
