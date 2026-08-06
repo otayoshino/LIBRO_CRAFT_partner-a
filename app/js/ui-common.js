@@ -57,6 +57,23 @@ import { state } from './state.js';
       const closing = !body.classList.contains('is-closed');
       body.classList.toggle('is-closed', closing);
       btn.classList.toggle('is-closed', closing);
+      // 開いた側を最前面にする（閉じた側は最前面指定を外す）
+      if (closing) {
+        body.classList.remove('is-front');
+      } else {
+        bringHdrInlineToFront(body);
+      }
+    }
+
+    /**
+     * 指定した .hdr-inline パネルを最前面（is-front）にし、他のパネルからは外す。
+     * 詳細設定・整列のドロップダウンが重なったとき、アクティブな方を前面に表示するために使う。
+     */
+    function bringHdrInlineToFront(target) {
+      document.querySelectorAll('.hdr-inline.is-front').forEach(el => {
+        if (el !== target) el.classList.remove('is-front');
+      });
+      target.classList.add('is-front');
     }
 
     /**
@@ -103,3 +120,11 @@ import { state } from './state.js';
       // （大問ボタングループの選択枠も updateAlignPanel() 内で更新される）
       updateAlignPanel();
     }
+
+    /* 詳細設定・整列パネルの内部をクリック（ポインタ押下）したときも、そのパネルを最前面にする。
+       キャプチャフェーズで拾うため、パネル内のボタン処理より先に前面化が確定する。 */
+    document.addEventListener('pointerdown', (e) => {
+      const panel = e.target.closest?.('.hdr-inline');
+      if (!panel || panel.classList.contains('is-closed')) return;
+      bringHdrInlineToFront(panel);
+    }, true);

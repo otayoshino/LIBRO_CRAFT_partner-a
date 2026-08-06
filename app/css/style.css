@@ -288,6 +288,13 @@
     .hdr-inline.is-closed {
       display: none;
     }
+    /* 詳細設定・整列を同時に開いたとき、最後に操作した（アクティブな）パネルを最前面にする。
+       親 .blk は position:relative かつ z-index:auto でスタッキングコンテキストを作らないため、
+       両パネルは同一コンテキスト内で比較され、z-index が同値だとDOM順で後ろの整列が常に前面になる。
+       アクティブ側にのみ is-front を付与して z-index を上げることで解決する（付与は toggleAcc / ui-common.js）。 */
+    .hdr-inline.is-front {
+      z-index: 2;
+    }
     .blk.detail-group > .nav-btn,
     .blk.align-group  > .nav-btn {
       display: flex;
@@ -338,6 +345,10 @@
       }
       .hdr-inline.is-closed {
         display: flex;
+      }
+      /* インライン表示では重ならないため、重なり順制御を無効化する */
+      .hdr-inline.is-front {
+        z-index: auto;
       }
 
       .hdr-inline .side-detail-form {
