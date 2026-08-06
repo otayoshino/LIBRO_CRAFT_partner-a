@@ -572,6 +572,10 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
           // 同一形式にし、再インポート時に renderTogglePairs がボタン要素へ突き合わせられるようにする。
           if (el.dataset.daimonId) desc.btnDaimonGroupId = `daimon-${el.dataset.daimonId}`;
           if (el.dataset.kotaeId)  desc.btnKotaeGroupId  = `kotae-${el.dataset.kotaeId}`;
+          // 付箋側の開閉へ答ボタンの見た目を追従させるため、後段（kotaeIdsByKotaeId構築後）の
+          // 第2パスで答ボタンのclosed/openペアidを解決する。ここではその引き当てキーだけを控える
+          // （この時点では答ボタン側のidがまだ確定していない）。第2パスの最後に削除する一時キー。
+          if (el.dataset.kotaeId) desc.kotaeLinkId = el.dataset.kotaeId;
           // 答ボタン紐付け前の開閉方式。答ボタンを削除したときの復帰値としてメタへ往復させる
           // （これが無いと再読込後の答ボタン削除で一律「通常開閉」に戻ってしまう）。
           if (el.dataset.kotaeOrigOpenMode !== undefined) desc.kotaeOrigOpenMode = el.dataset.kotaeOrigOpenMode;
@@ -600,6 +604,31 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
         if (!btn.dataset.kotaePressedId) btn.dataset.kotaePressedId = String(++state.annIdCounter);
         const openId = parseInt(btn.dataset.kotaePressedId, 10);
         kotaeIdsByKotaeId.set(kid, { closedId, openId });
+      });
+
+      // 付箋側の開閉操作に答ボタンの押下見た目を追従させるため（CRAFT側の
+      // syncKotaeButtonPressedByStickies と同じ対応をLIBRO+で再現するため）、
+      // 付箋annotのHide/Showターゲットへ答ボタンのclosed/openペアidを加える。
+      // LIBRO+のactionsには「配下がすべて閉か」の判定ができないため、答ボタン配下の付箋が
+      // すべて同一の付箋グループに収まっている場合のみ連動させる（複数グループに跨る答ボタンは
+      // 片方だけ閉じたときにCRAFTと食い違うため、従来どおり連動させない）。
+      domStickyGroups.forEach(group => {
+        const countByKotaeId = new Map();
+        group.members.forEach(m => {
+          if (!m.kotaeLinkId) return;
+          countByKotaeId.set(m.kotaeLinkId, (countByKotaeId.get(m.kotaeLinkId) || 0) + 1);
+        });
+        const kotaePairs = [];
+        countByKotaeId.forEach((countInGroup, kid) => {
+          const pair = kotaeIdsByKotaeId.get(kid);
+          if (!pair) return;
+          // 書き出し対象外の付箋（証明ボタン紐付き等）が混ざっている答ボタンもここで除外される
+          const totalLinked = document.querySelectorAll(`.sticky-note[data-kotae-id="${kid}"]`).length;
+          if (totalLinked !== countInGroup) return;
+          kotaePairs.push(pair);
+        });
+        if (kotaePairs.length > 0) group.kotaePairs = kotaePairs;
+        group.members.forEach(m => { delete m.kotaeLinkId; });
       });
 
       // 新規作成の大問ボタン：紐付く付箋（新規・LIBRO由来いずれも）のclosed/open idを

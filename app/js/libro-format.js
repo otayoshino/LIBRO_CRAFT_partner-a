@@ -1649,14 +1649,22 @@ async function convertDaimonButtonToLibroAnnots(daimonData, pageWidth, pageHeigh
  * @param {string} groupId - グループ内の全メンバーが共有する一意なid（storage.jsのdata-group-id、
  *   ソロ付箋は合成id）。libro-craft-metaの group-id としてメンバー全員の closed/open annotに
  *   埋め込み、再インポート時に構造ヒューリスティックに頼らずグループを確実に復元できるようにする。
+ * @param {Array<{closedId:number, openId:number}>} [kotaePairs] - このグループに紐付く答ボタンの
+ *   closed/openペアid。付箋の開閉アクションへ合流させ、LIBRO+でも付箋側の操作に答ボタンの
+ *   押下見た目が追従するようにする（storage.jsが連動可否を判定済みのものだけを渡す）。
  * @returns {Promise<{annotJsons:Array<Object>, newPngWrites:Array<{annot:Object, bytes:Uint8Array}>}>}
  *   newPngWritesのannotは対応するannotJsons要素そのもの（同一オブジェクト参照）。呼び出し側が
  *   ID正規化でannot.filenameを書き換えた後、その最終filenameへ直接バイト列を書き込むため、
  *   ここではpathを組み立てず生成直後のannotJsonオブジェクトへの参照のみを渡す。
  */
-async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, groupId) {
+async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, groupId, kotaePairs = []) {
   const closedIds = members.map(m => m.closedId);
   const openIds   = members.map(m => m.openId);
+  // 紐付く答ボタンの通常時（closed）／押下時（open）idペア。付箋の開閉と同時に答ボタンの
+  // 画像も入れ替えることで、LIBRO+でもCRAFTと同じく「付箋を閉じたら答ボタンも通常見た目へ戻る」
+  // 挙動になる。連動対象の限定条件はstorage.js側で判定済み（ここでは渡された分をそのまま使う）。
+  const kotaeClosedIds = kotaePairs.map(p => p.closedId);
+  const kotaeOpenIds   = kotaePairs.map(p => p.openId);
 
   const annotJsons = [];
   const newPngWrites = [];
@@ -1695,8 +1703,9 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, g
       // 「閉じる」動作（開側のactions）には影響しない。
       ...(m.openLocked ? {} : {
         actions: [
-          { action: 'Hide', targets: closedIds },
-          { action: 'Show', targets: openIds },
+          // 付箋を開く：紐付く答ボタンも押下時（open）画像へ切り替える
+          { action: 'Hide', targets: [...closedIds, ...kotaeClosedIds] },
+          { action: 'Show', targets: [...openIds,   ...kotaeOpenIds] },
         ],
       }),
       [CRAFT_META_KEY]: closedMeta,
@@ -1707,8 +1716,9 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, g
       hidden: true,
       _oldId: m.openId,
       actions: [
-        { action: 'Hide', targets: openIds },
-        { action: 'Show', targets: closedIds },
+        // 付箋を閉じる：紐付く答ボタンも通常時（closed）画像へ戻す
+        { action: 'Hide', targets: [...openIds,   ...kotaeOpenIds] },
+        { action: 'Show', targets: [...closedIds, ...kotaeClosedIds] },
       ],
       [CRAFT_META_KEY]: openMeta,
     };
@@ -1853,9 +1863,10 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
  * @param {Array<{pageNum:number, raw:Object}>} passthroughAnnotations - 無変更のまま書き戻すアノテーション
  *   （state.libroUnknownAnnotations＝真に未知のもの、および削除・位置編集されていない大問ボタンの
  *   closed/open生データを合流させたもの）
- * @param {Array<{pageNum:number, members:Array<Object>, groupId:string}>} [domStickyGroups] - 付箋のグループ一覧
- *   （groupId未設定の付箋は単独1件のグループとして渡す。groupIdはlibro-craft-metaのgroup-idとして
- *   埋め込まれ、再インポート時のグループ復元に使う。members仕様は convertStickyGroupToLibroAnnots 参照）
+ * @param {Array<{pageNum:number, members:Array<Object>, groupId:string, kotaePairs?:Array<Object>}>} [domStickyGroups]
+ *   - 付箋のグループ一覧（groupId未設定の付箋は単独1件のグループとして渡す。groupIdはlibro-craft-metaの
+ *   group-idとして埋め込まれ、再インポート時のグループ復元に使う。kotaePairsは紐付く答ボタンの
+ *   closed/openペアid。members・kotaePairsの仕様は convertStickyGroupToLibroAnnots 参照）
  * @param {Array<Object>} [domDaimonButtons] - 新規作成の大問ボタン一覧（storage.jsが紐付き付箋の
  *   closed/open idを解決済みのデータ。仕様は convertDaimonButtonToLibroAnnots 参照）
  * @returns {Promise<JSZip>}
@@ -1960,7 +1971,7 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
     });
 
     const stickyGroupResults = await Promise.all(
-      (stickyGroupsByPage.get(pageNum) || []).map(group => convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, group.groupId))
+      (stickyGroupsByPage.get(pageNum) || []).map(group => convertStickyGroupToLibroAnnots(group.members, pageWidth, pageHeight, group.groupId, group.kotaePairs || []))
     );
     stickyGroupResults.forEach(({ newPngWrites }) => {
       newPngWrites.forEach(({ annot, bytes }) => {
