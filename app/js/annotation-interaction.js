@@ -2218,6 +2218,20 @@ import { pushUndo } from './undo-redo.js';
           return;
         }
 
+        // 大問制御範囲内の付箋に答ボタンが紐付いている場合、その答ボタンも囲み線に含める。
+        // 答ボタンは dataset.daimonId を持たない（createDaimonButton は付箋・証明ボタン・
+        // 証明傘下の付箋にしか daimonId を付与しない）ため、上で集めた付箋の
+        // dataset.kotaeId から答ボタンを逆引きして members へ加える。
+        const kotaeIds = new Set(
+          members.map(el => el.dataset.kotaeId).filter(Boolean)
+        );
+        kotaeIds.forEach(kid => {
+          pageEl.querySelectorAll(`.kotae-btn[data-kotae-id="${kid}"]`).forEach(btn => {
+            if (btn.classList.contains('ann-hidden-page')) return;
+            if (!members.includes(btn)) members.push(btn);
+          });
+        });
+
         const rects = members.map(el => {
           const cr = el.getBoundingClientRect();
           return {
