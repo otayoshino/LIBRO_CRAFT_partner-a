@@ -2782,6 +2782,16 @@
       color: #888;
     }
 
+    /* Plusファイル「ページ内」表示時の背景グレーアウト（モーダル用）。
+       フローティング表示のときは生成されない。z-index はPlusファイルポップアップ(9100)の
+       すぐ下に置く（9090は未使用であることを確認済み）。 */
+    #plusfileOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9090;
+      background: rgba(0,0,0,0.82);
+    }
+
     /* Plusファイルポップアップ */
     #plusfilePopup {
       position: fixed;

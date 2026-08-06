@@ -109,6 +109,16 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
             const isFloating = showMode === '2';
             const existing = document.getElementById('plusfilePopup');
             if (existing) existing.remove();
+            const existingOverlay = document.getElementById('plusfileOverlay');
+            if (existingOverlay) existingOverlay.remove();
+            // 「ページ内」＝モーダル表示のときだけ背景をグレーアウトする（動画モーダルと同じ見え方）。
+            // フローティングは紙面を操作しながら参照する想定のため背景は暗くしない。
+            let overlay = null;
+            if (!isFloating) {
+              overlay = document.createElement('div');
+              overlay.id = 'plusfileOverlay';
+              document.body.appendChild(overlay);
+            }
             const popup = document.createElement('div');
             popup.id = 'plusfilePopup';
             popup.innerHTML = `
@@ -125,8 +135,12 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
             // 画面中央に配置
             popup.style.left = Math.max(8, (window.innerWidth  - 760) / 2) + 'px';
             popup.style.top  = Math.max(8, (window.innerHeight - 520) / 2) + 'px';
-            // 閉じるボタン
-            document.getElementById('plusfileClose').onclick = () => popup.remove();
+            // 閉じるボタン（オーバーレイもあわせて除去する）
+            const closePopup = () => {
+              popup.remove();
+              if (overlay) overlay.remove();
+            };
+            document.getElementById('plusfileClose').onclick = closePopup;
             const titleBar = popup.querySelector('.plusfile-title');
             if (isFloating) {
               // タイトルバードラッグ移動(フローティング時のみ)
