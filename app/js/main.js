@@ -369,10 +369,10 @@ import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, loadSetting
       if (state.isSpaceHeld) return;
 
       // ズームステップ：ホイール1ノッチあたり10%
+      // 上下限のクランプは applyZoomChange() 側で行う（フィットモードにより限界値が変わるため）
       const delta = e.deltaY < 0 ? 10 : -10;
-      const newZoom = Math.min(400, Math.max(50, state.zoomLevel + delta));
       // マウスカーソル位置を中心としてズームを適用する
-      applyZoomChange(newZoom, e.clientX, e.clientY);
+      applyZoomChange(state.zoomLevel + delta, e.clientX, e.clientY);
     }, { passive: false });
 
     /* ============================

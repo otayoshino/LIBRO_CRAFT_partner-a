@@ -379,14 +379,50 @@ import { updateStatus } from './ui-common.js';
 
 
     /**
+     * 現在のフィット基準サイズにおけるズームの下限・上限（%）を返す。
+     *
+     * ズームは「フィット基準サイズに対する相対値」であるため、下限・上限を固定%にすると
+     * フィットモードごとに縮小・拡大できる実サイズが変わってしまう（横幅フィット時に
+     * ページ全体フィット相当まで縮小できない不具合の原因）。
+     * そこで「ページ全体フィット時のベース幅を基準に 50%〜400%」という絶対的な実サイズ範囲を定め、
+     * 現在のベース幅に対する相対%へ換算して返す。
+     * @returns {{min: number, max: number}} ズーム下限・上限（%）
+     */
+    function getZoomLimits() {
+      const DEFAULT = { min: 50, max: 400 };
+      const view = document.getElementById('viewArea');
+      const page = document.getElementById('pageLeft');
+      if (!view || !page) return DEFAULT;
+
+      const baseW = page.offsetWidth;
+      if (!baseW) return DEFAULT;
+
+      // ページ全体フィット時のベース幅（resizePage() の 'page' 分岐と同じ計算）
+      const padding = 48;
+      const viewW = view.clientWidth  - padding;
+      const viewH = view.clientHeight - padding;
+      if (viewW <= 0 || viewH <= 0) return DEFAULT;
+      const fitPageW = (viewW / viewH < state.PAGE_ASPECT) ? viewW : viewH * state.PAGE_ASPECT;
+      if (fitPageW <= 0) return DEFAULT;
+
+      const k = fitPageW / baseW;
+      return { min: 50 * k, max: 400 * k };
+    }
+
+
+    /**
      * ズームレベルを変更し、アノテーションの位置・サイズを追従させる。
      * マウス座標が指定された場合はその点を中心にズームする。
      * 座標が未指定の場合はビュー中心を基準にズームする。
-     * @param {number}  newZoom       - 新しいズームレベル（50〜400）
+     * 指定値は現在のフィット基準における下限・上限（getZoomLimits()）でクランプする。
+     * @param {number}  newZoom       - 新しいズームレベル（getZoomLimits() の範囲へクランプされる）
      * @param {number} [mouseClientX] - マウスのビューポートX座標
      * @param {number} [mouseClientY] - マウスのビューポートY座標
      */
     export function applyZoomChange(newZoom, mouseClientX, mouseClientY) {
+      const limits = getZoomLimits();
+      newZoom = Math.min(limits.max, Math.max(limits.min, newZoom));
+
       const oldZoom = state.zoomLevel;
       if (newZoom === oldZoom) return;
 
@@ -421,33 +457,31 @@ import { updateStatus } from './ui-common.js';
     }
 
     /**
-     * ズーム限界（上限400% / 下限50%）到達時に header の拡大・縮小ボタンを非活性にする。
+     * ズーム限界（getZoomLimits() が返す下限・上限）到達時に header の拡大・縮小ボタンを非活性にする。
      * state.zoomLevel を書き換えるのは applyZoomChange() と setFit() の2箇所のみのため、
      * その両方から呼び出せば全経路（ボタン・ホイールズーム・フィット変更）をカバーできる。
      */
     export function updateZoomButtonStates() {
-      document.getElementById('zoomInBtn')?.classList.toggle('disabled', state.zoomLevel >= 400);
-      document.getElementById('zoomOutBtn')?.classList.toggle('disabled', state.zoomLevel <= 50);
+      const limits = getZoomLimits();
+      // 浮動小数の誤差で限界到達を取りこぼさないよう 0.01% の許容差を設ける
+      document.getElementById('zoomInBtn')?.classList.toggle('disabled', state.zoomLevel >= limits.max - 0.01);
+      document.getElementById('zoomOutBtn')?.classList.toggle('disabled', state.zoomLevel <= limits.min + 0.01);
     }
 
 
     /**
-     * ズームインする。
+     * ズームインする。上限は applyZoomChange() 側でクランプされる。
      */
     export function zoomIn() {
-      if (state.zoomLevel < 400) {
-        applyZoomChange(Math.min(400, state.zoomLevel + 10));
-      }
+      applyZoomChange(state.zoomLevel + 10);
     }
 
 
     /**
-     * ズームアウトする。
+     * ズームアウトする。下限は applyZoomChange() 側でクランプされる。
      */
     export function zoomOut() {
-      if (state.zoomLevel > 50) {
-        applyZoomChange(Math.max(50, state.zoomLevel - 10));
-      }
+      applyZoomChange(state.zoomLevel - 10);
     }
 
 
