@@ -677,6 +677,8 @@
     }
     .side .panel ul.panel-stack li div {
       flex-shrink: 0;
+      /* アイコン枠を最大アイコン幅(21px)で固定し、テキスト開始位置を全ボタンで揃える */
+      width: 21px;
     }
     .side .panel ul.panel-stack li p {
       margin-top: 0;
