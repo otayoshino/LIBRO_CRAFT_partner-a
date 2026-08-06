@@ -29,12 +29,25 @@ import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, loadSetting
       }
 
       // クイック作成/編集ポップアップ表示中も紙面向けショートカットを全て抑止し、
-      // Escapeで閉じる（描画モード解除を含む）のみ受け付ける
+      // Escapeで閉じる（描画モード解除を含む）／Enterで確定するのみ受け付ける
       if (document.getElementById('quickCreatePopup')) {
         if (e.key === 'Escape') {
           closeQuickCreateDialog();
           if (state.currentDrawType) deactivateAnnotationMode();
           updateStatus();
+        }
+        // Enterキー：確定ボタン（作成する／更新する）のクリックと同じ扱いにする。
+        // #qcOkBtn の onclick には作成/編集それぞれの確定処理が代入済みのため、
+        // click() を呼べばJ-stream検証・ポップアップのクローズまで既存経路をそのまま通る。
+        if (e.key === 'Enter') {
+          // IME変換中の確定Enterでは作成しない（日本語入力の確定で誤確定するのを防ぐ）
+          if (e.isComposing || e.keyCode === 229) return;
+          const tag = document.activeElement?.tagName;
+          // textareaは改行入力を優先する。ボタンにフォーカスがある場合は
+          // ブラウザ既定のクリック動作に任せる（キャンセルボタンでの二重発火を防ぐ）
+          if (tag === 'TEXTAREA' || tag === 'BUTTON') return;
+          e.preventDefault();
+          document.getElementById('qcOkBtn')?.click();
         }
         return;
       }
