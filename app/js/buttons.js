@@ -301,6 +301,35 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
+     * 制御ボタン（大問・答）の作成位置を求める。
+     * 紐付け対象のうち「先頭のオブジェクト」＝最も上（topが同値なら最も左）のものを基準に、
+     * その左横（ボタン幅＋余白ぶん左）・上端揃えの位置を返す。
+     * 従来は紐付け対象群の真上へ置いていたが、上方向の他オブジェクトと干渉するため左側配置へ変更した。
+     * 紙面左端で余白が足りない場合はここでは詰めず、呼び出し側の clampElementToPage() が紙面内へ押し戻す。
+     * @param {HTMLElement[]} posEls - 位置の基準にする紐付けオブジェクト（1件以上）
+     * @param {number} btnWidth - 作成するボタンの幅(px・ページ座標系)
+     * @returns {{left: number, top: number}}
+     */
+    function computeControlButtonPos(posEls, btnWidth) {
+      const anchor = posEls.reduce((best, n) => {
+        const bTop = parseFloat(best.style.top) || 0;
+        const nTop = parseFloat(n.style.top)    || 0;
+        if (nTop < bTop) return n;
+        if (nTop > bTop) return best;
+        // top が同値の場合は left が小さい方を先頭とする
+        const bLeft = parseFloat(best.style.left) || 0;
+        const nLeft = parseFloat(n.style.left)    || 0;
+        return nLeft < bLeft ? n : best;
+      });
+      const anchorLeft = parseFloat(anchor.style.left) || 0;
+      const anchorTop  = parseFloat(anchor.style.top)  || 0;
+      return {
+        left: Math.max(0, anchorLeft - (btnWidth + 4)),
+        top:  Math.max(0, anchorTop),
+      };
+    }
+
+    /**
      * 選択中の付箋を一括表示/非表示できる大問ボタンをページ上に作成する。
      * 1件以上の付箋・証明ボタンが選択されている必要がある。
      */
@@ -330,16 +359,14 @@ import { pushUndo } from './undo-redo.js';
       // 大問IDをすべての要素に一括付与（証明傘下の付箋も含む）
       allLinked.forEach(n => { n.dataset.daimonId = did; });
 
-      // 配置位置：紐付けた全オブジェクトの左上の少し上
-      const posEls  = [...stickies, ...shomeis];
-      const minLeft = Math.min(...posEls.map(n => parseFloat(n.style.left) || 0));
-      const minTop  = Math.min(...posEls.map(n => parseFloat(n.style.top)  || 0));
-
       const page = document.getElementById('pageLeft');
       // 既定サイズはLIBRO実データ（194×116 / 600dpi）基準。表示中ページのdpiで換算される。
       // is-sized クラスは「ページ座標系のサイズをインラインstyleで持つ大問ボタン」の目印で、
       // CSSの固定サイズ打ち消し・フィット変更時の追従・保存復元時のサイズ復元の判定に使う。
       const { width: defW, height: defH } = getDaimonDefaultSizePx();
+      // 配置位置：先頭オブジェクト（最も上・同率なら最も左）の左横・上端揃え
+      const posEls = [...stickies, ...shomeis];
+      const pos    = computeControlButtonPos(posEls, defW);
       const el = document.createElement('div');
       el.className        = 'daimon-btn is-sized';
       el.dataset.type     = 'daimon';
@@ -349,9 +376,8 @@ import { pushUndo } from './undo-redo.js';
       // （設定を後から変えても既に作成済みのボタンは変わらない仕様）
       const daimonSavedData = { btnPreset: '0', btnScale: '1', btnLabel: state.settingsDaimonLabel || '大問' };
       el.dataset.savedData = JSON.stringify(daimonSavedData);
-      el.style.left       = minLeft + 'px';
-      // 紐付けたオブジェクト群の上に、ボタン高さ＋わずかな余白の分だけ持ち上げて配置する
-      el.style.top        = Math.max(0, minTop - (defH + 4)) + 'px';
+      el.style.left       = pos.left + 'px';
+      el.style.top        = pos.top  + 'px';
       el.style.width      = defW + 'px';
       el.style.height     = defH + 'px';
       renderButtonVisual(el, 'daimon', daimonSavedData);
@@ -528,21 +554,19 @@ import { pushUndo } from './undo-redo.js';
         note.style.background = '#ffffff';
       });
 
-      // 配置位置：選択グループの左上の少し上
-      const minLeft = Math.min(...stickies.map(n => parseFloat(n.style.left) || 0));
-      const minTop  = Math.min(...stickies.map(n => parseFloat(n.style.top)  || 0));
-
       const page = document.getElementById('pageLeft');
       // 既定サイズは大問ボタンと同じLIBRO実データ基準（194×116 / 600dpi）。表示中ページのdpiで換算される。
       const { width: defW, height: defH } = getDaimonDefaultSizePx();
+      // 配置位置：先頭の付箋（最も上・同率なら最も左）の左横・上端揃え
+      const pos = computeControlButtonPos(stickies, defW);
       const el = document.createElement('div');
       el.className        = 'kotae-btn is-sized';
       el.dataset.type     = 'kotae';
       el.dataset.id       = ++state.annIdCounter;
       el.dataset.kotaeId  = kid;
       el.dataset.savedData = JSON.stringify({ btnPreset: '1', btnScale: '1' });
-      el.style.left       = minLeft + 'px';
-      el.style.top        = Math.max(0, minTop - (defH + 4)) + 'px';
+      el.style.left       = pos.left + 'px';
+      el.style.top        = pos.top  + 'px';
       el.style.width      = defW + 'px';
       el.style.height     = defH + 'px';
       renderButtonVisual(el, 'kotae', { btnPreset: '1', btnScale: '1' });
