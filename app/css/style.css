@@ -1515,8 +1515,9 @@
     /* 付箋ボタン（解答隠し用、単色矩形） */
     .sticky-note {
       position: absolute;
-      min-width: 10px;
-      min-height: 10px;
+      /* JS 側の STICKY_MIN_SIZE_PX（app/js/config.js）と同値に保つこと */
+      min-width: 4px;
+      min-height: 4px;
       z-index: 10;
       cursor: pointer;
       box-sizing: border-box;

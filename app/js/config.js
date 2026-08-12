@@ -186,6 +186,14 @@
     export const ICON_DEFAULT_MIN_SIZE_PX = 20;
 
     /**
+     * 付箋（.sticky-note）の最小サイズ（px）。
+     * ドラッグ作成時のクイック作成分岐しきい値と、リサイズ時の下限の両方に使う。
+     * 細い解答欄（1〜2行の数式など）を覆えるようにするため、他種別（10px / 14px）より小さい。
+     * CSS の .sticky-note { min-width / min-height } と同値に保つこと。
+     */
+    export const STICKY_MIN_SIZE_PX = 4;
+
+    /**
      * ページ基準サイズ（#pageLeft.offsetWidth）が取得できない場合のフォールバック値（px）。
      * book未読込時など。従来の固定既定値と同値。
      */

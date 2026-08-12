@@ -1,7 +1,7 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { confirmAnnotation, openAnnotationSettingsDialog, openQuickCreateDialog, refreshMultiSelectionPanel, refreshPosFieldsLive } from './annotation-dialog.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, makeDaimonResizable, renderButtonVisual } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, STICKY_MIN_SIZE_PX, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { selectedStickySet, state } from './state.js';
 import { addStickyClickHandler, applyStickyOpenMode } from './sticky.js';
 import { closeDialog } from './storage.js';
@@ -863,13 +863,18 @@ import { pushUndo } from './undo-redo.js';
       state.drawStartPos = null;
 
       // クリックのみ（ほぼ移動なし）の場合：クイック作成ポップアップを表示
-      if (w < 10 && h < 10) {
+      // 付箋のみ、細い解答欄を覆えるようしきい値を STICKY_MIN_SIZE_PX まで下げる
+      const clickThreshold = (type === 'sticky') ? STICKY_MIN_SIZE_PX : 10;
+      if (w < clickThreshold && h < clickThreshold) {
         openQuickCreateDialog(type, x, y, e.clientX, e.clientY);
         return;
       }
 
       // ドラッグ作成：ポップアップなし・紙面カラー形式で即時作成
-      state.pendingRect = { x, y, w, h };
+      // 判定は w/h の AND のため、片辺だけ極端に細い矩形は最小サイズへ切り上げる（付箋のみ）
+      const drawW = (type === 'sticky') ? Math.max(w, STICKY_MIN_SIZE_PX) : w;
+      const drawH = (type === 'sticky') ? Math.max(h, STICKY_MIN_SIZE_PX) : h;
+      state.pendingRect = { x, y, w: drawW, h: drawH };
       const _specForm = document.getElementById('dialogFormSpecific');
       if (_specForm) {
         const _dtEl = _specForm.querySelector('#annDisplayType');
@@ -897,14 +902,16 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} el - リサイズ対象要素
      * @param {object} [options] - オプション
      * @param {boolean} [options.lockAspectRatio=false] - true にすると縦横比を維持してリサイズ（コーナー4点のみ表示）
-     * @param {number} [options.minSize=10] - リサイズ時の最小サイズ（px）
+     * @param {number} [options.minSize] - リサイズ時の最小サイズ（px）。省略時は
+     *   付箋（.sticky-note）が STICKY_MIN_SIZE_PX、それ以外は 10。
+     *   付箋の呼び出し箇所は7か所あるため、呼び出し側ではなくここで既定値を分岐させている。
      */
     export function makeResizable(el, options = {}) {
       // 既存ハンドルを削除（クローン再初期化時の重複防止）
       el.querySelectorAll('.resize-handle').forEach(h => h.remove());
 
       const lockAspectRatio = options.lockAspectRatio || false;
-      const MIN_SIZE        = options.minSize || 10;
+      const MIN_SIZE        = options.minSize || (el.classList.contains('sticky-note') ? STICKY_MIN_SIZE_PX : 10);
 
       // lockAspectRatio が true の場合はコーナー4点のみ（辺中点は縦横比を崩すため除外）
       const corners = lockAspectRatio

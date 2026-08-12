@@ -5,6 +5,7 @@ import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObj
 import { switchToViewMode } from './mode.js';
 import { addIndexRow, closeIndexEditor, openIndexEditor } from './index-outline.js';
 import { applyZoomChange, goFirstPage, goLastPage, goTocPage, nextPage, prevPage, resizePage, setFit, updatePageDisplay, zoomIn, zoomOut } from './page-view.js';
+import { STICKY_MIN_SIZE_PX } from './config.js';
 import { state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
 import { closeDialog, handleZipFile, loadAnnotationsFromZip, saveAnnotationsAsLibroBook, saveDialog } from './storage.js';
@@ -322,13 +323,21 @@ import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, loadSetting
       const y = Math.min(endPos.y, start.y);
       const w = Math.abs(endPos.x - start.x);
       const h = Math.abs(endPos.y - start.y);
-      if (w < 10 && h < 10) {
+      // 付箋のみ、細い解答欄を覆えるようしきい値を STICKY_MIN_SIZE_PX まで下げる
+      const isSticky = (state.currentDrawType === 'sticky');
+      const clickThreshold = isSticky ? STICKY_MIN_SIZE_PX : 10;
+      if (w < clickThreshold && h < clickThreshold) {
         // クリック扱い：クイック作成ポップアップを表示
         openQuickCreateDialog(state.currentDrawType, start.x, start.y, e.clientX, e.clientY);
         return;
       }
       // ドラッグ作成：紙面カラー形式で即時作成
-      state.pendingRect = { x, y, w, h };
+      // 判定は w/h の AND のため、片辺だけ極端に細い矩形は最小サイズへ切り上げる（付箋のみ）
+      state.pendingRect = {
+        x, y,
+        w: isSticky ? Math.max(w, STICKY_MIN_SIZE_PX) : w,
+        h: isSticky ? Math.max(h, STICKY_MIN_SIZE_PX) : h,
+      };
       const _specForm = document.getElementById('dialogFormSpecific');
       if (_specForm) {
         const _dtEl = _specForm.querySelector('#annDisplayType');
