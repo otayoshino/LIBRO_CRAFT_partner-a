@@ -138,9 +138,13 @@ LIBRO+ が生成・読み込む book フォルダ形式（`index.json` / `p####.
 |---|---|---|---|
 | `toAppendix("フォルダ名", 表示モード)` | Plusファイル（デジタルアニメーション） | 第1引数＝フォルダ名、第2引数＝表示モード（実データは`1`固定） | 実装済み（`plusfile`） |
 | `toMovie("id", "base64A", "base64B")` | 動画再生（J-Stream） | 第1引数＝プレイヤーID文字列。第2・第3引数はBase64エンコードされた数値文字列（例：`"NDExNQ=="`→デコードすると`"4115"`）であることを確認。デコード後の数値が何を指すか（コンテンツID／再生範囲等）までは未解読 | 実装済み（`video`、`annVideoSrc:'2'`）。引数の意味自体は未解析のため生文字列のまま保持 |
-| `toMovieBNR("path", flag)` | 動画再生（AWS） | 第1引数＝S3的なパス文字列、第2引数＝実データ全サンプルで`1`固定 | 実装済み（`video`、`annVideoSrc:'2'`）。同上 |
+| `toMovieBNR("path", 表示モード)` | 動画再生（**book内の内部ファイル**） | 第1引数＝book内 `video/in/` 配下を指す相対パス文字列、第2引数＝表示モード（実データ全サンプルで`1`＝別タブ） | 実装済み（`video`、`annVideoSrc:'0'`＝内部ファイル）。※下記注記を参照 |
 | `toListening("id", flag)` | カラオケボタン（音声同期ハイライト） | 第1引数＝音声ID文字列、第2引数＝`1`固定 | **未対応**（CRAFTに作成手段が無いためスコープ外、外部リンク扱いのまま保持） |
 | `toFlashcard("deckId", "variant", flag)` | フラッシュカード | 第1引数＝デッキID、第2引数＝バリアント番号文字列（実データは`"2"`）、第3引数＝`1`固定 | **未対応**（同上） |
+
+> **`toMovieBNR` についての注記（2026-08-17 修正）**：本表には長らく「動画再生（AWS）／第1引数＝S3的なパス文字列」「`annVideoSrc:'2'`」と記載されていたが、**いずれも誤りだった**。[2026-07-21_feat_動画内部ファイルのvideo-in書き出し対応.md](../docs/plans/archive/対応不可_2026-07-21_feat_動画内部ファイルのvideo-in書き出し対応.md) の調査で、`toMovieBNR` は **book フォルダ内の `video/in/` 配下のファイルを LIBRO+ が直接GETして `<video>` 再生する**方式（＝AWS/S3ではなくbook同梱の内部ファイル）であり、CRAFT側の対応種別も `annVideoSrc:'0'`（内部ファイル）であることが確定している。`annVideoSrc:'2'` に対応するのは `toMovie`（J-stream）のみ。
+>
+> なお、`toMovie` の第2・第3引数は**Base64エンコードされた企業IDと難読化された動画ID**であることがその後判明している（[2026-07-29_feat_Jストリーム設定値のバリデーション追加.md](../docs/plans/archive/2026-07-29_feat_Jストリーム設定値のバリデーション追加.md) 参照）。上の `toMovie` 行の「デコード後の数値が何を指すかまでは未解読」という記述は解読前のもの。
 
 ### 1-10. `fulltext.json`
 
@@ -177,9 +181,9 @@ DOM上は`.ann-object`（マーカー/紙面カラー型）または`.ann-image-
 | externallink | `annUrl` | リンク先URL |
 | audio | `annFile` | 音声ファイル名（拡張子なし） |
 | audio | `annPlayMode` | コントローラー表示有無 |
-| video | `annVideoSrc` | `'0'`＝内部ファイル／`'1'`＝外部タグ／`'2'`＝LIBROリンク（toMovie/toMovieBNR由来） |
+| video | `annVideoSrc` | `'0'`＝内部ファイル（書き出しは `toMovieBNR`、実体は book 内 `video/in/*.mp4`）／`'1'`＝外部タグ（新規作成は無効化中）／`'2'`＝J-stream（書き出しは `toMovie`） |
 | video | `annFile` | 内部ファイル指定時の動画ファイル名 |
-| video | `annVideoFn` / `annVideoArg` | `annVideoSrc:'2'`時：関数名（`toMovie`/`toMovieBNR`）と生の引数文字列 |
+| video | `annVideoFn` / `annVideoArg` | インポートで解釈できなかったLIBROリンクを保持する退避先：関数名と生の引数文字列 |
 | video | `annShowMode` | ページ内／別タブ |
 | 共通 | `annLabel` | マーカー表示テキスト（JSONには存在するが入力UIが無いため常に既定ラベル） |
 | 共通 | `annColor` | 塗り色 |
@@ -231,7 +235,14 @@ LIBRO由来の大問ボタン（`dataset.libroToggle==='1'`）は、位置・サ
 | externallink | `URI`（`toMovie`等の既知パターンに一致しない場合） | `annDisplayType:'marker'`, `annUrl: uri文字列` | `{URI, uri:annUrl}` | 実装済み |
 | audio | `Launch` | `annDisplayType:'marker'`, `annFile: ファイル名(拡張子除去)`, `annPlayMode:'0'` | `{Launch, filename:"sounds/"+annFile+".mp3"}` | 実装済み |
 | plusfile | `URI`＋`toAppendix(folder,mode)` | `annDisplayType:'marker'`, `annFile:folder`, `annShowMode:mode` | `{URI, uri:'toAppendix("'+annFile+'",'+annShowMode+')'}` | 実装済み |
-| video | `URI`＋`toMovie(...)`/`toMovieBNR(...)` | `toMovie`3引数＝J-stream指定（`annVideoSrc:'2'`＋`annJstreamDir`/`annJstreamCorpId`/`annJstreamVideoId`、企業ID・難読化IDはbase64復号して平文保持）、`toMovieBNR`2引数＝内部ファイル指定（`annVideoSrc:'0'`＋`annFile`/`annShowMode`）、いずれにも当てはまらない引数構成は生文字列保持（`annVideoFn`/`annVideoArg`） | J-streamは`{URI, uri:'toMovie("dir","base64(企業ID)","base64(難読化ID)")'}`（**3引数固定。表示モードは書き出さない**）、内部ファイルは`{URI, uri:'toMovieBNR("ファイル名",表示モード)'}` | 実装済み（外部タグ指定`annVideoSrc:'1'`はLIBRO側に対応actionが無いため書き出し非対応） |
+| video | `URI`＋`toMovie(...)`/`toMovieBNR(...)` | `toMovie`＝J-stream指定（`annVideoSrc:'2'`＋`annJstreamDir`/`annJstreamCorpId`/`annJstreamVideoId`/`annShowMode`。**3引数・4引数のどちらも読み込める**）、`toMovieBNR`2引数＝内部ファイル指定（`annVideoSrc:'0'`＋`annFile`/`annShowMode`）、いずれにも当てはまらない引数構成は生文字列保持（`annVideoFn`/`annVideoArg`） | J-streamは`{URI, uri:'toMovie("dir","企業ID","難読化ID",表示モード)'}`（**4引数**。表示モードは数値・引用符なしで 0=ページ内（モーダル）／1=別タブ）、内部ファイルは`{URI, uri:'toMovieBNR("ファイル名",表示モード)'}` | 実装済み（外部タグ指定`annVideoSrc:'1'`はLIBRO側に対応actionが無いため書き出し非対応） |
+
+> **上記行の修正履歴（2026-08-17）**：本行には長らく「`toMovie` は**3引数固定**。表示モードは書き出さない」「企業ID・難読化IDは**base64復号して平文保持**」と記載されていたが、**どちらも現行実装と一致しない**。
+>
+> - **引数の数**：`buildJstreamArgs()`（[app/js/libro-format.js](../app/js/libro-format.js) 194〜200行目付近）は `"dir","企業ID","難読化ID",表示モード` の **4要素**を返す。「3引数固定」は 2026-07-23 の [J-stream動画のtoMovie第4引数によるLIBRO＋消失](../docs/plans/archive/2026-07-23_fix_J-stream動画のtoMovie第4引数によるLIBRO＋消失.md) で一時的に採った措置の記述で、その後の環境設定・バリデーション対応（2026-07-29）で表示モードを含む4引数へ戻っている。
+> - **base64の扱い**：現行は**エンコード・デコードとも行わず、入力値をそのまま書き出す**（`buildJstreamArgs()` は `.trim()` のみ）。「base64復号して平文保持」は誤り。
+>
+> 正となる記述は [libro-integration Skill](../.claude/skills/libro-integration/SKILL.md) 側。本仕様書を参照する際は Skill と突き合わせること。
 
 いずれも画像アイコン型（`annDisplayType:'image'`）の場合、元画像（`annots/xxxx.png`）が無変更なら既存zipエントリをそのまま維持し、差し替え時のみ平文PNGのまま上書きする（`annots/*.png`は暗号化対象外。[libro_image_display_type_feature.md](../.claude/skills/libro-integration/SKILL.md)相当のロジック）。
 
