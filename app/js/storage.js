@@ -37,6 +37,45 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
          * handleZipFile から呼び出される。
          * @param {Array} arr - annotations.json のパース済み配列
          */
+        /**
+         * 復元データ（annotations.json / IndexedDBオートセーブ）から取り出した
+         * CSS background の値を検証し、色表現であればその値を、そうでなければ null を返す。
+         *
+         * 復元データは外部から持ち込まれるファイルであり、値をそのまま style へ流すと
+         * `background: url(https://example.com/beacon.png)` のような外部参照を仕込まれ、
+         * bookを開いた瞬間に外部へHTTPリクエストが飛ぶ（閲覧トラッキングが成立する）。
+         * アノテーションの background は本来「単色の塗り」しか取らないため、
+         * 色表現以外は一律で採用しない。
+         *
+         * null を返した場合、呼び出し側は background を style へ入れないため、
+         * 後段の「style に background が無い場合は savedData.annColor から引き当てる」
+         * フォールバックが働き、既定色で復元される。
+         *
+         * @param {string} rawValue - 復元データから抽出した background の生値
+         * @returns {string|null} 採用してよい色文字列。色として解釈できない場合は null
+         */
+        function sanitizeRestoredBackground(rawValue) {
+          const v = (rawValue || '').trim();
+          if (!v) return null;
+          // url() / image-set() / element() などの外部参照・関数形式を明示的に拒否する。
+          // 下の色判定でも弾けるが、意図を明確にするため先に落とす。
+          if (/url\s*\(|image-set|element\s*\(|var\s*\(/i.test(v)) return null;
+          // #rgb / #rrggbb / #rgba / #rrggbbaa
+          if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(v)) return v;
+          // rgb() / rgba()（数値・%・カンマ区切り・スペース区切りのいずれも許容）
+          if (/^rgba?\(\s*[\d.%\s,\/]+\)$/i.test(v)) return v;
+          // transparent / 色名（CSSの名前付き色）。ブラウザのパーサに解釈させて判定する。
+          // 解釈できない文字列は fillStyle が変化しないため、番兵色との比較で弾ける。
+          if (!/^[a-z]+$/i.test(v)) return null; // ここへ来る時点で色名以外は認めない
+          const ctx = sanitizeRestoredBackground._ctx ||
+                      (sanitizeRestoredBackground._ctx = document.createElement('canvas').getContext('2d'));
+          ctx.fillStyle = '#010203'; // 番兵
+          try { ctx.fillStyle = v; } catch (_) { return null; }
+          if (ctx.fillStyle === '#010203') return null; // 代入が効かなかった＝解釈不能
+          return v;
+        }
+
+
         export function restoreAnnotationsFromArray(arr) {
           const page = document.getElementById('pageLeft');
           // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。
@@ -74,8 +113,10 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
                   const widthPctMatch  = obj.style.match(/width:\s*([\d.]+)%/);
                   const heightPctMatch = obj.style.match(/height:\s*([\d.]+)%/);
                   let styleStr = '';
-                  // 背景色を抽出（付箋の塗り復元に必要）
-                  const bgMatch = obj.style.match(/background:([^;]+)/);
+                  // 背景色を抽出（付箋の塗り復元に必要）。
+                  // 外部データ由来のため色表現であることを検証する（url(...) 等は採用しない）。
+                  const bgRawMatch = obj.style.match(/background:([^;]+)/);
+                  const bgValue = bgRawMatch ? sanitizeRestoredBackground(bgRawMatch[1]) : null;
                   if (leftPctMatch) {
                     // (1) % 形式（現行の保存フォーマット）
                     styleStr += `left:${parseFloat(leftPctMatch[1]) * pageRect.width / 100}px;`;
@@ -84,7 +125,7 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
                       if (widthPctMatch)  styleStr += `width:${parseFloat(widthPctMatch[1]) * pageRect.width / 100}px;`;
                       if (heightPctMatch) styleStr += `height:${parseFloat(heightPctMatch[1]) * pageRect.height / 100}px;`;
                     }
-                    if (bgMatch) styleStr += `background:${bgMatch[1].trim()};`;
+                    if (bgValue) styleStr += `background:${bgValue};`;
                   } else if (obj.xRatio !== undefined) {
                     // (2) xRatio/yRatio/wRatio/hRatio 形式（旧バージョンの JSON）
                     styleStr += `left:${obj.xRatio * pageRect.width}px;`;
@@ -93,7 +134,7 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
                       if (obj.wRatio !== undefined) styleStr += `width:${obj.wRatio * pageRect.width}px;`;
                       if (obj.hRatio !== undefined) styleStr += `height:${obj.hRatio * pageRect.height}px;`;
                     }
-                    if (bgMatch) styleStr += `background:${bgMatch[1].trim()};`;
+                    if (bgValue) styleStr += `background:${bgValue};`;
                   } else {
                     // (3) px 形式（style に直接 px 値が入っているフォーマット）
                     const leftPxMatch   = obj.style.match(/left:\s*([\d.]+)px/);
@@ -106,7 +147,7 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
                       if (widthPxMatch)  styleStr += `width:${widthPxMatch[1]}px;`;
                       if (heightPxMatch) styleStr += `height:${heightPxMatch[1]}px;`;
                     }
-                    if (bgMatch) styleStr += `background:${bgMatch[1].trim()};`;
+                    if (bgValue) styleStr += `background:${bgValue};`;
                   }
                   el.style.cssText = styleStr;
                 }
