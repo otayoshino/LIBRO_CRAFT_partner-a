@@ -355,7 +355,12 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
     export function addAnnClickHandler(ann) {
       const type = ann.dataset.type;
       const cfg  = ANNOTATION_TYPE_CONFIG[type];
-      ann.addEventListener('click', (e) => {
+      // 多重リスナー登録の防止。理由は buttons.js の addDaimonClickHandler と同じ。
+      // reinitElement() は Undo/Redo の 'prop' 系復元で既存要素にも呼ばれるため、
+      // 解除しないと同一要素にリスナーが積み重なる。
+      if (ann._annClickHandler)    ann.removeEventListener('click',    ann._annClickHandler);
+      if (ann._annDblclickHandler) ann.removeEventListener('dblclick', ann._annDblclickHandler);
+      ann._annClickHandler = (e) => {
         // 複数選択のドラッグ移動直後に発火したclickは選択操作として扱わない（H-4と同じ理由）
         if (state.suppressObjectClick) { state.suppressObjectClick = false; return; }
         // 閲覧モード時：実際の挙動を実行
@@ -397,13 +402,15 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
             updateStatus();
           }
         }
-      });
+      };
+      ann.addEventListener('click', ann._annClickHandler);
 
       // ダブルクリック：編集モード時に編集ポップアップを開く
-      ann.addEventListener('dblclick', (e) => {
+      ann._annDblclickHandler = (e) => {
         if (document.body.classList.contains('is-view-mode')) return;
         e.preventDefault();
         e.stopPropagation();
         openEditPopup(ann);
-      });
+      };
+      ann.addEventListener('dblclick', ann._annDblclickHandler);
     }

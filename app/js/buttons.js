@@ -602,14 +602,25 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} btn - 答ボタン要素
      */
     export function addKotaeClickHandler(btn) {
+      // reinitElement()（Undo/Redoによるプロパティ変更の復元、annotation-interaction.js）は
+      // 新規クローン要素だけでなく「作成時にすでにこのリスナーが登録済みの既存要素」に対しても
+      // 呼ばれることがある。addEventListener は同一要素に対して呼ぶたびリスナーを追加登録してしまい、
+      // 解除されないまま2重に発火すると一括開閉の判定が自己干渉して壊れるため、
+      // 再呼び出し時は前回登録したリスナーを解除してから登録し直す（初回呼び出し時は何もしない）。
+      // addDaimonClickHandler と同一方式。
+      if (btn._kotaeDblclickHandler) btn.removeEventListener('dblclick', btn._kotaeDblclickHandler);
+      if (btn._kotaeClickHandler)    btn.removeEventListener('click',    btn._kotaeClickHandler);
+
       // ダブルクリック：編集モード時にスタイル編集ポップアップを開く
-      btn.addEventListener('dblclick', (e) => {
+      btn._kotaeDblclickHandler = (e) => {
         if (document.body.classList.contains('is-view-mode')) return;
         e.preventDefault();
         e.stopPropagation();
         openEditPopup(btn);
-      });
-      btn.addEventListener('click', (e) => {
+      };
+      btn.addEventListener('dblclick', btn._kotaeDblclickHandler);
+
+      btn._kotaeClickHandler = (e) => {
         // 複数選択のドラッグ移動直後に発火したclickは選択操作として扱わない（H-4と同じ理由）
         if (state.suppressObjectClick) { state.suppressObjectClick = false; return; }
         if (!document.body.classList.contains('is-view-mode')) {
@@ -646,7 +657,8 @@ import { pushUndo } from './undo-redo.js';
         });
         swapButtonPressedImage(btn, allVisible);
         updateStatus();
-      });
+      };
+      btn.addEventListener('click', btn._kotaeClickHandler);
     }
 
 
@@ -729,14 +741,20 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} btn - 証明ボタン要素
      */
     export function addShomeiClickHandler(btn) {
+      // 多重リスナー登録の防止。理由は addDaimonClickHandler / addKotaeClickHandler と同じ。
+      if (btn._shomeiDblclickHandler) btn.removeEventListener('dblclick', btn._shomeiDblclickHandler);
+      if (btn._shomeiClickHandler)    btn.removeEventListener('click',    btn._shomeiClickHandler);
+
       // ダブルクリック：編集モード時にスタイル編集ポップアップを開く
-      btn.addEventListener('dblclick', (e) => {
+      btn._shomeiDblclickHandler = (e) => {
         if (document.body.classList.contains('is-view-mode')) return;
         e.preventDefault();
         e.stopPropagation();
         openEditPopup(btn);
-      });
-      btn.addEventListener('click', (e) => {
+      };
+      btn.addEventListener('dblclick', btn._shomeiDblclickHandler);
+
+      btn._shomeiClickHandler = (e) => {
         // 複数選択のドラッグ移動直後に発火したclickは選択操作として扱わない（H-4と同じ理由）
         if (state.suppressObjectClick) { state.suppressObjectClick = false; return; }
         if (!document.body.classList.contains('is-view-mode')) {
@@ -782,5 +800,6 @@ import { pushUndo } from './undo-redo.js';
         });
         swapButtonPressedImage(btn, allShowing);
         updateStatus();
-      });
+      };
+      btn.addEventListener('click', btn._shomeiClickHandler);
     }

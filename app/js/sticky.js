@@ -232,14 +232,22 @@ import { pushUndo, redo } from './undo-redo.js';
      * @param {HTMLElement} note - 付箋要素
      */
     export function addStickyClickHandler(note) {
-            // ダブルクリック：編集モード時に編集ポップアップを開く
-            note.addEventListener('dblclick', (e) => {
-              if (document.body.classList.contains('is-view-mode')) return;
-              e.preventDefault();
-              e.stopPropagation();
-              openEditPopup(note);
-            });
-      note.addEventListener('click', (e) => {
+      // 多重リスナー登録の防止。理由は buttons.js の addDaimonClickHandler と同じ。
+      // reinitElement() は Undo/Redo の 'prop' 系復元で既存要素にも呼ばれるため、
+      // 解除しないとクリックの開閉トグルが2回走って自己相殺する。
+      if (note._stickyDblclickHandler) note.removeEventListener('dblclick', note._stickyDblclickHandler);
+      if (note._stickyClickHandler)    note.removeEventListener('click',    note._stickyClickHandler);
+
+      // ダブルクリック：編集モード時に編集ポップアップを開く
+      note._stickyDblclickHandler = (e) => {
+        if (document.body.classList.contains('is-view-mode')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openEditPopup(note);
+      };
+      note.addEventListener('dblclick', note._stickyDblclickHandler);
+
+      note._stickyClickHandler = (e) => {
         // 複数選択のドラッグ移動直後に発火したclickは選択操作として扱わない
         // （選択を1件へ畳まず、複数選択を維持する。state.suppressObjectClickの説明を参照）
         if (state.suppressObjectClick) { state.suppressObjectClick = false; return; }
@@ -314,5 +322,6 @@ import { pushUndo, redo } from './undo-redo.js';
         // 配下が全て閉になれば答ボタンは通常（初期）見た目へ戻る。
         syncKotaeButtonPressedByStickies(targets);
         updateStatus();
-      });
+      };
+      note.addEventListener('click', note._stickyClickHandler);
     }
