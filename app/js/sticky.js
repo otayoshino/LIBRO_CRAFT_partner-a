@@ -128,9 +128,17 @@ import { pushUndo, redo } from './undo-redo.js';
         showToast('付箋を選択してください。');
         return;
       }
+      // LIBRO由来のトグル付箋（.libro-toggle）は、見た目を子要素の閉/開2枚のPNGで表す
+      // 画像表示モデルであり style.background を持たない。白背景＋fuhyojiフラグを与えると
+      // 表示モデルとの整合が崩れるため対象から除外する（openBulkStickyDialog と同じ扱い）。
+      const targets = [...selectedStickySet].filter(note => !note.classList.contains('libro-toggle'));
+      if (targets.length === 0) {
+        showToast('LIBRO由来の付箋は「付箋を隠す」の対象外です。');
+        return;
+      }
       // Undo用: 操作前の背景色・fuhyoji属性・クラス名を記録
       const prevStates = [];
-      selectedStickySet.forEach(note => {
+      targets.forEach(note => {
         prevStates.push({
           el: note,
           prevBackground: note.style.background,
@@ -139,7 +147,7 @@ import { pushUndo, redo } from './undo-redo.js';
         });
       });
       // 選択中の付箋の背景色を白一色に変更し、専用フラグを付与する
-      selectedStickySet.forEach(note => {
+      targets.forEach(note => {
         note.style.background = '#ffffff';
         note.dataset.fuhyoji = '1'; // 「付箋を隠す」ボタンで設定された付箋と識別するフラグ
       });
