@@ -254,6 +254,11 @@ import { pushUndo } from './undo-redo.js';
       document.querySelectorAll('.daimon-btn').forEach(btn => {
         delete btn.dataset.daimonOpen;
       });
+      // 答ボタンも大問ボタンと同一の開閉モデル（ボタン自身の前回状態で判定）になったため、
+      // 同じ理由で dataset.kotaeOpen をリセットする。
+      document.querySelectorAll('.kotae-btn').forEach(btn => {
+        delete btn.dataset.kotaeOpen;
+      });
     }
 
 
@@ -500,7 +505,12 @@ import { pushUndo } from './undo-redo.js';
         const linkedKotaeIds = new Set(targets.map(t => t.dataset.kotaeId).filter(Boolean));
         linkedKotaeIds.forEach(kid => {
           const kbtn = document.querySelector(`.kotae-btn[data-kotae-id="${kid}"]`);
-          if (kbtn) swapButtonPressedImage(kbtn, !allOpen);
+          if (!kbtn) return;
+          swapButtonPressedImage(kbtn, !allOpen);
+          // 答ボタンも大問ボタンと同一モデル（ボタン自身の前回状態で判定）になったため、
+          // 大問ボタン経由で開閉したときは答ボタン側の記憶も同じ状態へ合わせる。
+          // これをしないと、大問で全員開いた直後に答ボタンを押しても再び開こうとしてしまう。
+          kbtn.dataset.kotaeOpen = allOpen ? '0' : '1';
         });
         updateStatus();
       };
@@ -650,12 +660,19 @@ import { pushUndo } from './undo-redo.js';
         const kid = btn.dataset.kotaeId;
         const targets = [...document.querySelectorAll(`.sticky-note[data-kotae-id="${kid}"]`)];
         if (targets.length === 0) return;
-        const allVisible = targets.every(t => t.classList.contains('state-visible'));
+        // 答ボタン自身の開閉状態（dataset.kotaeOpen）を基準に判定する（大問ボタンと同一モデル）。
+        // 配下付箋の個別開閉状態（state-hidden/state-visible）は判定に使わない
+        // ＝個別操作で一部だけ開いた混在状態でも、答ボタン側の前回状態だけで次の一括開閉を決める。
+        // 未設定（初回押下）は「閉」扱い：編集モード再入場時に resetAllButtonPressedImages() が
+        // kotaeOpen を削除するため、閲覧モードでの初回押下は必ず「全て開く」から始まる。
+        const allOpen = btn.dataset.kotaeOpen === '1';
         targets.forEach(t => {
-          t.classList.toggle('state-visible', !allVisible);
-          t.classList.toggle('state-hidden',   allVisible);
+          t.classList.toggle('state-visible', allOpen);
+          t.classList.toggle('state-hidden',  !allOpen);
         });
-        swapButtonPressedImage(btn, allVisible);
+        // 答ボタン自身の新しい開閉状態を保存（次回押下時の判定基準にする）
+        btn.dataset.kotaeOpen = allOpen ? '0' : '1';
+        swapButtonPressedImage(btn, !allOpen);
         updateStatus();
       };
       btn.addEventListener('click', btn._kotaeClickHandler);
