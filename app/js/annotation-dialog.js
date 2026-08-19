@@ -184,6 +184,32 @@ import { pushUndo } from './undo-redo.js';
       lastNewAnnData.video.annJstreamCorpId = String(corpId);
     }
 
+    /**
+     * 連続作成用の前回設定（lastNewAnnData[type]）へ格納する値を組み立てる。
+     * 種別ごとに「1件ごとに個別指定すべきフィールド」を引継ぎ対象から除外する。
+     *  - audio：annFile（音声ファイルごとに異なるため常に空へ）
+     *  - video：annJstreamVideoId（動画ごとに一意のため常に空へ）。ディレクトリ・企業IDは
+     *    項目ごとに独立して扱い、環境設定に既定値が無い項目だけ空へ倒す。
+     *    環境設定に値がある項目を空へ倒さないのは、ユーザーが環境設定と異なる値を手入力していた
+     *    ときにそれを失わせないため（空にしても入力欄構築側の jsDirFallback/jsCorpFallback で
+     *    環境設定値へ戻るだけだが、手入力値は復元されない）。
+     *    逆に環境設定が空の項目は、ここで空にしておかないとフォールバックも空のため
+     *    前回入力値がそのまま引き継がれてしまう。
+     * @param {string} type - アノテーション種別
+     * @param {Object} savedData - 今回作成したアノテーションの設定値
+     * @returns {Object} lastNewAnnData[type] へ格納する値
+     */
+    function buildLastNewAnnData(type, savedData) {
+      if (type === 'audio') return { ...savedData, annFile: '' };
+      if (type === 'video') {
+        const next = { ...savedData, annJstreamVideoId: '' };
+        if (!(state.settingsJstreamDir    || '').trim()) next.annJstreamDir    = '';
+        if (!(state.settingsJstreamCorpId || '').trim()) next.annJstreamCorpId = '';
+        return next;
+      }
+      return savedData;
+    }
+
 
     /**
      * クイック作成／編集ポップアップのJ-stream入力欄が、J-Streamの想定入力値かを検証する。
@@ -2211,9 +2237,9 @@ import { pushUndo } from './undo-redo.js';
           updateStatus();
         } else {
           // 新規作成：連続作成用に設定を保存し、displayType に応じて要素を生成する。
-          // 音声再生のファイル名（annFile）はファイルごとに個別指定すべき値のため、
-          // 引継ぎ対象から除外し次回ポップアップは空欄から始める（video種別は対象外）。
-          lastNewAnnData[type] = type === 'audio' ? { ...savedData, annFile: '' } : savedData;
+          // 1件ごとに個別指定すべきフィールド（音声のファイル名・動画のJストリーム難読化ID等）は
+          // buildLastNewAnnData() が引継ぎ対象から除外する。
+          lastNewAnnData[type] = buildLastNewAnnData(type, savedData);
           const ann = document.createElement('div');
           ann.dataset.id        = ++state.annIdCounter;
           ann.dataset.type      = type;
