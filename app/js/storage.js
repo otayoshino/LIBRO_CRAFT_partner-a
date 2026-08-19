@@ -278,16 +278,17 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
 
     /**
      * ファイル名と拡張子からメディアの再生URL を解決する。
-     * ZIPから読み込んだファイルがあればBlobURLを返し、
-     * なければサーバー上の従来パスを返す。
+     * ZIPから読み込んだファイルがあればBlobURLを返し、無ければ空文字を返す。
+     * 以前は `/mock/ver2/_media/` 配下の従来パスへフォールバックしていたが、
+     * このパスは開発環境にも本番サーバにも存在せず必ず404になっていた（旧プロトタイプの残骸）。
+     * 呼び出し側は空文字を「ファイルが見つからない」として扱い、ユーザーへ通知する。
      * @param {string} fileName - 拡張子なしのファイル名
      * @param {string} ext      - 拡張子（"mp3" または "mp4"）
-     * @returns {string} 再生URL
+     * @returns {string} 再生URL。見つからない場合は空文字
      */
     export function resolveMediaSrc(fileName, ext) {
       const key = `${fileName}.${ext}`;
-      if (mediaBlobs[key]) return mediaBlobs[key];
-      return `/mock/ver2/_media/${encodeURIComponent(fileName)}.${ext}`;
+      return mediaBlobs[key] || '';
     }
 
 

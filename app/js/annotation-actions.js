@@ -189,6 +189,14 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
           const fileName = (saved.annFile || '').trim();
           if (!fileName) { updateStatus(); break; }
           const src = resolveMediaSrc(fileName, 'mp3');
+          // 読み込んだbookに該当ファイルが無い場合は再生できないため、その旨を通知して終了する。
+          // 従来は存在しないサーバパスへフォールバックしており、プレーヤーは開くが
+          // 無音のまま404になり、画面上は何も起きていないように見えていた。
+          if (!src) {
+            showToast(`音声ファイル「${fileName}.mp3」が見つかりません`);
+            updateStatus();
+            break;
+          }
           const playMode = saved.annPlayMode || '0';
           if (playMode === '1') {
             // コントローラーなし：そのまま再生
