@@ -851,6 +851,29 @@ export async function parseLibroBookZip(zip) {
     maxAnnotId = Math.max(maxAnnotId, maxId);
   }
 
+  // sounds/ 配下の音声を全件BlobURL化して mediaBlobs へキャッシュする。
+  // 上のページループでキャッシュされるのは「アノテーションから参照されている音声」だけのため、
+  // 参照されていない音声は設定ポップアップのファイル名候補に出せない。候補提示のため
+  // フォルダ内の *.mp3 をすべて対象にする（既にキャッシュ済みのキーは再処理しない）。
+  // 各ファイルは独立して復号できるため Promise.all で並列実行する（逐次だと本数に比例して待ち時間が伸びる）。
+  const soundEntries = [];
+  zip.forEach((relPath, entry) => {
+    if (entry.dir) return;
+    if (!relPath.startsWith(baseDir)) return;
+    const rel = relPath.slice(baseDir.length);
+    if (/^sounds\/[^/]+\.mp3$/i.test(rel)) soundEntries.push({ rel, entry });
+  });
+  await Promise.all(soundEntries.map(async ({ rel, entry }) => {
+    const baseName = stripAudioPrefix(rel.split('/').pop());
+    if (mediaBlobs[baseName]) return;
+    const buf = await entry.async('arraybuffer');
+    // どのアノテーションからも参照されていないファイルは書き出し対象にならないため、
+    // 平文であっても unencryptedAssetPaths には登録しない
+    // （登録すると書き出し時の強制暗号化対象が不必要に増える）。
+    const bytes = isPbve2000Encoded(buf) ? decodePbve2000(buf) : new Uint8Array(buf);
+    mediaBlobs[baseName] = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+  }));
+
   // annots画像を読み込んでBlobURL化する共通ヘルパー。
   // 通常は平文PNGだが、別オーサリングツール由来で実際にはPbve2000暗号化されている
   // 場合もあるため、ヘッダーを見て判定する（暗号化されていた場合のみ復号する）。

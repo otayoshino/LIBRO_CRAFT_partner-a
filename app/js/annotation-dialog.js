@@ -1307,6 +1307,8 @@ import { pushUndo } from './undo-redo.js';
         const fileDd = _buildTextDD('annFile', savedData.annFile || '', 'ファイル名を入力');
         fileDd.querySelector('input').insertAdjacentHTML('afterend',
           '<p class="field-note">※ファイル名の拡張子「.mp3」は除く</p>');
+        // bookに同梱された音声を入力候補として提示する（自由入力も従来どおり可能）
+        appendAudioFileDatalist(fileDd);
         _appendDropZone(fileDd, 'annFile', 'audio', existingEl);
         form.appendChild(fileDd);
         form.appendChild(_buildRadioDt('再生方法'));
@@ -1504,6 +1506,39 @@ import { pushUndo } from './undo-redo.js';
       inp.placeholder = placeholder;
       dd.appendChild(inp);
       return dd;
+    }
+
+
+    /**
+     * 音声ファイル名の入力欄へ、bookに同梱された音声の候補リスト（<datalist>）を付ける。
+     * 候補は mediaBlobs にキャッシュ済みの *.mp3 キーから作る。LIBRO book形式では
+     * sounds/ 配下の全mp3が、独自ZIP形式ではzip内の全mp3がキャッシュ済みのため、
+     * どちらの形式でも同じ抽出で候補を出せる。候補が0件のときは何も付けない。
+     * 入力欄の id は同ダイアログ内で重複し得るため、getElementById ではなく
+     * 渡された dd 要素からの相対参照で取得する。
+     * @param {HTMLElement} dd - annFile入力欄を含む dd 要素
+     */
+    function appendAudioFileDatalist(dd) {
+      const inp = dd.querySelector('input');
+      if (!inp) return;
+      const names = [...new Set(
+        Object.keys(mediaBlobs)
+          .filter(k => /\.mp3$/i.test(k))
+          .map(k => k.replace(/\.mp3$/i, ''))
+      )].sort();
+      if (names.length === 0) return;
+      const listId = 'annFileCandidates';
+      // 前回ダイアログ分の datalist が残っていると候補が古いままになるため作り直す
+      document.getElementById(listId)?.remove();
+      const dl = document.createElement('datalist');
+      dl.id = listId;
+      names.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        dl.appendChild(opt);
+      });
+      dd.appendChild(dl);
+      inp.setAttribute('list', listId);
     }
 
 
