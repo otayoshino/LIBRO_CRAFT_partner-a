@@ -132,6 +132,7 @@
     /* ブロック区切り線 */
     .nav .blk.settings-group::after,
     .nav .blk.index-edit-group::after,
+    .nav .blk.page-nav::after,
     .nav .blk.scale::after,
     .nav .blk.fit-group::after,
     .nav .blk.detail-group::after {
