@@ -771,6 +771,8 @@ import { pushUndo } from './undo-redo.js';
       // なったため、この条件は通常成立しない（到達不能）。real-page-count 未設定の book や
       // 将来の拡張に対する保険として、意図的に削除せず残している。
       if (state.realPageCount != null && state.currentPage > state.realPageCount) return;
+      // 見開き表示（閲覧専用モード）中は描画・ドラッグ選択を一切行わない
+      if (state.viewMode === 'spread') return;
       // 描画モードでない場合
       if (!state.currentDrawType) {
         // 付箋・アノテーション・リサイズハンドル以外の場所をクリックしたらドラッグ選択を開始

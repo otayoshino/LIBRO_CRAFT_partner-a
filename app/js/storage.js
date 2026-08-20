@@ -453,6 +453,11 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
         showToast('LIBRO bookとして読み込んだ場合のみ書き出せます');
         return;
       }
+      // 見開き表示中は座標基準（#pageLeft の実寸）が見開き紙面のものになるため書き出せない
+      if (state.viewMode === 'spread') {
+        showToast('見開き表示中は書き出せません。単ページ表示に切り替えてください');
+        return;
+      }
 
       const page = document.getElementById('pageLeft');
       // offsetWidth/offsetHeightはCSS transform（ズーム）の影響を受けない基準サイズ。

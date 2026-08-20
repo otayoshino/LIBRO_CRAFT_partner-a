@@ -119,6 +119,9 @@ import { showToast } from './ui-common.js';
      * 現在のアノテーション状態をIndexedDBへ保存する。
      */
     async function saveAutoSaveSnapshot() {
+      // 見開き表示中はスナップショットのpx→%換算基準（#pageLeft の実寸）が見開き紙面のものになり、
+      // 保存される座標が壊れる。見開きは閲覧専用で編集も発生しないため、保存自体を見送る。
+      if (state.viewMode === 'spread') return;
       try {
         const data = collectAnnotationSnapshotData();
         // LIBRO book由来付箋の紐付け情報（本体はzip側が真のため、編集分だけを別枠で保存する）

@@ -114,7 +114,9 @@ export function addIndexRow() {
 export function updateLibroBookBtnStates() {
   const disabled = !state.libroBook;
   document.getElementById('indexEditBtn')?.classList.toggle('disabled', disabled);
-  document.getElementById('libroExportBtn')?.classList.toggle('disabled', disabled);
+  // 見開き表示中はアノテーション座標の基準サイズ（#pageLeft の実寸）が見開き紙面のものになり、
+  // 書き出し時のpx→%換算がずれるため書き出しを禁止する（storage.js 側にもガードあり）
+  document.getElementById('libroExportBtn')?.classList.toggle('disabled', disabled || state.viewMode === 'spread');
 }
 
 

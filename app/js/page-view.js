@@ -91,6 +91,9 @@ import { updateStatus } from './ui-common.js';
      * @returns {number|null}
      */
     function getTocPageNumber() {
+      // 見開き表示中は toc-page（合成ページ番号を指す場合がある）と単ページ番号の意味が
+      // 混ざるため、TOCボタンは無効化する
+      if (state.viewMode === 'spread') return null;
       const tocPage = state.libroBook?.indexJson?.configs?.['toc-page'];
       if (!Number.isInteger(tocPage) || tocPage < 1 || tocPage > state.totalPages) return null;
       return tocPage;
@@ -121,11 +124,22 @@ import { updateStatus } from './ui-common.js';
         return;
       }
 
-      document.getElementById('pageInput').value = state.currentPage;
-      // 合計ページ数表示を更新
+      // ページ番号表示：見開き表示中は sub-pages が示す単ページ番号の範囲（例「2-3」）を表示し、
+      // 分母も単ページ総数に揃える（利用者が扱う番号を常に単ページ番号に統一するため）
+      const pageInput = document.getElementById('pageInput');
       const totalPagesText = document.getElementById('totalPagesText');
-      if (totalPagesText) {
-        totalPagesText.textContent = `/ ${state.totalPages}`;
+      if (state.viewMode === 'spread') {
+        const nums = (state.bookPages[state.currentPage - 1]?.subPages || [])
+          .map(sp => sp.page).filter(Number.isInteger);
+        pageInput.value = nums.length ? `${Math.min(...nums)}-${Math.max(...nums)}` : String(state.currentPage);
+        if (totalPagesText) {
+          totalPagesText.textContent = `/ ${state.singlePages ? state.singlePages.length : state.totalPages}`;
+        }
+      } else {
+        pageInput.value = state.currentPage;
+        if (totalPagesText) {
+          totalPagesText.textContent = `/ ${state.totalPages}`;
+        }
       }
       // 見開き（real-page-count超過ページ）バッジの表示更新
       updateSpreadBadge();
@@ -203,7 +217,8 @@ import { updateStatus } from './ui-common.js';
      * 対する保険として、意図的に削除せず残している。
      */
     function updateSpreadBadge() {
-      const isSpread = state.realPageCount != null && state.currentPage > state.realPageCount;
+      const isSpread = state.viewMode === 'spread'
+        || (state.realPageCount != null && state.currentPage > state.realPageCount);
       const badge = document.getElementById('spreadBadge');
       if (badge) {
         badge.classList.toggle('show', isSpread);
@@ -218,6 +233,10 @@ import { updateStatus } from './ui-common.js';
      * 現在ページに属するアノテーションのみ表示し、他ページのアノテーションを非表示にする。
      */
     export function updateAnnotationVisibility() {
+      // 見開き表示中は state.currentPage が見開き配列の添字になり、単ページ番号と偶然一致した
+      // アノテーションが誤った座標で表示されてしまう。見開き中は一律で全件非表示にする
+      // （見開きは閲覧専用のため、アノテーションを出す必要もない）。
+      const spread = state.viewMode === 'spread';
       document.querySelectorAll(
         '#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj, #pageLeft .ann-image-obj, ' +
         '#pageLeft .daimon-btn, ' +
@@ -225,7 +244,7 @@ import { updateStatus } from './ui-common.js';
         '#pageLeft .libro-toggle, #pageLeft .libro-network-slot'
       ).forEach(el => {
         const elPage = parseInt(el.dataset.page || '1', 10);
-        el.classList.toggle('ann-hidden-page', elPage !== state.currentPage);
+        el.classList.toggle('ann-hidden-page', spread || elPage !== state.currentPage);
       });
     }
 
@@ -238,7 +257,7 @@ import { updateStatus } from './ui-common.js';
      */
     export function loadLibroBookPages(pages, realPageCount = null) {
       // 見開き合成ページ（real-page-count超過ページ）はCRAFTの編集対象外のため、
-      // 表示・編集用のページ列からは除外する。合成ページの生データ（index.json.pages[]・
+      // 編集用のページ列（単ページ列）からは除外する。合成ページの生データ（index.json.pages[]・
       // p####.json・annots）は state.libroBook / state.libroUnknownAnnotations 側に
       // 保持され続け、書き出し時は indexJson.pages 全件を駆動元として無改変で書き戻される
       // ため、ここで除外しても往復保存の内容には影響しない（確認済み）。
@@ -249,12 +268,29 @@ import { updateStatus } from './ui-common.js';
       const editablePages = (realPageCount != null && realPageCount > 0 && realPageCount < pages.length)
         ? pages.filter(p => p.pageNum <= realPageCount)
         : pages;
+      // 見開き表示用のページ列：p####.json に sub-pages を持ち、かつ単ページ列に含まれないページ。
+      // real-page-count ではなく sub-pages の有無で判定するため、境界値がずれた book でも破綻しない。
+      const spreadPages = pages.filter(p =>
+        Array.isArray(p.subPages) && p.subPages.length > 0 && !editablePages.includes(p));
+      // 単ページ番号 → 見開き配列の添字（0始まり）
+      const spreadIndexBySinglePage = new Map();
+      spreadPages.forEach((p, i) => {
+        p.subPages.forEach(sp => {
+          if (Number.isInteger(sp?.page)) spreadIndexBySinglePage.set(sp.page, i);
+        });
+      });
+      state.singlePages = editablePages;
+      state.spreadPages = spreadPages;
+      state.spreadIndexBySinglePage = spreadIndexBySinglePage;
+      state.viewMode = 'single';
+      state._singleBaseSize = null;
       state.bookPages = editablePages;
       state.totalPages = editablePages.length;
       state.realPageCount = realPageCount;
       const pageInput = document.getElementById('pageInput');
       if (pageInput) pageInput.dataset.max = state.totalPages;
       state.currentPage = 1;
+      updateViewModeButtonStates();
       const first = pages[0];
       if (first && first.width && first.height) {
         state.PAGE_ASPECT = first.width / first.height;
@@ -264,6 +300,105 @@ import { updateStatus } from './ui-common.js';
       // 読込成功後にドロップオーバーレイを非表示にし、.pageの白背景・影を表示する
       document.getElementById('pageDropOverlay').classList.add('hidden');
       document.getElementById('pageLeft').classList.remove('no-book');
+    }
+
+
+    /**
+     * 紙面の表示モード（単ページ／見開き）を切り替える。
+     *
+     * 見開き表示は「LIBRO book にすでに存在する見開き合成ページ画像」をそのまま表示する閲覧専用モードで、
+     * アノテーションの表示・編集・書き出し・自動保存は行わない（座標基準が見開き紙面になり、
+     * px→%換算が壊れるため）。
+     *
+     * アノテーション座標の保全：見開き中は rebaseAnnotations()/scaleAnnotations() を一切行わず、
+     * 単ページ表示へ戻る時にだけ「見開きへ入る直前の基準サイズ → 戻り後の基準サイズ」で1回変換する。
+     * 見開き中にフィットを変更しなければ比率は1になり、座標は完全に元のまま維持される。
+     *
+     * @param {'single'|'spread'} mode
+     */
+    export function setViewMode(mode) {
+      if (mode !== 'single' && mode !== 'spread') return;
+      if (!state.bookPages) return;
+      if (mode === state.viewMode) { updateViewModeButtonStates(); return; }
+      if (mode === 'spread' && !(state.spreadPages && state.spreadPages.length)) return;
+
+      const pageEl = document.getElementById('pageLeft');
+
+      if (mode === 'spread') {
+        const curSingle = state.bookPages[state.currentPage - 1]?.pageNum ?? 1;
+        state._singleBaseSize = { w: pageEl.offsetWidth, h: pageEl.offsetHeight };
+        // 対応する見開きが無いページ（表紙など、どの sub-pages にも含まれないページ）は
+        // 先頭の見開きへフォールバックする
+        const idx = state.spreadIndexBySinglePage?.get(curSingle);
+        state.viewMode   = 'spread';
+        state.bookPages  = state.spreadPages;
+        state.totalPages = state.spreadPages.length;
+        state.currentPage = (Number.isInteger(idx) ? idx : 0) + 1;
+      } else {
+        const firstSingle = state.bookPages[state.currentPage - 1]?.subPages?.[0]?.page ?? 1;
+        state.viewMode   = 'single';
+        state.bookPages  = state.singlePages;
+        state.totalPages = state.singlePages.length;
+        state.currentPage = Math.min(Math.max(firstSingle, 1), state.totalPages);
+      }
+
+      // 紙面の縦横比と基準サイズをここで同期的に確定させる。
+      // renderPage() 側の縦横比変更ブランチ（rebaseAnnotations を伴う）に入らせないための処置。
+      const target = state.bookPages[state.currentPage - 1];
+      if (target?.width && target?.height) state.PAGE_ASPECT = target.width / target.height;
+      state.zoomLevel = 100;
+      state.panOffsetX = 0;
+      state.panOffsetY = 0;
+      document.getElementById('pageContainer').style.transform = 'none';
+      resizePage();
+
+      // 単ページ表示へ戻ったときだけ、アノテーション座標を戻り後の座標系へ合わせ直す
+      if (state.viewMode === 'single' && state._singleBaseSize) {
+        rebaseAnnotations(state._singleBaseSize.w, state._singleBaseSize.h, pageEl.offsetWidth, pageEl.offsetHeight);
+        state._singleBaseSize = null;
+      }
+
+      updateViewModeButtonStates();
+      updateZoomButtonStates();
+      updateLibroBookBtnStates();
+      updatePageDisplay();
+    }
+
+
+    /**
+     * 表示モード切替ボタンの選択状態・活性状態を更新する。
+     * 見開き合成ページを持たない book（real-page-count 未設定の book 等）では見開きボタンを非活性にする。
+     */
+    export function updateViewModeButtonStates() {
+      const singleBtn = document.getElementById('viewSingleBtn');
+      const spreadBtn = document.getElementById('viewSpreadBtn');
+      const hasBook   = !!state.bookPages;
+      const hasSpread = !!(state.spreadPages && state.spreadPages.length);
+      singleBtn?.classList.toggle('selected', state.viewMode !== 'spread');
+      spreadBtn?.classList.toggle('selected', state.viewMode === 'spread');
+      singleBtn?.classList.toggle('disabled', !hasBook);
+      spreadBtn?.classList.toggle('disabled', !hasBook || !hasSpread);
+    }
+
+
+    /**
+     * 単ページ番号を指定して移動する（ページ入力欄から呼ばれる）。
+     * 見開き表示中は、その単ページを含む見開きへ移動する。
+     * @param {number} n - 単ページ番号（1始まり）
+     * @returns {boolean} 移動できたかどうか
+     */
+    export function goToPageNumber(n) {
+      if (!state.bookPages || !Number.isInteger(n) || n < 1) return false;
+      if (state.viewMode === 'spread') {
+        const idx = state.spreadIndexBySinglePage?.get(n);
+        if (!Number.isInteger(idx)) return false;
+        state.currentPage = idx + 1;
+      } else {
+        if (n > state.totalPages) return false;
+        state.currentPage = n;
+      }
+      updatePageDisplay();
+      return true;
     }
 
 
@@ -315,7 +450,11 @@ import { updateStatus } from './ui-common.js';
         const oldBaseH = pageEl.offsetHeight;
         state.PAGE_ASPECT = pageAspect;
         resizePage();
-        rebaseAnnotations(oldBaseW, oldBaseH, pageEl.offsetWidth, pageEl.offsetHeight);
+        // 見開き表示中はアノテーション座標を一切変換しない（単ページ座標系のまま凍結し、
+        // 単ページ表示へ戻したときに setViewMode() 側で1回だけ変換する）
+        if (state.viewMode !== 'spread') {
+          rebaseAnnotations(oldBaseW, oldBaseH, pageEl.offsetWidth, pageEl.offsetHeight);
+        }
       }
 
       const dpr   = window.devicePixelRatio || 1;
@@ -594,7 +733,10 @@ import { updateStatus } from './ui-common.js';
       resizePage();
 
       const newW = page.offsetWidth;
-      if (oldW > 0 && newW !== oldW) {
+      // 見開き表示中は基準幅が見開き紙面のものになるため座標変換しない。
+      // 見開き中に変更されたフィットの分は、単ページ表示へ戻すときに setViewMode() が
+      // _singleBaseSize からの1回の変換でまとめて反映する。
+      if (state.viewMode !== 'spread' && oldW > 0 && newW !== oldW) {
         scaleAnnotations(newW / oldW);
       }
 

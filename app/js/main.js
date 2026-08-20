@@ -4,7 +4,7 @@ import { createDaimonButton, createKotaeButton, createShomeiButton } from './but
 import { activateAnnotationMode, alignObjects, cancelDragSelect, copySelectedObjects, cutSelectedObjects, deactivateAnnotationMode, deleteSelectedObjects, finalizeDragSelect, getPageRelativePos, onDragSelectMove, onDrawPreviewMove, onPageMouseDown, onPageMouseMove, onPageMouseUp, pasteClipboard, selectAllObjects } from './annotation-interaction.js';
 import { switchToViewMode } from './mode.js';
 import { addIndexRow, closeIndexEditor, openIndexEditor } from './index-outline.js';
-import { applyZoomChange, goFirstPage, goLastPage, goTocPage, nextPage, prevPage, resizePage, setFit, updatePageDisplay, zoomIn, zoomOut } from './page-view.js';
+import { applyZoomChange, goFirstPage, goLastPage, goToPageNumber, goTocPage, nextPage, prevPage, resizePage, setFit, setViewMode, updatePageDisplay, zoomIn, zoomOut } from './page-view.js';
 import { STICKY_MIN_SIZE_PX } from './config.js';
 import { state } from './state.js';
 import { onMisetteiBtnClick, toggleStickyGroup } from './sticky.js';
@@ -401,14 +401,12 @@ import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, loadSetting
        ページ入力イベント
     ============================ */
     document.getElementById('pageInput').addEventListener('change', function() {
-      const max = parseInt(this.dataset.max || state.totalPages, 10);
+      // 入力される番号は常に「単ページ番号」。見開き表示中はその単ページを含む見開きへ移動する
+      // （goToPageNumber が表示モードごとの解決を担当する）。
+      // 移動できない値のときは updatePageDisplay() が現在ページの表示へ戻す。
       const v = parseInt(this.value, 10);
-      if (!isNaN(v) && v >= 1 && v <= max) {
-        state.currentPage = v;
-        updatePageDisplay();
-      } else {
-        this.value = state.currentPage;
-      }
+      if (!Number.isNaN(v) && goToPageNumber(v)) return;
+      updatePageDisplay();
     });
 
     // 初期ページ表示を 0/0 に初期化する
@@ -433,6 +431,7 @@ Object.assign(window, {
   zoomIn,
   zoomOut,
   setFit,
+  setViewMode,
   saveAnnotationsAsLibroBook,
   handleZipFile,
   loadAnnotationsFromZip,

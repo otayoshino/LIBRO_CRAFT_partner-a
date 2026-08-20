@@ -89,6 +89,20 @@ export const state = {
    * real-page-count 未設定の book では null のまま。
    */
   realPageCount: null,
+  /** 紙面の表示モード。'single' = 単ページ表示（既定）、'spread' = 見開き合成ページ表示（閲覧専用） */
+  viewMode: 'single',
+  /** 単ページ表示用のページ配列（loadLibroBookPages で構築。state.bookPages の実体のひとつ） */
+  singlePages: null,
+  /** 見開き合成ページの配列（p####.json に sub-pages を持つページのみ） */
+  spreadPages: null,
+  /** 単ページ番号 → state.spreadPages の添字（0始まり）の対応表 */
+  spreadIndexBySinglePage: null,
+  /**
+   * 見開き表示へ切り替える直前の #pageLeft 基準サイズ（{w, h}）。
+   * 単ページ表示へ戻すときに、アノテーション座標を「元の単ページ座標系 → 戻り後の単ページ座標系」へ
+   * 1回だけ変換するために保持する（見開き中は座標変換を一切行わない方針のため）。
+   */
+  _singleBaseSize: null,
   /**
    * LIBRO book読込時、既知パターンに一致しなかった未知アノテーション、および
    * Hide/Showペア（付箋の開閉等）を構成する生アノテーションをページごとに保持する。

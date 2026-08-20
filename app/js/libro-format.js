@@ -814,7 +814,9 @@ export async function parseLibroBookZip(zip) {
     }
     // dpi はページ画像px↔物理サイズの換算に使う(新規ボタン・アイコンの既定サイズ算出)。
     // p####.json / index.json の pages[] のどちらにも入っているため width/height と同じ優先順で拾う。
-    pages.push({ pageNum, width: pageWidth, height: pageHeight, dpi: pageJson.dpi || pageMeta.dpi, imageUrl, jsonPath: pageMeta.json });
+    // subPages：見開き合成ページの p####.json が持つ "sub-pages"（各要素 {rect:[x,y,w,h], page:単ページ番号}）。
+    // 見開き表示⇔単ページ表示の相互変換に使う。単ページ側は持たないため通常 null。
+    pages.push({ pageNum, width: pageWidth, height: pageHeight, dpi: pageJson.dpi || pageMeta.dpi, imageUrl, jsonPath: pageMeta.json, subPages: pageJson['sub-pages'] || null });
 
     // 参照されている音声ファイルをPbve2000復号してmediaBlobsへキャッシュ
     // （resolveMediaSrc は "ファイル名.mp3" 形式のキーを参照するため、拡張子込みで格納する。

@@ -262,6 +262,47 @@
       background: rgba(255,255,255,0.2);
     }
 
+    /* 表示方法ボタン（見開き表示／単ページ表示。フィットボタンより広いアイコン幅に対応） */
+    .blk.view-mode-group {
+      padding: 0 16px 0 0;
+    }
+
+    .view-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      height: 24px;
+      padding: 0 4px;
+      border-radius: 3px;
+      border: 1px solid #fff;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .view-btn + .view-btn {
+      margin-left: 8px;
+    }
+
+    .view-btn.selected {
+      background: #fff;
+      color: #353c47;
+    }
+
+    .view-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .view-btn.selected:hover {
+      background: #fff;
+    }
+
+    .view-btn.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
     /* ============================
        詳細設定・整列ブロック
        ・デフォルト（〜1919px）：ドロップダウン方式（クリックで開閉、1〜4章相当）
