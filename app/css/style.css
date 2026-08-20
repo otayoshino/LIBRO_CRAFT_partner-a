@@ -142,6 +142,21 @@
       background: #353c47;
     }
 
+    /* ページ移動ボタン（左端 / めくる / ページ番号 / めくる / 右端）は
+       1つのまとまりに見せるため、間隔を他ブロックの半分（4px）にする。
+       目次ボタン（#tocBtn）は別機能のため、#tocBtn の右に margin: 4px を足して
+       4 + 4 = 8px（他ブロックと同じ間隔）を維持する。
+       ボタンの .disabled 状態では間隔を変えない（#tocBtn / #firstPageBtn /
+       #prevPageBtn は初期 .disabled で book 読込時に解除されるため、
+       状態依存にすると読込時にレイアウトが動いてしまう）。 */
+    .nav-inner > .blk.page-nav {
+      gap: 4px;
+    }
+
+    .nav-inner > .blk.page-nav > #tocBtn {
+      margin-right: 4px;
+    }
+
     /* ブロック区切り線 */
     .nav .blk.settings-group::after,
     .nav .blk.index-edit-group::after,
