@@ -105,13 +105,17 @@
       opacity: 0.55;
     }
 
-    /* ナビ内のコントロール群ラッパー */
+    /* ナビ内のコントロール群ラッパー
+       ブロック間の余白は各ブロックの左右 padding（12px）だけで作る。
+       ここに gap を入れると区切り線（.blk::after は right:0 に描画）の
+       左右余白が「padding-right」対「gap + 次ブロックの padding-left」となり
+       非対称になるため、gap は 0 とする。 */
     .nav-inner {
       display: flex;
       align-items: center;
       justify-content: flex-start;
       flex: 1;
-      gap: 4px;
+      gap: 0;
       height: 100%;
     }
 
@@ -122,6 +126,15 @@
       align-items: center;
       padding: 0 8px;
       height: 100%;
+    }
+
+    /* nav-inner 内のブロックは左右 padding とボタン間隔を統一する。
+       ・padding: 0 12px  → 区切り線（right:0 に描画）の左右余白が常に 12px で揃う
+       ・gap: 8px         → ブロック内のボタン外形ボックス同士の間隔を統一する
+       .blk.sidebar / .blk.action は nav-inner の外側にあるため対象外。 */
+    .nav-inner > .blk {
+      padding: 0 12px;
+      gap: 8px;
     }
 
     /* ページブロック背景をナビバーと同色に */
@@ -135,6 +148,7 @@
     .nav .blk.page-nav::after,
     .nav .blk.scale::after,
     .nav .blk.fit-group::after,
+    .nav .blk.view-mode-group::after,
     .nav .blk.detail-group::after {
       content: '';
       position: absolute;
@@ -175,12 +189,16 @@
       pointer-events: none;
     }
 
-    /* ページ番号入力 */
+    /* ページ番号入力
+       外側の余白は親 .page-nav の gap: 8px で付くため、ここでは padding を持たせない
+       （持たせると 8 + 8 = 16px となり他のボタン間隔と揃わない）。
+       内部の gap: 4px は「入力欄 / 総ページ数 / 見開きバッジ」を1つのまとまりとして
+       近接させるための意図的な値であり、8px 統一の対象外。 */
     .nav .grp.direct {
       display: flex;
       align-items: center;
       gap: 4px;
-      padding: 0 8px;
+      padding: 0;
       font-family: 'Roboto', sans-serif;
       font-weight: 700;
       color: #fff;
@@ -231,11 +249,9 @@
       display: inline-flex;
     }
 
-    /* フィットボタン（枠線あり） */
-    .blk.fit-group {
-      padding: 0 16px;
-    }
-
+    /* フィットボタン（枠線あり）
+       ブロックの左右 padding は .nav-inner > .blk（12px）に統一したため、
+       ここでの個別指定は行わない。 */
     .fit-btn {
       display: flex;
       align-items: center;
@@ -250,19 +266,13 @@
       transition: background 0.15s;
     }
 
-    .fit-btn + .fit-btn {
-      margin-left: 8px;
-    }
-
     .fit-btn:hover {
       background: rgba(255,255,255,0.2);
     }
 
-    /* 表示方法ボタン（見開き表示／単ページ表示。フィットボタンより広いアイコン幅に対応） */
-    .blk.view-mode-group {
-      padding: 0 16px 0 0;
-    }
-
+    /* 表示方法ボタン（見開き表示／単ページ表示。フィットボタンより広いアイコン幅に対応）
+       ブロックの左右 padding は .nav-inner > .blk（12px）に統一したため、
+       ここでの個別指定は行わない。 */
     .view-btn {
       display: flex;
       align-items: center;
@@ -274,10 +284,6 @@
       color: #fff;
       cursor: pointer;
       transition: background 0.15s;
-    }
-
-    .view-btn + .view-btn {
-      margin-left: 8px;
     }
 
     .view-btn:hover {
