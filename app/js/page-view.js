@@ -308,8 +308,10 @@ import { updateStatus } from './ui-common.js';
       canvas.height = newH;
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, newW, newH);
-      canvas.style.width  = pageEl.offsetWidth  + 'px';
-      canvas.style.height = pageEl.offsetHeight + 'px';
+      // canvasの表示サイズはCSS（.page-content の width:100%/height:100%）に委ねる。
+      // ここで offsetWidth（整数へ丸められた値）を px 指定すると、小数を含む
+      // #pageLeft の実幅とわずかにずれ、デバイスピクセルへの丸め方向が食い違って
+      // 紙面右端に隙間（余白）が出る。canvas.width/height（描画解像度）は上で設定済み。
       ctx.drawImage(img, 0, 0, newW, newH);
     }
 
@@ -495,6 +497,11 @@ import { updateStatus } from './ui-common.js';
 
       // ベースサイズ（ズーム100%相当）を計算する。ズームはCSS transformで適用するため除外。
       // ビュー幅・高さの両方を考慮し、はみ出す場合は収まる方の辺に合わせてアスペクト比を保つ。
+      //
+      // 最終的な代入値は Math.round() で整数化する。小数のまま指定すると、
+      // アノテーションの座標基準（getPageBaseSize() ＝ offsetWidth/offsetHeight＝整数）と
+      // 実レイアウト幅が最大0.5pxずれ、デバイスピクセルへの丸めで紙面端に隙間が出る。
+      // 丸めは必ず Math.round を使う（offsetWidth の丸め方と一致させるため。floor/ceil は不可）。
       if (state.fitMode === 'height') {
         const viewW = view.clientWidth  - padding;
         const viewH = view.clientHeight - padding;
@@ -504,14 +511,14 @@ import { updateStatus } from './ui-common.js';
           w = viewW;
           h = w / state.PAGE_ASPECT;
         }
-        page.style.height = h + 'px';
-        page.style.width  = w + 'px';
+        page.style.height = Math.round(h) + 'px';
+        page.style.width  = Math.round(w) + 'px';
       } else if (state.fitMode === 'width') {
         const viewW = view.clientWidth  - padding;
         const w = viewW;
         const h = w / state.PAGE_ASPECT;
-        page.style.width  = w + 'px';
-        page.style.height = h + 'px';
+        page.style.width  = Math.round(w) + 'px';
+        page.style.height = Math.round(h) + 'px';
       } else if (state.fitMode === 'page') {
         const viewW = view.clientWidth  - padding;
         const viewH = view.clientHeight - padding;
@@ -523,8 +530,8 @@ import { updateStatus } from './ui-common.js';
           h = viewH;
           w = h * state.PAGE_ASPECT;
         }
-        page.style.width  = w + 'px';
-        page.style.height = h + 'px';
+        page.style.width  = Math.round(w) + 'px';
+        page.style.height = Math.round(h) + 'px';
       }
       // ズームをCSS scaleで適用する（オブジェクトのleft/top/width/heightは変化しない）
       applyZoomTransform();
