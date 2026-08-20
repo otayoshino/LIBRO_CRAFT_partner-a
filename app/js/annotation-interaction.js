@@ -932,8 +932,8 @@ import { pushUndo } from './undo-redo.js';
 
           const startX      = e.clientX;
           const startY      = e.clientY;
-          const startLeft   = parseInt(el.style.left,   10) || 0;
-          const startTop    = parseInt(el.style.top,    10) || 0;
+          const startLeft   = parseFloat(el.style.left) || 0;
+          const startTop    = parseFloat(el.style.top)  || 0;
           const startWidth  = el.offsetWidth;
           const startHeight = el.offsetHeight;
           // 縦横比を事前に計算（lockAspectRatio 時に使用）
@@ -941,12 +941,17 @@ import { pushUndo } from './undo-redo.js';
 
           // Shift 軸固定はコーナーハンドルのみ・縦横比ロック時は無効
           const isCorner = ['tl', 'tr', 'bl', 'br'].includes(corner);
+          // mousedown 時点で既に Shift が押されている場合は、この場でスナップショットを
+          // 確定させる（凍結値は 0＝ドラッグ原点）。onMove は 4px のドラッグ判定しきい値を
+          // 超えるまで早期 return するため、そこで初めてスナップショットを撮ると
+          // 「しきい値を超えた分のずれ」が固定軸に乗ったままリサイズされてしまう。
+          const shiftAtStart = e.shiftKey && isCorner && !lockAspectRatio;
           let axis       = null;
-          let prevShift  = false;
-          let shiftSnapX = null;
-          let shiftSnapY = null;
-          let frozenDx   = null;
-          let frozenDy   = null;
+          let prevShift  = shiftAtStart;
+          let shiftSnapX = shiftAtStart ? e.clientX : null;
+          let shiftSnapY = shiftAtStart ? e.clientY : null;
+          let frozenDx   = shiftAtStart ? 0 : null;
+          let frozenDy   = shiftAtStart ? 0 : null;
 
           // ダブルクリックの2回目のmousedownがわずかに動いただけでリサイズ扱いになるのを防ぐ
           const DRAG_THRESHOLD = 4;
@@ -976,8 +981,11 @@ import { pushUndo } from './undo-redo.js';
               if (axis === null && (Math.abs(ddx) > 3 || Math.abs(ddy) > 3)) {
                 axis = Math.abs(ddx) >= Math.abs(ddy) ? 'h' : 'v';
               }
-              if (axis === 'h') dy = frozenDy;
-              if (axis === 'v') dx = frozenDx;
+              // 軸が決まるまでは両軸を凍結し、判定待ちの数pxが斜めのリサイズ＋巻き戻りとして
+              // 見えてしまうのを防ぐ（Shift押下時点のサイズ・位置から一切ずらさない）。
+              if (axis === null) { dx = frozenDx; dy = frozenDy; }
+              else if (axis === 'h') dy = frozenDy;
+              else if (axis === 'v') dx = frozenDx;
             } else if (isCorner && !lockAspectRatio) {
               axis       = null;
               shiftSnapX = shiftSnapY = frozenDx = frozenDy = null;
@@ -1723,12 +1731,15 @@ import { pushUndo } from './undo-redo.js';
 
           // Shift 軸固定はコーナーハンドルのみ適用（単一選択と同仕様）
           const isCorner = ['tl', 'tr', 'bl', 'br'].includes(corner);
+          // mousedown 時点で Shift が押されていれば、この場でスナップショットを確定させる
+          // （理由は makeResizable 側のコメントを参照）
+          const shiftAtStart = e.shiftKey && isCorner;
           let axis       = null;
-          let prevShift  = false;
-          let shiftSnapX = null;
-          let shiftSnapY = null;
-          let frozenDx   = null;
-          let frozenDy   = null;
+          let prevShift  = shiftAtStart;
+          let shiftSnapX = shiftAtStart ? e.clientX : null;
+          let shiftSnapY = shiftAtStart ? e.clientY : null;
+          let frozenDx   = shiftAtStart ? 0 : null;
+          let frozenDy   = shiftAtStart ? 0 : null;
 
           // ダブルクリックの2回目のmousedownがわずかに動いただけでリサイズ扱いになるのを防ぐ
           const DRAG_THRESHOLD = 4;
@@ -1757,8 +1768,10 @@ import { pushUndo } from './undo-redo.js';
               if (axis === null && (Math.abs(ddx) > 3 || Math.abs(ddy) > 3)) {
                 axis = Math.abs(ddx) >= Math.abs(ddy) ? 'h' : 'v';
               }
-              if (axis === 'h') dy = frozenDy;
-              if (axis === 'v') dx = frozenDx;
+              // 軸が決まるまでは両軸を凍結する（単一リサイズと同じ理由）
+              if (axis === null) { dx = frozenDx; dy = frozenDy; }
+              else if (axis === 'h') dy = frozenDy;
+              else if (axis === 'v') dx = frozenDx;
             } else if (isCorner) {
               axis       = null;
               shiftSnapX = shiftSnapY = frozenDx = frozenDy = null;
