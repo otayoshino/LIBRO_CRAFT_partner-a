@@ -253,11 +253,6 @@
       margin-left: 8px;
     }
 
-    .fit-btn.selected {
-      background: #fff;
-      color: #353c47;
-    }
-
     .fit-btn:hover {
       background: rgba(255,255,255,0.2);
     }
@@ -284,17 +279,8 @@
       margin-left: 8px;
     }
 
-    .view-btn.selected {
-      background: #fff;
-      color: #353c47;
-    }
-
     .view-btn:hover {
       background: rgba(255,255,255,0.2);
-    }
-
-    .view-btn.selected:hover {
-      background: #fff;
     }
 
     .view-btn.disabled {
