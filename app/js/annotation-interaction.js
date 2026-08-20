@@ -1270,8 +1270,8 @@ import { pushUndo } from './undo-redo.js';
             reinitElement(clone);
             return {
               clone,
-              startLeft: parseInt(orig.style.left, 10) || 0,
-              startTop:  parseInt(orig.style.top,  10) || 0
+              startLeft: parseFloat(orig.style.left) || 0,
+              startTop:  parseFloat(orig.style.top)  || 0
             };
           });
           // shomei-btn に対応する付箋が選択されていない場合は付箋も補完複製
@@ -1292,8 +1292,8 @@ import { pushUndo } from './undo-redo.js';
               reinitElement(noteClone);
               clones.push({
                 clone:     noteClone,
-                startLeft: parseInt(origNote.style.left, 10) || 0,
-                startTop:  parseInt(origNote.style.top,  10) || 0
+                startLeft: parseFloat(origNote.style.left) || 0,
+                startTop:  parseFloat(origNote.style.top)  || 0
               });
             });
           });
@@ -1315,8 +1315,8 @@ import { pushUndo } from './undo-redo.js';
               reinitElement(noteClone);
               clones.push({
                 clone:     noteClone,
-                startLeft: parseInt(origNote.style.left, 10) || 0,
-                startTop:  parseInt(origNote.style.top,  10) || 0
+                startLeft: parseFloat(origNote.style.left) || 0,
+                startTop:  parseFloat(origNote.style.top)  || 0
               });
             });
           });
@@ -1329,10 +1329,11 @@ import { pushUndo } from './undo-redo.js';
           const startX = e.clientX;
           const startY = e.clientY;
 
-          // Shift 制約状態
-          let axis2 = null, prevShift2 = false;
-          let shiftSnapX2 = null, shiftSnapY2 = null;
-          let frozenDx2   = null, frozenDy2   = null;
+          // Shift 制約状態。mousedown 時点で Shift が押されていれば、この場で
+          // スナップショットを確定させる（理由は単一移動側のコメントを参照）
+          let axis2 = null, prevShift2 = e.shiftKey;
+          let shiftSnapX2 = e.shiftKey ? e.clientX : null, shiftSnapY2 = e.shiftKey ? e.clientY : null;
+          let frozenDx2   = e.shiftKey ? 0 : null,         frozenDy2   = e.shiftKey ? 0 : null;
 
           // ダブルクリックの2回目のmousedownがわずかに動いただけでドラッグ扱いになるのを防ぐ
           const DRAG_THRESHOLD = 4;
@@ -1359,8 +1360,10 @@ import { pushUndo } from './undo-redo.js';
               if (axis2 === null && (Math.abs(ddx) > 3 || Math.abs(ddy) > 3)) {
                 axis2 = Math.abs(ddx) >= Math.abs(ddy) ? 'h' : 'v';
               }
-              if (axis2 === 'h') dy = frozenDy2;
-              if (axis2 === 'v') dx = frozenDx2;
+              // 軸が決まるまでは両軸を凍結する（単一移動と同じ理由）
+              if (axis2 === null) { dx = frozenDx2; dy = frozenDy2; }
+              else if (axis2 === 'h') dy = frozenDy2;
+              else if (axis2 === 'v') dx = frozenDx2;
             } else {
               axis2 = null;
               shiftSnapX2 = shiftSnapY2 = frozenDx2 = frozenDy2 = null;
@@ -1412,8 +1415,8 @@ import { pushUndo } from './undo-redo.js';
         if (isInMultiSel) {
           const multiTargets = selectedAll.map(orig => ({
             el:        orig,
-            startLeft: parseInt(orig.style.left, 10) || 0,
-            startTop:  parseInt(orig.style.top,  10) || 0
+            startLeft: parseFloat(orig.style.left) || 0,
+            startTop:  parseFloat(orig.style.top)  || 0
           }));
           // 紙面内クランプ用：選択群の矩形（相対位置を保つため外接矩形で判定する）
           const multiRects = multiTargets.map(({ el: t, startLeft, startTop }) => ({
@@ -1423,9 +1426,11 @@ import { pushUndo } from './undo-redo.js';
           const startX = e.clientX;
           const startY = e.clientY;
 
-          let axisM = null, prevShiftM = false;
-          let shiftSnapXM = null, shiftSnapYM = null;
-          let frozenDxM   = null, frozenDyM   = null;
+          // mousedown 時点で Shift が押されていれば、この場でスナップショットを確定させる
+          // （理由は単一移動側のコメントを参照）
+          let axisM = null, prevShiftM = e.shiftKey;
+          let shiftSnapXM = e.shiftKey ? e.clientX : null, shiftSnapYM = e.shiftKey ? e.clientY : null;
+          let frozenDxM   = e.shiftKey ? 0 : null,         frozenDyM   = e.shiftKey ? 0 : null;
 
           // ダブルクリックの2回目のmousedownがわずかに動いただけでドラッグ扱いになるのを防ぐ
           const DRAG_THRESHOLD = 4;
@@ -1452,8 +1457,10 @@ import { pushUndo } from './undo-redo.js';
               if (axisM === null && (Math.abs(ddx) > 3 || Math.abs(ddy) > 3)) {
                 axisM = Math.abs(ddx) >= Math.abs(ddy) ? 'h' : 'v';
               }
-              if (axisM === 'h') dy = frozenDyM;
-              if (axisM === 'v') dx = frozenDxM;
+              // 軸が決まるまでは両軸を凍結する（単一移動と同じ理由）
+              if (axisM === null) { dx = frozenDxM; dy = frozenDyM; }
+              else if (axisM === 'h') dy = frozenDyM;
+              else if (axisM === 'v') dx = frozenDxM;
             } else {
               axisM = null;
               shiftSnapXM = shiftSnapYM = frozenDxM = frozenDyM = null;
@@ -1555,16 +1562,20 @@ import { pushUndo } from './undo-redo.js';
 
         const startX    = e.clientX;
         const startY    = e.clientY;
-        const startLeft = parseInt(target.style.left, 10) || 0;
-        const startTop  = parseInt(target.style.top,  10) || 0;
+        const startLeft = parseFloat(target.style.left) || 0;
+        const startTop  = parseFloat(target.style.top)  || 0;
 
-        // Shift制約：Shift を押した瞬間の位置を起点に軸を判定して固定する
+        // Shift制約：Shift を押した瞬間の位置を起点に軸を判定して固定する。
+        // mousedown 時点で既に Shift が押されている場合は、この場でスナップショットを
+        // 確定させる（凍結値は 0＝ドラッグ原点）。onMove は 4px のドラッグ判定しきい値を
+        // 超えるまで早期 return するため、そこで初めてスナップショットを撮ると
+        // 「しきい値を超えた分のずれ」が固定軸に乗ったまま移動してしまう。
         let axis       = null;
-        let prevShift  = false;
-        let shiftSnapX = null; // Shift 押下時の clientX
-        let shiftSnapY = null; // Shift 押下時の clientY
-        let frozenDx   = null; // 固定軸で凍結する dx 値
-        let frozenDy   = null; // 固定軸で凍結する dy 値
+        let prevShift  = e.shiftKey;
+        let shiftSnapX = e.shiftKey ? e.clientX : null; // Shift 押下時の clientX
+        let shiftSnapY = e.shiftKey ? e.clientY : null; // Shift 押下時の clientY
+        let frozenDx   = e.shiftKey ? 0 : null;         // 固定軸で凍結する dx 値
+        let frozenDy   = e.shiftKey ? 0 : null;         // 固定軸で凍結する dy 値
 
         // ダブルクリックの2回目のmousedownがわずかに動いただけでドラッグ扱いになるのを防ぐ
         const DRAG_THRESHOLD = 4;
@@ -1595,9 +1606,12 @@ import { pushUndo } from './undo-redo.js';
             if (axis === null && (Math.abs(ddx) > 3 || Math.abs(ddy) > 3)) {
               axis = Math.abs(ddx) >= Math.abs(ddy) ? 'h' : 'v';
             }
-            // 固定軸は Shift 押下時の値で凍結
-            if (axis === 'h') dy = frozenDy;
-            if (axis === 'v') dx = frozenDx;
+            // 固定軸は Shift 押下時の値で凍結。
+            // 軸が決まるまでは両軸を凍結し、判定待ちの数pxが斜め移動＋巻き戻りとして
+            // 見えてしまうのを防ぐ（Shift押下位置から一切ずらさない）。
+            if (axis === null) { dx = frozenDx; dy = frozenDy; }
+            else if (axis === 'h') dy = frozenDy;
+            else if (axis === 'v') dx = frozenDx;
           } else {
             // Shift を離したら制約を全解除
             axis = null;
