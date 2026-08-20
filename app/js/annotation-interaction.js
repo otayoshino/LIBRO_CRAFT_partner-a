@@ -766,7 +766,10 @@ import { pushUndo } from './undo-redo.js';
       if (state.isSpaceHeld) return;
       // 閲覧モード中はドラッグ選択を禁止
       if (document.body.classList.contains('is-view-mode')) return;
-      // 見開きページ表示中はアノテーション設定不可
+      // 見開きページ表示中はアノテーション設定不可。
+      // loadLibroBookPages() が見開き合成ページを state.bookPages から除外するように
+      // なったため、この条件は通常成立しない（到達不能）。real-page-count 未設定の book や
+      // 将来の拡張に対する保険として、意図的に削除せず残している。
       if (state.realPageCount != null && state.currentPage > state.realPageCount) return;
       // 描画モードでない場合
       if (!state.currentDrawType) {

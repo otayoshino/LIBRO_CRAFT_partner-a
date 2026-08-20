@@ -195,6 +195,12 @@ import { updateStatus } from './ui-common.js';
 
     /**
      * 見開きページ（real-page-count超過ページ）を表示中であることを示すバッジの表示を更新する。
+     *
+     * 注意：loadLibroBookPages() が見開き合成ページを state.bookPages から除外するように
+     * なったため、real-page-count を持つ book では state.currentPage が realPageCount を
+     * 超えることはなく、この関数の isSpread は通常 false のままになる（到達不能）。
+     * real-page-count 未設定の book や将来の拡張（合成ページの閲覧専用プレビュー等）に
+     * 対する保険として、意図的に削除せず残している。
      */
     function updateSpreadBadge() {
       const isSpread = state.realPageCount != null && state.currentPage > state.realPageCount;
@@ -231,8 +237,20 @@ import { updateStatus } from './ui-common.js';
      *   このページ数を超えるページは見開きであることを示す。未指定時はnull。
      */
     export function loadLibroBookPages(pages, realPageCount = null) {
-      state.bookPages = pages;
-      state.totalPages = pages.length;
+      // 見開き合成ページ（real-page-count超過ページ）はCRAFTの編集対象外のため、
+      // 表示・編集用のページ列からは除外する。合成ページの生データ（index.json.pages[]・
+      // p####.json・annots）は state.libroBook / state.libroUnknownAnnotations 側に
+      // 保持され続け、書き出し時は indexJson.pages 全件を駆動元として無改変で書き戻される
+      // ため、ここで除外しても往復保存の内容には影響しない（確認済み）。
+      // 合成ページは実データ上つねに「末尾の連続ブロック（先頭 = real-page-count + 1）」
+      // であることを sample_books の book 3件で確認済みのため、前半を残す切り詰めで
+      // state.bookPages[num - 1] のインデックス整合（renderPage が依存）は保たれる。
+      // realPageCount が未設定・0以下・総ページ数以上の場合は切り詰めない（安全側）。
+      const editablePages = (realPageCount != null && realPageCount > 0 && realPageCount < pages.length)
+        ? pages.filter(p => p.pageNum <= realPageCount)
+        : pages;
+      state.bookPages = editablePages;
+      state.totalPages = editablePages.length;
       state.realPageCount = realPageCount;
       const pageInput = document.getElementById('pageInput');
       if (pageInput) pageInput.dataset.max = state.totalPages;
