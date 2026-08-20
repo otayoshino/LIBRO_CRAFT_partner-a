@@ -211,7 +211,15 @@ function makeRowBtn(label, tip, onClick) {
  * @returns {Array<Object>|null}
  */
 function buildOutlineFromRows() {
-  const totalPages = state.libroBook.indexJson.pages?.length || state.totalPages;
+  // index.json.pages の総件数（見開き合成ページを含む）。既存の見開き飛び先を温存する
+  // 判定にのみ使う。
+  const indexPageCount = state.libroBook.indexJson.pages?.length || state.totalPages;
+  // 新規に指定できる遷移先の上限。real-page-count を持つ book では実ページまでに制限する
+  // （見開き合成ページへ新たに飛ばす運用は存在しないため）。未設定の book では従来どおり
+  // index.json.pages の総件数を上限とする。
+  const maxDestPage = (state.realPageCount != null && state.realPageCount > 0)
+    ? Math.min(state.realPageCount, indexPageCount)
+    : indexPageCount;
   const result = [];
   const lastItemAtLevel = {};
   let prevLevel = 0;
@@ -224,13 +232,23 @@ function buildOutlineFromRows() {
       return null;
     }
 
-    // ページ番号：空欄はdest-pageキー自体を省略、入力があれば範囲内整数のみ許容
+    // ページ番号：空欄はdest-pageキー自体を省略、入力があれば範囲内整数のみ許容。
+    // 見開き合成ページ（maxDestPage 超）は新規指定できないが、読込時からその値のままの
+    // 行だけは例外的に許容し、既存bookの見開きナビ目次項目を壊さないようにする
+    // （実サンプルには configs['toc-page'] = 32 のように合成ページを指す目次が実在する）。
+    // なお一度31以下へ書き換えた行は orig と一致しなくなるため合成ページ番号へ戻せない。
+    // 見開き飛び先が減る方向にしか動かない片道の挙動であり、これは意図した仕様。
     let destPage = null;
     const pageStr = row.destPage.trim();
     if (pageStr !== '') {
       destPage = Number(pageStr);
-      if (!Number.isInteger(destPage) || destPage < 1 || destPage > totalPages) {
-        showToast(`${i + 1}行目：ページ番号は1〜${totalPages}の整数で入力してください`);
+      const origDestPage = Number.isInteger(row.orig?.['dest-page']) ? row.orig['dest-page'] : null;
+      const keepsOriginalSpreadDest = destPage > maxDestPage
+        && destPage <= indexPageCount
+        && destPage === origDestPage;
+      if (!Number.isInteger(destPage) || destPage < 1
+        || (destPage > maxDestPage && !keepsOriginalSpreadDest)) {
+        showToast(`${i + 1}行目：ページ番号は1〜${maxDestPage}の整数で入力してください`);
         return null;
       }
     }
