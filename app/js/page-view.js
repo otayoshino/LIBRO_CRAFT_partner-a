@@ -156,6 +156,8 @@ import { updateStatus } from './ui-common.js';
 
       // 前ページ・最初ページのボタン活性制御（右綴じ時は左右の意味が入れ替わるため関数化）
       updateNavButtonStates();
+      // 見開きボタンの活性状態は現在ページに対応する見開きの有無で変わるため、ページ移動のたびに更新する
+      updateViewModeButtonStates();
       // 現在ページのアノテーションのみ表示する
       updateAnnotationVisibility();
     }
@@ -326,16 +328,21 @@ import { updateStatus } from './ui-common.js';
 
       if (mode === 'spread') {
         const curSingle = state.bookPages[state.currentPage - 1]?.pageNum ?? 1;
-        state._singleBaseSize = { w: pageEl.offsetWidth, h: pageEl.offsetHeight };
-        // 対応する見開きが無いページ（表紙など、どの sub-pages にも含まれないページ）は
-        // 先頭の見開きへフォールバックする
+        // 対応する見開きが無いページ（表紙など、どの sub-pages にも含まれないページ）からは
+        // 見開き表示へ切り替えない（見開きボタン自体も updateViewModeButtonStates() で非活性）。
+        // 以前は先頭の見開きへフォールバックしていたが、意図しないページへ飛ぶため廃止した。
         const idx = state.spreadIndexBySinglePage?.get(curSingle);
+        if (!Number.isInteger(idx)) return;
+        state._singleBaseSize = { w: pageEl.offsetWidth, h: pageEl.offsetHeight };
         state.viewMode   = 'spread';
         state.bookPages  = state.spreadPages;
         state.totalPages = state.spreadPages.length;
-        state.currentPage = (Number.isInteger(idx) ? idx : 0) + 1;
+        state.currentPage = idx + 1;
       } else {
-        const firstSingle = state.bookPages[state.currentPage - 1]?.subPages?.[0]?.page ?? 1;
+        // 見開きが含む単ページ番号のうち「若い方」を起点にする（sub-pages の配列順には依存しない）
+        const nums = (state.bookPages[state.currentPage - 1]?.subPages || [])
+          .map(sp => sp.page).filter(Number.isInteger);
+        const firstSingle = nums.length ? Math.min(...nums) : 1;
         state.viewMode   = 'single';
         state.bookPages  = state.singlePages;
         state.totalPages = state.singlePages.length;
@@ -367,17 +374,30 @@ import { updateStatus } from './ui-common.js';
 
     /**
      * 表示モード切替ボタンの選択状態・活性状態を更新する。
-     * 見開き合成ページを持たない book（real-page-count 未設定の book 等）では見開きボタンを非活性にする。
+     *
+     * 見開きボタンは次のいずれかで非活性になる：
+     *  - book 未読込
+     *  - book が見開き合成ページを持たない（real-page-count 未設定の book 等）
+     *  - 単ページ表示中で、現在ページがどの sub-pages にも含まれない（表紙など見開きの無いページ）
+     *
+     * 3つ目の判定は現在ページに依存するため、本関数はページ移動のたびに
+     * （updatePageDisplay() から）呼び直す必要がある。
      */
     export function updateViewModeButtonStates() {
       const singleBtn = document.getElementById('viewSingleBtn');
       const spreadBtn = document.getElementById('viewSpreadBtn');
       const hasBook   = !!state.bookPages;
       const hasSpread = !!(state.spreadPages && state.spreadPages.length);
+      // 見開き表示中は常に切替可能。単ページ表示中は現在ページに対応する見開きがある場合のみ。
+      let canSpread = hasBook && hasSpread;
+      if (canSpread && state.viewMode !== 'spread') {
+        const curSingle = state.bookPages[state.currentPage - 1]?.pageNum;
+        canSpread = Number.isInteger(curSingle) && !!state.spreadIndexBySinglePage?.has(curSingle);
+      }
       singleBtn?.classList.toggle('selected', state.viewMode !== 'spread');
       spreadBtn?.classList.toggle('selected', state.viewMode === 'spread');
       singleBtn?.classList.toggle('disabled', !hasBook);
-      spreadBtn?.classList.toggle('disabled', !hasBook || !hasSpread);
+      spreadBtn?.classList.toggle('disabled', !canSpread);
     }
 
 
