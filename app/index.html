@@ -437,14 +437,30 @@
               <dl>
                 <dt>付箋カラー</dt>
                 <dd>
-                  <div class="d-select-wrap">
-                    <select class="d-select" id="settingsStickyColorSelect">
-                      <option value="3">紙色</option>
-                      <option value="0">青</option>
-                      <option value="1">緑</option>
-                      <option value="2">黄</option>
-                    </select>
+                  <!-- 紙色＋カスタム3枠のラジオ。選んだものが新規作成時のデフォルト色になる。
+                       カスタム枠は hex欄を空にすれば未登録（選択肢に出ない）に戻る。
+                       旧選択肢（青・緑・黄）は過去データの描画用に定義だけ残し、UIからは出さない -->
+                  <div id="settingsStickyColorMode">
+                    <div class="settings-color-row">
+                      <label class="settings-color-radio"><input type="radio" name="settingsStickyColorMode" value="3" checked>紙色</label>
+                    </div>
+                    <div class="settings-color-row" data-custom-slot="0">
+                      <label class="settings-color-radio"><input type="radio" name="settingsStickyColorMode" value="100">カスタム1</label>
+                      <input type="color" id="settingsCustomColorPicker0" value="#ffffff" aria-label="カスタムカラー1">
+                      <input type="text" class="d-input" id="settingsCustomColorHex0" placeholder="#RRGGBB" maxlength="7" spellcheck="false">
+                    </div>
+                    <div class="settings-color-row" data-custom-slot="1">
+                      <label class="settings-color-radio"><input type="radio" name="settingsStickyColorMode" value="101">カスタム2</label>
+                      <input type="color" id="settingsCustomColorPicker1" value="#ffffff" aria-label="カスタムカラー2">
+                      <input type="text" class="d-input" id="settingsCustomColorHex1" placeholder="#RRGGBB" maxlength="7" spellcheck="false">
+                    </div>
+                    <div class="settings-color-row" data-custom-slot="2">
+                      <label class="settings-color-radio"><input type="radio" name="settingsStickyColorMode" value="102">カスタム3</label>
+                      <input type="color" id="settingsCustomColorPicker2" value="#ffffff" aria-label="カスタムカラー3">
+                      <input type="text" class="d-input" id="settingsCustomColorHex2" placeholder="#RRGGBB" maxlength="7" spellcheck="false">
+                    </div>
                   </div>
+                  <p class="input-error" id="settingsCustomColorError"></p>
                 </dd>
                 <dt>制御ボタンアイコン</dt>
                 <dd>

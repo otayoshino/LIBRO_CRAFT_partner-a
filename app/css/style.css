@@ -3146,6 +3146,41 @@
       margin: 3px 0 6px;
     }
 
+    /* 環境設定：付箋カラーの各行（ラジオ＋カラーピッカー＋hex手入力）。
+       紙色の行はラジオのみ、カスタム1〜3の行はカラー入力を伴う。
+       <input type="color"> はブラウザ標準UIのため、他の .d-input と完全に同じ見た目にはならない。
+       高さだけ揃えて横に並べる。 */
+    .settings-color-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    /* ラジオのラベル幅を揃え、右のカラー入力欄を縦に並べる */
+    .settings-color-radio {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      width: 88px;
+      flex: none;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .settings-color-row input[type="color"] {
+      width: 32px;
+      height: 26px;
+      padding: 0;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: none;
+      cursor: pointer;
+      flex: none;
+    }
+    .settings-color-row .d-input {
+      width: 110px;
+      flex: none;
+    }
+
     /* 環境設定モーダル内のみ：項目名が長いため dt 幅を広げる
        （.dialog-contents の共通ルールは変更せず、ここでスコープ限定で上書きする） */
     #settingsOverlay .dialog-contents dl dt { width: 140px; }

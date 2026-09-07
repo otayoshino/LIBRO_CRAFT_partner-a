@@ -1,4 +1,5 @@
 import { syncJstreamDefaults, syncStickyDefaultColor } from './annotation-dialog.js';
+import { CUSTOM_STICKY_COLOR_BASE, CUSTOM_STICKY_COLOR_SLOTS, CUSTOM_STICKY_COLOR_VALUES } from './config.js';
 import { validateJstreamCorpId, validateJstreamDir } from './jstream-validate.js';
 import { state } from './state.js';
 
@@ -14,8 +15,24 @@ import { state } from './state.js';
 /** 環境設定の永続化に使う localStorage キー */
 const SETTINGS_STORAGE_KEY = 'ContentsBuilderSettings';
 
-/** 付箋デフォルトカラーとして許容する値（STICKY_COLOR_MAP のインデックス文字列） */
-const STICKY_COLOR_VALUES = ['0', '1', '2', '3'];
+/**
+ * 付箋デフォルトカラーとして環境設定で選べる値。
+ * '3'（紙色）と '100'〜'102'（カスタム1〜3）。旧選択肢 '0'〜'2'（青/緑/黄）は
+ * 過去データの描画用に config.js の定義だけを残しており、環境設定からは選べない。
+ */
+const STICKY_COLOR_VALUES = ['3', ...CUSTOM_STICKY_COLOR_VALUES];
+
+/**
+ * カスタムカラーの入力値を '#rrggbb'（小文字）へ正規化する。
+ * '#' の有無と大文字小文字を許容し、それ以外は不正として null を返す。
+ * @param {string} value
+ * @returns {string|null} 正規化した '#rrggbb'、または不正なら null
+ */
+function normalizeStickyHex(value) {
+  const v = String(value ?? '').trim();
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(v);
+  return m ? `#${m[1].toLowerCase()}` : null;
+}
 
 /** 大問ボタン作成メニューのラベルとして許容する値 */
 const DAIMON_LABEL_VALUES = ['大問', 'ALL', '解答'];
@@ -33,8 +50,26 @@ export function loadSettings() {
   }
   if (!saved || typeof saved !== 'object') return;
 
-  if (STICKY_COLOR_VALUES.includes(saved.stickyDefaultColor)) {
-    state.settingsStickyDefaultColor = saved.stickyDefaultColor;
+  // カスタムカラーはデフォルト色の判定より先に復元する
+  // （選ばれているスロットが登録済みかの判断に使うため）。
+  // スロット数は常に CUSTOM_STICKY_COLOR_SLOTS 個に揃え、壊れた値・不正なhexは空文字にする。
+  if (Array.isArray(saved.customStickyColors)) {
+    state.settingsCustomStickyColors = Array.from(
+      { length: CUSTOM_STICKY_COLOR_SLOTS },
+      (_, i) => normalizeStickyHex(saved.customStickyColors[i]) || ''
+    );
+  }
+
+  if (saved.stickyDefaultColor !== undefined) {
+    const savedMode = String(saved.stickyDefaultColor);
+    const slot = CUSTOM_STICKY_COLOR_VALUES.indexOf(savedMode);
+    if (slot >= 0 && state.settingsCustomStickyColors[slot]) {
+      state.settingsStickyDefaultColor = savedMode;
+    } else {
+      // 旧選択肢（'0'=青 / '1'=緑 / '2'=黄）や、未登録スロットが選ばれた状態で
+      // 保存されていた場合は、選択できる既定値である紙色へ丸める
+      state.settingsStickyDefaultColor = '3';
+    }
   }
   if (DAIMON_LABEL_VALUES.includes(saved.daimonLabel)) {
     state.settingsDaimonLabel = saved.daimonLabel;
@@ -56,6 +91,7 @@ function saveSettings() {
   try {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({
       stickyDefaultColor: state.settingsStickyDefaultColor,
+      customStickyColors: state.settingsCustomStickyColors,
       daimonLabel:        state.settingsDaimonLabel,
       jstreamDir:         state.settingsJstreamDir,
       jstreamCorpId:      state.settingsJstreamCorpId,
@@ -63,6 +99,74 @@ function saveSettings() {
   } catch (_) {
     /* 保存できない環境では何もしない */
   }
+}
+
+/**
+ * 環境設定モーダルで現在選ばれている付箋カラー（'3'=紙色 / '100'〜'102'=カスタム1〜3）を返す。
+ * @returns {string}
+ */
+function getSelectedStickyColorMode() {
+  const checked = document.querySelector('#settingsStickyColorMode input[name="settingsStickyColorMode"]:checked');
+  return checked ? checked.value : '3';
+}
+
+/**
+ * カスタムカラー各スロットのhex入力欄・カラーピッカーを取得する。
+ * @param {number} slot - 0起点のスロット番号
+ * @returns {{picker: HTMLElement, hexEl: HTMLElement}}
+ */
+function getCustomColorInputs(slot) {
+  return {
+    picker: document.getElementById(`settingsCustomColorPicker${slot}`),
+    hexEl:  document.getElementById(`settingsCustomColorHex${slot}`),
+  };
+}
+
+/**
+ * カスタムカラーの入力値を検証し、設定の反映を続行してよいかを返す。
+ * - 空欄のスロットは「未登録」として許容する（削除に相当）。
+ * - 空でないスロットは #RRGGBB 形式でなければエラー。
+ * - デフォルト色として選択中のスロットが空欄の場合もエラー（色が決まらないため）。
+ * エラー時は欄の直下にメッセージを表示し、付箋タブへ切り替えて該当欄へフォーカスする
+ * （J-stream欄と同じ方式。確認ダイアログは出さない）。
+ * @returns {boolean} true なら反映を続行してよい
+ */
+function applyStickyColorValidation() {
+  const errEl = document.getElementById('settingsCustomColorError');
+  const showError = (message, focusEl) => {
+    if (errEl) {
+      errEl.textContent = message;
+      errEl.classList.add('is-shown');
+    }
+    switchSettingsTab('sticky');
+    if (focusEl) focusEl.focus();
+  };
+  if (errEl) {
+    errEl.textContent = '';
+    errEl.classList.remove('is-shown');
+  }
+
+  // 空でないスロットの形式を検証する
+  for (let slot = 0; slot < CUSTOM_STICKY_COLOR_SLOTS; slot++) {
+    const { hexEl } = getCustomColorInputs(slot);
+    const raw = (hexEl?.value ?? '').trim();
+    if (raw === '') continue;
+    if (!normalizeStickyHex(raw)) {
+      showError(`カスタム${slot + 1}のカラーは #RRGGBB 形式（16進数6桁）で入力してください。`, hexEl);
+      return false;
+    }
+  }
+
+  // デフォルトとして選択中のスロットは未登録であってはならない
+  const selectedSlot = CUSTOM_STICKY_COLOR_VALUES.indexOf(getSelectedStickyColorMode());
+  if (selectedSlot >= 0) {
+    const { hexEl } = getCustomColorInputs(selectedSlot);
+    if ((hexEl?.value ?? '').trim() === '') {
+      showError(`カスタム${selectedSlot + 1}のカラーを入力してください。`, hexEl);
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -102,12 +206,25 @@ function applyJstreamValidation(dirValue, corpValue) {
  * 環境設定モーダルを開く。現在のstate値をフォームへ反映してから表示する。
  */
 export function openSettingsModal() {
-  document.getElementById('settingsStickyColorSelect').value = state.settingsStickyDefaultColor;
+  // 付箋カラー：選択中の色（紙色／カスタム1〜3）と各スロットの入力欄をstate値から復元する。
+  // 未登録スロットのhex欄は空にし、ピッカーだけ紙色（#ffffff）を初期表示にする。
+  const mode = STICKY_COLOR_VALUES.includes(state.settingsStickyDefaultColor)
+    ? state.settingsStickyDefaultColor
+    : '3';
+  const modeInput = document.querySelector(`#settingsStickyColorMode input[value="${mode}"]`);
+  if (modeInput) modeInput.checked = true;
+  for (let slot = 0; slot < CUSTOM_STICKY_COLOR_SLOTS; slot++) {
+    const { picker, hexEl } = getCustomColorInputs(slot);
+    const savedHex = state.settingsCustomStickyColors[slot] || '';
+    if (picker) picker.value = savedHex || '#ffffff';
+    if (hexEl)  hexEl.value  = savedHex;
+  }
+
   document.getElementById('settingsDaimonLabelSelect').value = state.settingsDaimonLabel;
   document.getElementById('settingsJstreamDirInput').value    = state.settingsJstreamDir;
   document.getElementById('settingsJstreamCorpIdInput').value = state.settingsJstreamCorpId;
   // 前回開いたときのエラー表示は持ち越さない
-  ['settingsJstreamDirError', 'settingsJstreamCorpIdError'].forEach(id => {
+  ['settingsJstreamDirError', 'settingsJstreamCorpIdError', 'settingsCustomColorError'].forEach(id => {
     const errEl = document.getElementById(id);
     if (errEl) {
       errEl.textContent = '';
@@ -134,8 +251,18 @@ export function closeSettingsModal(save) {
     const dirValue  = document.getElementById('settingsJstreamDirInput').value.trim();
     const corpValue = document.getElementById('settingsJstreamCorpIdInput').value.trim();
     if (!applyJstreamValidation(dirValue, corpValue)) return;
+    // カスタムカラーは付箋の色そのものになるため、反映前に #RRGGBB 形式かを検証する。
+    // 空欄のスロットは「未登録」として許容する（削除に相当）。
+    if (!applyStickyColorValidation()) return;
 
-    state.settingsStickyDefaultColor = document.getElementById('settingsStickyColorSelect').value;
+    // 各スロットを反映する。空欄は未登録（空文字）として保存する。
+    // 検証済みのため normalizeStickyHex は必ず成功する（空欄を除く）。
+    for (let slot = 0; slot < CUSTOM_STICKY_COLOR_SLOTS; slot++) {
+      const { hexEl } = getCustomColorInputs(slot);
+      const raw = (hexEl?.value ?? '').trim();
+      state.settingsCustomStickyColors[slot] = raw === '' ? '' : normalizeStickyHex(raw);
+    }
+    state.settingsStickyDefaultColor = getSelectedStickyColorMode();
     state.settingsDaimonLabel        = document.getElementById('settingsDaimonLabelSelect').value;
     state.settingsJstreamDir    = dirValue;
     state.settingsJstreamCorpId = corpValue;
@@ -194,4 +321,42 @@ export function initSettingsTabs() {
     if (!btn || !btn.dataset.settingsTab) return;
     switchSettingsTab(btn.dataset.settingsTab);
   });
+}
+
+
+/**
+ * 環境設定の付箋カラー欄（カラーピッカーとhex手入力の相互同期）を配線する
+ * （初期化時に1度だけ呼ぶ）。スロットごとに同じ配線を行う。
+ * - ピッカー操作：同じスロットのhex欄へ反映し、そのスロットのラジオも選択状態にする
+ *   （色をいじった枠をそのままデフォルトにしたい、という自然な操作に合わせる）
+ * - hex欄入力：正規化できた場合のみピッカーへ反映する（不正値の判定はOK押下時に行う）
+ * ラジオ自体は選択されるだけで、追加の配線は不要（値は closeSettingsModal(true) 時に読む）。
+ */
+export function initStickyColorControls() {
+  const modeWrap = document.getElementById('settingsStickyColorMode');
+  if (!modeWrap) return;
+  const errEl = document.getElementById('settingsCustomColorError');
+  const clearError = () => {
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.classList.remove('is-shown');
+    }
+  };
+
+  for (let slot = 0; slot < CUSTOM_STICKY_COLOR_SLOTS; slot++) {
+    const { picker, hexEl } = getCustomColorInputs(slot);
+    if (!picker || !hexEl) continue;
+    const radio = modeWrap.querySelector(`input[value="${CUSTOM_STICKY_COLOR_VALUES[slot]}"]`);
+
+    picker.addEventListener('input', () => {
+      hexEl.value = picker.value;
+      if (radio) radio.checked = true;
+      clearError();
+    });
+
+    hexEl.addEventListener('input', () => {
+      const hex = normalizeStickyHex(hexEl.value);
+      if (hex) picker.value = hex;
+    });
+  }
 }
