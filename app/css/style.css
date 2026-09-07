@@ -1576,6 +1576,19 @@
       opacity: 1;
     }
 
+    /* 編集モード：通常の付箋に細い実線枠を出す。
+       付箋カラーの既定が紙色(白)のため、枠が無いと白い紙面上で付箋を見失うため。
+       - 閲覧モードには出さない（body:not(.is-view-mode)）
+       - LIBRO由来の付箋（.libro-toggle）は閉/開2枚のPNGで見た目が決まるため対象外
+       - 「開削除」設定（.sticky-open-locked）は破線枠で区別しているため対象外
+       - 書き出しPNGはCanvasで単色塗りするため、この枠は書き出し結果に影響しない
+       枠線幅はズーム率に依存しない見た目にするため --zoom-inv-scale を掛ける
+       （.sticky-open-locked / .state-hidden の既存指定と同じ方式）。 */
+    body:not(.is-view-mode) .sticky-note:not(.libro-toggle):not(.sticky-open-locked).state-visible {
+      outline: solid rgba(0,0,0,0.35);
+      outline-width: calc(1px * var(--zoom-inv-scale, 1));
+    }
+
     /* 「開削除」設定の付箋：閉状態は編集・閲覧モード問わず紙色(白)固定で表示する
        (作成者が編集モードでも設定を判別できるように)。
        背景色は付箋のインラインstyle.backgroundより優先させる必要があるためbackgroundのみ!important。 */
