@@ -38,16 +38,11 @@ function normalizeStickyHex(value) {
 const DAIMON_LABEL_VALUES = ['大問', 'ALL', '解答'];
 
 /**
- * localStorage に保存された環境設定を state へ復元する（起動時に1度だけ呼ぶ）。
- * 保存値が壊れている・想定外の値の場合はその項目を無視し、state 側の初期値を使う。
+ * 環境設定オブジェクト（localStorage の保存形式と同じキー構成）を state へ適用する。
+ * 値が壊れている・想定外の場合はその項目を無視し、呼び出し時点の state の値を維持する。
+ * @param {*} saved - パース済みの設定オブジェクト。オブジェクトでなければ何もしない
  */
-export function loadSettings() {
-  let saved = null;
-  try {
-    saved = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || 'null');
-  } catch (_) {
-    saved = null;
-  }
+function applySettingsObject(saved) {
   if (!saved || typeof saved !== 'object') return;
 
   // カスタムカラーはデフォルト色の判定より先に復元する
@@ -80,6 +75,66 @@ export function loadSettings() {
   if (typeof saved.jstreamCorpId === 'string') {
     state.settingsJstreamCorpId = saved.jstreamCorpId;
   }
+}
+
+/**
+ * 環境設定の初期値（state.js の定義と一致させること）を新しいオブジェクトで返す。
+ * bookに設定が記録されていない場合のリセット先として使う。
+ * @returns {Object}
+ */
+function getDefaultSettings() {
+  return {
+    stickyDefaultColor: '3',
+    customStickyColors: Array.from({ length: CUSTOM_STICKY_COLOR_SLOTS }, () => ''),
+    daimonLabel:        '大問',
+    jstreamDir:         '',
+    jstreamCorpId:      '',
+  };
+}
+
+/**
+ * localStorage に保存された環境設定を state へ復元する（起動時に1度だけ呼ぶ）。
+ * 保存値が壊れている・想定外の値の場合はその項目を無視し、state 側の初期値を使う。
+ *
+ * 注意：book を開くと applyBookSettings() が「初期値 ＋ book値」で state を作り直すため、
+ * ここで復元した値が効くのは book 未読込の間だけである。将来 localStorage での管理を
+ * 廃止する際は、この関数と saveSettings()・SETTINGS_STORAGE_KEY を削除すればよい。
+ */
+export function loadSettings() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || 'null');
+  } catch (_) {
+    saved = null;
+  }
+  applySettingsObject(saved);
+}
+
+/**
+ * LIBRO book の index.json に記録された環境設定を state へ適用し、UIへ反映する。
+ * book読込のたびに呼ぶ。
+ *
+ * - book側に settings があれば、確認なしで無条件に適用する（教材ごとに固定される
+ *   Jストリーム設定・大問ボタン文言を自動で切り替えるのが目的のため）。
+ * - book側に settings が無ければ初期値へリセットする。前bookの設定も、ブラウザに
+ *   溜まった localStorage の既定値も、bookへ持ち込ませないための仕様である。
+ * - localStorage は読まないし書き換えもしない（将来の localStorage 廃止に備え、
+ *   book由来の設定経路が localStorage へ依存しないようにする）。
+ *
+ * @param {Object} indexJson - LIBRO book の index.json パース済みオブジェクト
+ */
+export function applyBookSettings(indexJson) {
+  // book固有の設定を適用する前に必ず初期値へ戻してから重ねる。
+  // book側が一部の項目しか持たない場合でも、前bookの値が残らない。
+  applySettingsObject(getDefaultSettings());
+
+  const bookSettings = indexJson?.configs?.['libro-craft-meta']?.settings;
+  if (bookSettings) applySettingsObject(bookSettings);
+
+  // state の変更をUI・連続作成用の前回設定へ反映する（closeSettingsModal と同じ処理）。
+  syncStickyDefaultColor(state.settingsStickyDefaultColor);
+  syncJstreamDefaults(state.settingsJstreamDir, state.settingsJstreamCorpId);
+  applyDaimonMenuLabel();
 }
 
 /**

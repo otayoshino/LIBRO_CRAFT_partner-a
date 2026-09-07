@@ -6,6 +6,7 @@ import { buildLibroBookExport, checkLibroBookLoadable, isLibroBookZip, parseLibr
 import { loadLibroBookPages, updateAnnotationVisibility, updateNavButtonStates, updateTocButtonState } from './page-view.js';
 import { updateLibroBookBtnStates } from './index-outline.js';
 import { mediaBlobs, state } from './state.js';
+import { applyBookSettings } from './settings.js';
 import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelState, updateStatus } from './ui-common.js';
 
     /**
@@ -398,6 +399,8 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
       // unencryptedAssetPathsは、別オーサリングツール由来で実際には暗号化されていなかった
       // 音声・アノテーション画像のパス一覧（書き出し時に強制暗号化する対象）
       state.libroBook = { zip, baseDir, indexJson, unencryptedAssetPaths };
+      // book側に記録された環境設定を無条件で適用する（無ければlocalStorageの値へ戻す）
+      applyBookSettings(indexJson);
       updateTocButtonState();
       updateNavButtonStates();
       updateLibroBookBtnStates();

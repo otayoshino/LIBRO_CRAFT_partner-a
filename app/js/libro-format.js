@@ -1,4 +1,4 @@
-import { mediaBlobs } from './state.js';
+import { mediaBlobs, state } from './state.js';
 import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, ICON_COLOR_OPTIONS } from './config.js';
 import { addStickyClickHandler } from './sticky.js';
 import { getPageBaseSize, makeDraggable, makeResizable } from './annotation-interaction.js';
@@ -20,8 +20,11 @@ const PBVE_HEADER_LEN = 8;
  */
 const CRAFT_META_KEY = 'libro-craft-meta';
 
-/** libro-craft-meta のスキーマバージョン（互換性が必要な変更をする際に上げる） */
-const CRAFT_META_SCHEMA_VERSION = 1;
+/**
+ * libro-craft-meta のスキーマバージョン（互換性が必要な変更をする際に上げる）。
+ * 2: book全体マーカーへ settings（環境設定のbook単位保存）を追加。
+ */
+const CRAFT_META_SCHEMA_VERSION = 2;
 
 /**
  * libro-craft-metaのうち「Hide/Showトグルのペア（role:'closed'|'open'）」として
@@ -2254,8 +2257,23 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
 
   // book全体マーカー：このbookが（少なくとも一度）CRAFTで書き出されたことを示す。
   // 既存の configs（generator等）は上書きせず併存させる。
+  //
+  // settings：環境設定のbook単位保存。Jストリーム設定・大問ボタン文言は教材（出版社）ごとに
+  // 固定される値のため、書き出し時点の値をbookへ記録し、次回読込時に自動適用する
+  // （settings.js の applyBookSettings 参照）。書き出し時のみ記録し、環境設定モーダルの
+  // OK押下では書き込まない（localStorage への保存は従来どおり settings.js 側で行う）。
   indexJson.configs = indexJson.configs || {};
-  indexJson.configs[CRAFT_META_KEY] = { editor: 'libro_craft', 'schema-version': CRAFT_META_SCHEMA_VERSION };
+  indexJson.configs[CRAFT_META_KEY] = {
+    editor: 'libro_craft',
+    'schema-version': CRAFT_META_SCHEMA_VERSION,
+    settings: {
+      stickyDefaultColor: state.settingsStickyDefaultColor,
+      customStickyColors: [...state.settingsCustomStickyColors],
+      daimonLabel:        state.settingsDaimonLabel,
+      jstreamDir:         state.settingsJstreamDir,
+      jstreamCorpId:      state.settingsJstreamCorpId,
+    },
+  };
   zip.file(baseDir + 'index.json', JSON.stringify(indexJson));
 
   // 新規追加された音声ファイル（元zipにまだ存在しないもの）のみPbve2000暗号化して追加
