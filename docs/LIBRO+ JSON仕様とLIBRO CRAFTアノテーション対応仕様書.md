@@ -252,8 +252,11 @@ LIBRO由来の大問ボタン（`dataset.libroToggle==='1'`）は、位置・サ
 |---|---|---|
 | sticky（付箋、単独 or CRAFT作成のグループ） | closed/open 2枚（Nメンバーなら2N枚）のHide/Showペア。`group-id`で全メンバーを束ねる（4節） | 実装済み（`convertStickyGroupToLibroAnnots`） |
 | daimon（LIBRO由来、位置・削除の変更なし） | 生データをそのまま無変更で書き戻す（passthrough方式） | 実装済みだが制約あり：**位置をドラッグ移動してから書き出すと変更が反映されず元の位置のまま書き戻される**（再生成ロジック自体が未実装のため） |
-| daimon（CRAFT上での新規作成） | ― | **未実装**（`storage.js`の`supportedTypes`に`daimon`が含まれないため、書き出し時にトースト警告のうえ除外される） |
-| kotae / shomei / zu | ― | **未実装**（作成・編集は可能だが、LIBRO形式書き出しには一切対応しない。書き出し時にトースト警告のうえ除外される） |
+| daimon（CRAFT上での新規作成） | closed/open のHide/Showペア。紐付き付箋を`targets`に束ねる | 実装済み（`convertDaimonButtonToLibroAnnots`）。押下時IDは`dataset.daimonPressedId`にキャッシュして再発行を防ぐ。ただし**紐付き付箋が0件の場合と、`shomei`が紐付いている場合は除外される**（トースト警告） |
+| kotae（答ボタン） | daimonと同一構造のHide/Showペア | 実装済み。`btnType: 'kotae'` を付けてdaimonと同じ変換パイプライン（`domDaimonButtons`）に載せる。紐付き付箋が0件の場合は除外される |
+| shomei（証明ボタン） | ― | **未実装**（作成・編集は可能だが書き出しに一切対応しない）。**本体だけでなく、紐付く付箋（`dataset.shomeiId` を持つもの）と、`shomei` が紐付いた `daimon` も書き出しから除外される**（トースト警告） |
+
+> **注**：`zu`（図ボタン）は現行の `ANNOTATION_TYPE_CONFIG`（`app/js/config.js`）に存在しない。過去に削除された種別のため、本表からは除外した。
 
 ### 3-3. 現状の既知の制約（未検証・未修正）
 

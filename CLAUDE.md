@@ -68,7 +68,7 @@ npm run build
 
 ### LIBRO 連携
 
-LIBRO の book フォルダ形式（`index.json` / `p####.json` / 暗号化ページ画像 / `annots/` / `sounds/`）との相互変換は [app/js/libro-format.js](app/js/libro-format.js) に実装済み（インポートは全種別対応、エクスポートはページリンク・外部リンク・音声再生・Plusファイルに加え、動画の内部ファイル指定（toMovieBNR）とJ-stream指定（toMovie）に対応。それ以外（動画の外部タグ指定・図・答/証明ボタン）は未対応）。詳細仕様と実装ルールは [libro-integration Skill](.claude/skills/libro-integration/SKILL.md)（元資料: [docs/libro_integration_計画書.md](docs/libro_integration_計画書.md)）を参照。
+LIBRO の book フォルダ形式（`index.json` / `p####.json` / 暗号化ページ画像 / `annots/` / `sounds/`）との相互変換は [app/js/libro-format.js](app/js/libro-format.js) に実装済み（インポートは全種別対応、エクスポートはページリンク・外部リンク・音声再生・Plusファイル・付箋・答ボタン・大問ボタンに加え、動画の内部ファイル指定（toMovieBNR）とJ-stream指定（toMovie）に対応。**未対応は証明ボタンと動画の外部タグ指定の2つのみ**。証明ボタンは本体だけでなく**紐付く付箋・紐付く大問ボタンも書き出しから除外される**（除外時は警告トーストを表示）。動画の外部タグ指定はUIから新規作成できず、インポートでも生成されないため残存データのみ）。詳細仕様と実装ルールは [libro-integration Skill](.claude/skills/libro-integration/SKILL.md)（元資料: [docs/libro_integration_計画書.md](docs/libro_integration_計画書.md)）を参照。
 
 ## 開発時の注意事項
 
