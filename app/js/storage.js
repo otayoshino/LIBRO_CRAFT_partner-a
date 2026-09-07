@@ -311,8 +311,11 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
 
     /**
      * ZIPファイル選択時の処理。
-     * ZIP内の音声・動画ファイルをBlobURLに変換してmediaBlobsへ格納し、
-     * annotations.json を読み込んでアノテーションを復元する。
+     * LIBRO bookフォルダ形式（ZIPルート直下に index.json を持つ）のみを受け付ける。
+     *
+     * 独自ZIP形式（annotations.json ＋ メディア一式）の読み込みは廃止した。書き出し機能は
+     * 既に廃止済みで読込コードのみが残っていたこと、および当該分岐が state.libroBook = null を
+     * 実行するため読込失敗時に開いているbookを壊す構造だったことによる。
      * @param {Event} event - ファイル選択イベント
      */
     export async function handleZipFile(event) {
@@ -322,59 +325,14 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
       try {
         const zip = await JSZip.loadAsync(file);
 
-        // ルート直下にindex.jsonがあればLIBRO bookフォルダ形式として扱う
-        if (isLibroBookZip(zip)) {
-          await handleLibroBookZip(zip, file.name);
+        // ルート直下にindex.jsonが無いZIPは受け付けない。
+        // state を一切変更せずに終了するため、開いているbookはそのまま残る。
+        if (!isLibroBookZip(zip)) {
+          showToast('LIBRO book形式のZIPではありません');
           return;
         }
 
-        // 既存BlobURLを解放してmediaBlobsを初期化
-        Object.values(mediaBlobs).forEach(url => URL.revokeObjectURL(url));
-        Object.keys(mediaBlobs).forEach(k => delete mediaBlobs[k]);
-
-        // 独自ZIP形式にはindex.jsonが無いため、前回LIBRO book読込分のtoc-page等が
-        // 残らないようlibroBookをクリアする
-        state.libroBook = null;
-        updateTocButtonState();
-        updateLibroBookBtnStates();
-
-        // 音声・動画・Plusファイルを含む全ファイルをBlobURLに変換してキャッシュ
-        const mimeMap = {
-          '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
-          '.m4a': 'audio/mp4', '.mp4': 'video/mp4', '.webm': 'video/webm',
-          '.pdf': 'application/pdf', '.html': 'text/html', '.htm': 'text/html',
-        };
-        const promises = [];
-        zip.forEach((relativePath, zipEntry) => {
-          if (zipEntry.dir) return;
-          const baseName = relativePath.split('/').pop();
-          if (baseName === 'annotations.json') return;
-          const lower = baseName.toLowerCase();
-          promises.push(
-            zipEntry.async('blob').then(blob => {
-              const ext = lower.slice(lower.lastIndexOf('.'));
-              const typedBlob = new Blob([blob], { type: mimeMap[ext] || blob.type });
-              mediaBlobs[baseName] = URL.createObjectURL(typedBlob);
-            })
-          );
-        });
-        await Promise.all(promises);
-
-        // annotations.json を読み込んでアノテーションを復元
-        const jsonFile = zip.file('annotations.json');
-        if (!jsonFile) {
-          showToast('ZIPにannotations.jsonが見つかりません');
-          return;
-        }
-        const jsonText = await jsonFile.async('string');
-        const arr = JSON.parse(jsonText);
-        // 独自ZIP形式にはbook folder名が無いため、ファイル名をbook識別子として使う
-        const bookId = file.name;
-        state.currentBookId = bookId;
-        updateAuthoringPanelState();
-        restoreAnnotationsFromArray(arr);
-        showToast(`${file.name} を読み込みました`);
-        await checkAndPromptRestoreForBook(bookId);
+        await handleLibroBookZip(zip, file.name);
       } catch (e) {
         showToast('ZIP読込エラー: ファイルが壊れているか形式が正しくありません');
         console.error(e);
