@@ -138,11 +138,22 @@ export const state = {
   currentBookId: null,
   /**
    * 環境設定：付箋のデフォルト背景色（STICKY_COLOR_MAP/STICKY_COLORSのインデックス文字列）。
-   * '0'=青, '1'=緑, '2'=黄, '3'=紙色。初期値は '3'。
+   * '0'=青, '1'=緑, '2'=黄, '3'=紙色, '100'〜'102'=カスタムカラー1〜3。初期値は '3'。
+   * 新規作成時に選べるのは '3'（紙色）と登録済みのカスタムスロットのみで、'0'〜'2' は
+   * 過去データの描画・書き出し用に定義だけを残している（環境設定・付箋の色選択欄には出さない）。
    * 値は settings.js が localStorage（キー: ContentsBuilderSettings）へ永続化し、
    * 起動時に loadSettings() で復元する。
    */
   settingsStickyDefaultColor: '3',
+  /**
+   * 環境設定：カスタム付箋カラーのスロット（要素数は常に CUSTOM_STICKY_COLOR_SLOTS＝3で固定）。
+   * 各要素は '#RRGGBB'（小文字）、未登録スロットは空文字。配列の添字 i が
+   * インデックス (CUSTOM_STICKY_COLOR_BASE + i) に対応する（0番目='100', 1番目='101', 2番目='102'）。
+   * 空文字のスロットは「未登録」として扱い、環境設定・付箋の色選択欄の選択肢に出さない。
+   * config.js の getStickyColor() がこの配列を参照する。
+   * 値は settings.js が localStorage へ永続化し、起動時に loadSettings() で復元する。
+   */
+  settingsCustomStickyColors: ['', '', ''],
   /**
    * 環境設定：大問ボタン作成メニューの表示文言（'大問' | 'ALL' | '解答'）。
    * サイドバーの大問ボタン作成メニュー項目のラベルにのみ反映し、実際に生成されるボタンの

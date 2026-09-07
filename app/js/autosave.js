@@ -105,7 +105,8 @@ import { showToast } from './ui-common.js';
             daimonId: el.dataset.daimonId,
             shomeiId: el.dataset.shomeiId,
             groupId:  el.dataset.groupId,
-            stickyColorOverride: el.dataset.stickyColorOverride,
+            stickyColorOverride:    el.dataset.stickyColorOverride,
+            stickyColorOverrideHex: el.dataset.stickyColorOverrideHex,
             // 答ボタン紐付けで既定適用される開閉方式と、その復帰用の元値。
             // .libro-toggle付箋はbook読込のたび renderTogglePairs() が再描画するため、
             // ここで保存しないと復元時に「表示ボタン削除」が失われる。

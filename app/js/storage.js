@@ -1,6 +1,6 @@
 import { checkAndPromptRestoreForBook } from './autosave.js';
 import { renderButtonVisual } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, getStickyColor, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
 import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, resolveVideoSrc, styleToRect } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility, updateNavButtonStates, updateTocButtonState } from './page-view.js';
@@ -155,8 +155,13 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
                 // style に background が含まれていない旧形式JSONの場合は savedData.annColor から引き当てる
                 if (el.classList.contains('sticky-note') && !el.style.background) {
                   let colorIdx = 0;
-                  try { colorIdx = parseInt((JSON.parse(obj.savedData || '{}')).annColor ?? '0', 10); } catch (_) {}
-                  el.style.background = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+                  let colorHex;
+                  try {
+                    const sd = JSON.parse(obj.savedData || '{}');
+                    colorIdx = parseInt(sd.annColor ?? '0', 10);
+                    colorHex = sd.annColorHex;
+                  } catch (_) {}
+                  el.style.background = getStickyColor(colorIdx, colorHex);
                 }
                 if (obj.savedData) el.dataset.savedData = obj.savedData;
                 if (obj.groupId) el.dataset.groupId = obj.groupId;
@@ -262,6 +267,9 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
           // 色上書き（設定ダイアログで色を選び直した状態）は、閉側プレビュー用の
           // オーバーレイ要素とセットで復元する（confirmAnnotation と同じ構成）
           el.dataset.stickyColorOverride = obj.stickyColorOverride;
+          if (obj.stickyColorOverrideHex !== undefined) {
+            el.dataset.stickyColorOverrideHex = obj.stickyColorOverrideHex;
+          }
           const colorIdx = parseInt(obj.stickyColorOverride, 10);
           let overlay = el.querySelector('.libro-toggle-color-override');
           if (!overlay) {
@@ -269,7 +277,7 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
             overlay.className = 'libro-toggle-color-override';
             el.appendChild(overlay);
           }
-          overlay.style.background = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+          overlay.style.background = getStickyColor(colorIdx, obj.stickyColorOverrideHex);
         }
       });
       // 復元した data-group-id と新規発行IDが衝突しないようカウンタを引き上げる
@@ -590,7 +598,7 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
               desc = { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color: STICKY_COLOR_MAP[3], style };
             } else if (el.dataset.stickyColorOverride) {
               const colorIdx = parseInt(el.dataset.stickyColorOverride, 10);
-              const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+              const color = getStickyColor(colorIdx, el.dataset.stickyColorOverrideHex);
               desc = { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color, style };
             } else {
               desc = { closedId, openId, closedFile, openFile, closedMode: 'reuse', openMode: 'reuse', style };
@@ -606,7 +614,7 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
             const colorIdx = parseInt(sd.annColor || '0', 10);
             const color = isKotaeLinked
               ? STICKY_COLOR_MAP[3]
-              : (STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0]);
+              : getStickyColor(colorIdx, sd.annColorHex);
             desc = { closedId, openId, closedMode: 'color', openMode: 'transparent', color, style };
           }
           // 「開削除」設定（3-2-4/3-2-5節でクラス反映済み）をLIBRO書き出し側へ伝える。

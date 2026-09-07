@@ -1,7 +1,7 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { confirmAnnotation, openAnnotationSettingsDialog, openQuickCreateDialog, refreshMultiSelectionPanel, refreshPosFieldsLive } from './annotation-dialog.js';
 import { addDaimonClickHandler, addKotaeClickHandler, addShomeiClickHandler, makeDaimonResizable, renderButtonVisual } from './buttons.js';
-import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, STICKY_MIN_SIZE_PX, renderAnnObjectContent, renderAnnImageContent } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, STICKY_MIN_SIZE_PX, getStickyColor, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { selectedStickySet, state } from './state.js';
 import { addStickyClickHandler, applyStickyOpenMode } from './sticky.js';
 import { closeDialog } from './storage.js';
@@ -162,6 +162,7 @@ import { pushUndo } from './undo-redo.js';
           snap.fromLibroToggle = true;
           if (el.dataset.stickyColorOverride !== undefined) {
             snap.stickyColorOverride = el.dataset.stickyColorOverride;
+            snap.stickyColorOverrideHex = el.dataset.stickyColorOverrideHex;
           }
         }
         return snap;
@@ -377,8 +378,10 @@ import { pushUndo } from './undo-redo.js';
               ? snap.stickyColorOverride
               : (state.settingsStickyDefaultColor ?? '0');
             stickySd.annColor = String(colorIdx);
+            stickyBg = getStickyColor(colorIdx, snap.stickyColorOverrideHex);
+            // 色の実体を併記する（書き出し時の色決定と表示を一致させるため）
+            stickySd.annColorHex = stickyBg;
             el.dataset.savedData = JSON.stringify(stickySd);
-            stickyBg = STICKY_COLOR_MAP[parseInt(stickySd.annColor, 10)] ?? STICKY_COLOR_MAP[0];
           }
 
           el.className = 'sticky-note state-visible' + (stickyOpenLocked ? ' sticky-open-locked' : '');
@@ -1168,8 +1171,10 @@ import { pushUndo } from './undo-redo.js';
       let sd = {};
       try { sd = JSON.parse(clone.dataset.savedData || '{}'); } catch (_) {}
       sd.annColor = String(colorIdx);
+      const bg = getStickyColor(colorIdx, clone.dataset.stickyColorOverrideHex);
+      // 色の実体を併記する（書き出し時の色決定と表示を一致させるため）
+      sd.annColorHex = bg;
       clone.dataset.savedData = JSON.stringify(sd);
-      const bg = STICKY_COLOR_MAP[parseInt(sd.annColor, 10)] ?? STICKY_COLOR_MAP[0];
 
       // LIBRO由来の見た目（閉/開PNG・色上書きオーバーレイ）を取り除く。
       // .resize-handle は直後の reinitElement → makeResizable が張り直すため触らない。
@@ -1185,6 +1190,7 @@ import { pushUndo } from './undo-redo.js';
       delete clone.dataset.closedFile;
       delete clone.dataset.openFile;
       delete clone.dataset.stickyColorOverride;
+      delete clone.dataset.stickyColorOverrideHex;
 
       clone.style.background = bg;
       // 答ボタンとの紐付けを解除したときに戻す背景色（buttons.jsが記録するもの）。

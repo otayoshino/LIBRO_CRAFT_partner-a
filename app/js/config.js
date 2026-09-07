@@ -15,6 +15,59 @@
     export const STICKY_COLOR_MAP = ['#4488cc', '#5ac46e', '#f7e04b', '#ffffff'];
 
 
+    /**
+     * カスタム付箋カラーの開始インデックス。
+     * 0〜3 は基本色（青/緑/黄/紙色）で意味が固定されており（紙色=3 は答ボタン紐付き付箋・
+     * 開削除設定などがコード上で直接指定している）、途中に割り込ませることはできない。
+     * また 4 は過去データに残りうる旧選択肢（廃止済みの「ピンク」）と衝突するため、
+     * 4〜99 を欠番（将来の拡張枠）として空け、カスタムカラーは 100 から始める。
+     */
+    export const CUSTOM_STICKY_COLOR_BASE = 100;
+
+    /** カスタム付箋カラーのスロット数（インデックス 100〜102 の3枠固定） */
+    export const CUSTOM_STICKY_COLOR_SLOTS = 3;
+
+    /**
+     * カスタム付箋カラーのインデックス一覧（['100','101','102']）。
+     * 環境設定のラジオ・付箋の色選択欄の生成、および保存値の検証に使う。
+     */
+    export const CUSTOM_STICKY_COLOR_VALUES =
+      Array.from({ length: CUSTOM_STICKY_COLOR_SLOTS }, (_, i) => String(CUSTOM_STICKY_COLOR_BASE + i));
+
+    /**
+     * カスタムカラーのインデックスかどうかを判定する。
+     * @param {number} idx
+     * @returns {boolean}
+     */
+    export function isCustomStickyColorIndex(idx) {
+      return Number.isInteger(idx)
+        && idx >= CUSTOM_STICKY_COLOR_BASE
+        && idx <  CUSTOM_STICKY_COLOR_BASE + CUSTOM_STICKY_COLOR_SLOTS;
+    }
+
+    /**
+     * 付箋の背景色を決める。色の実体（hex）が渡された場合はそれを最優先する。
+     *
+     * savedData.annColor は「何番の色か」しか持たないため、カスタムカラーの定義
+     * （state.settingsCustomStickyColors＝localStorage由来）が失われた環境や、
+     * 該当スロットが空にされた場合は、インデックスだけでは色を復元できない。
+     * そのため付箋側に併記した hex を優先して使い、hex を持たない過去データのみ
+     * インデックスから引き当てる。
+     * @param {string|number} colorIdx - STICKY_COLOR_MAP のインデックス、またはカスタムカラーのインデックス（100〜102）
+     * @param {string} [hex] - 色の実体（'#RRGGBB'）。妥当な場合はこれをそのまま返す
+     * @returns {string} CSS色文字列
+     */
+    export function getStickyColor(colorIdx, hex) {
+      if (typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex)) return hex;
+      const idx = parseInt(colorIdx, 10);
+      if (isCustomStickyColorIndex(idx)) {
+        // 未登録（空スロット）のまま参照された場合は、青へ倒さず紙色へフォールバックする
+        return state.settingsCustomStickyColors[idx - CUSTOM_STICKY_COLOR_BASE] || STICKY_COLOR_MAP[3];
+      }
+      return STICKY_COLOR_MAP[idx] ?? STICKY_COLOR_MAP[0];
+    }
+
+
     /** アノテーション種別ごとの設定 */
     export const ANNOTATION_TYPE_CONFIG = {
       pagelink: {

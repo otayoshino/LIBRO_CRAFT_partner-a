@@ -1,5 +1,5 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, CUSTOM_STICKY_COLOR_BASE, CUSTOM_STICKY_COLOR_SLOTS, getStickyColor, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
 import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getPageBaseSize, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel, updateDaimonGroupHighlight } from './annotation-interaction.js';
 import { applyDaimonImageAspect, generatePressedVariant, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { validateJstreamCorpId, validateJstreamDir, validateJstreamVideoId } from './jstream-validate.js';
@@ -688,12 +688,34 @@ import { pushUndo } from './undo-redo.js';
         o.textContent = '既存付箋カラー';
         colSel.appendChild(o);
       }
-      STICKY_COLORS.forEach((c, i) => {
-        const o = document.createElement('option');
-        o.value = i;
-        o.textContent = c.label;
-        colSel.appendChild(o);
-      });
+      // 新規作成で選べるのは紙色（STICKY_COLORS[3]）と登録済みのカスタムスロットのみ。
+      // 旧選択肢（青/緑/黄）は過去データの描画・書き出し用に定義だけ残しており、ここには出さない。
+      {
+        const paperOpt = document.createElement('option');
+        paperOpt.value = '3';
+        paperOpt.textContent = STICKY_COLORS[3].label;
+        colSel.appendChild(paperOpt);
+      }
+      // カスタムカラーは環境設定で登録済み（空文字でない）のスロットだけ選択肢に出す
+      let hasCustomColor = false;
+      for (let slot = 0; slot < CUSTOM_STICKY_COLOR_SLOTS; slot++) {
+        if (!state.settingsCustomStickyColors[slot]) continue;
+        hasCustomColor = true;
+        const customOpt = document.createElement('option');
+        customOpt.value = String(CUSTOM_STICKY_COLOR_BASE + slot);
+        customOpt.textContent = `カスタム${slot + 1}`;
+        colSel.appendChild(customOpt);
+      }
+      // カスタムカラーが1つも登録されていない場合は、選択できない案内用の項目を出す。
+      // 「紙色しか選べない」状態の理由（環境設定で登録が必要なこと）を利用者へ示すため。
+      // disabled のため選択されることはなく、colSel.value に入ることもない。
+      if (!hasCustomColor) {
+        const emptyOpt = document.createElement('option');
+        emptyOpt.value = '';
+        emptyOpt.textContent = 'カスタムカラー未設定';
+        emptyOpt.disabled = true;
+        colSel.appendChild(emptyOpt);
+      }
       // 新規作成時（existingElなし）のみ、フォールバック先を環境設定のデフォルト色にする
       const stickyColorFallback = existingEl ? '0' : (state.settingsStickyDefaultColor ?? '0');
       colSel.value = isLibroToggle ? 'existing' : (savedData.annColor || stickyColorFallback);
@@ -849,7 +871,7 @@ import { pushUndo } from './undo-redo.js';
             if (h > 0) target.style.height = Math.max(BTN_MIN, h) + 'px';
           }
         } else if (type === 'sticky') {
-          const color = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+          const color = getStickyColor(colorIdx);
           if (w > 0) target.style.width  = w + 'px';
           if (h > 0) target.style.height = h + 'px';
           target.style.background = color;
@@ -924,7 +946,7 @@ import { pushUndo } from './undo-redo.js';
             if (dw !== 0) target.style.width  = Math.max(10, (parseFloat(target.style.width)  || 0) + dw) + 'px';
             if (dh !== 0) target.style.height = Math.max(10, (parseFloat(target.style.height) || 0) + dh) + 'px';
             if (applyColor) {
-              target.style.background = STICKY_COLOR_MAP[multiColorIdx] ?? STICKY_COLOR_MAP[0];
+              target.style.background = getStickyColor(multiColorIdx);
             }
           } else if (target.classList.contains('ann-icon-obj')) {
             // アイコン型：常に 1:1（正方形）を保ったままサイズをデルタ分変更する。
@@ -2053,7 +2075,10 @@ import { pushUndo } from './undo-redo.js';
         // 新規作成時（isUpdate=false）のみ、フォールバック先を環境設定のデフォルト色にする
         const colorFallback = isUpdate ? '0' : (state.settingsStickyDefaultColor ?? '0');
         const colorIdx = parseInt(colorSelection || colorFallback, 10);
-        const color    = STICKY_COLOR_MAP[colorIdx] ?? STICKY_COLOR_MAP[0];
+        const color    = getStickyColor(colorIdx);
+        // 色の実体を付箋自身へ併記する（カスタムカラーの定義が失われた環境でも色が確定するように）。
+        // 「既存付箋カラー」（色を持たない指定）のときは付けない。
+        if (!keepsOriginalImage) savedData.annColorHex = color;
 
         if (isUpdate) {
           // 更新前のスナップショットを Undo スタックに積む（ラベルやクラス名も含める）
@@ -2084,7 +2109,8 @@ import { pushUndo } from './undo-redo.js';
           if (isLibroToggleNote && openLocked && !existingEl.dataset.kotaeId) {
             // 「表示ボタン削除」：.libro-toggle付箋は<img>が背景を覆うためbackground:#fff !important
             // が反映されない。色選択と同じオーバーレイ機構で白（STICKY_COLOR_MAP[3]）を強制表示する。
-            existingEl.dataset.stickyColorOverride = '3';
+            existingEl.dataset.stickyColorOverride    = '3';
+            existingEl.dataset.stickyColorOverrideHex = STICKY_COLOR_MAP[3];
             let overlay = existingEl.querySelector('.libro-toggle-color-override');
             if (!overlay) {
               overlay = document.createElement('div');
@@ -2095,9 +2121,12 @@ import { pushUndo } from './undo-redo.js';
           } else if (isLibroToggleNote && keepsOriginalImage) {
             // 「既存付箋カラー」に戻した場合：色上書きを解除し、元の閉画像表示に戻す
             delete existingEl.dataset.stickyColorOverride;
+            delete existingEl.dataset.stickyColorOverrideHex;
           } else if (isLibroToggleNote) {
             // 実際の色が選択された：閉のみ選択色のプレビューに差し替える（開・元datasetは無変更のまま維持）
-            existingEl.dataset.stickyColorOverride = String(colorIdx);
+            existingEl.dataset.stickyColorOverride    = String(colorIdx);
+            // 色の実体も併記する（カスタムカラーの定義が失われた環境でも色が確定するように）
+            existingEl.dataset.stickyColorOverrideHex = color;
             let overlay = existingEl.querySelector('.libro-toggle-color-override');
             if (!overlay) {
               overlay = document.createElement('div');
