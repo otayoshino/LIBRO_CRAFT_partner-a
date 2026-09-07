@@ -113,6 +113,71 @@ export function isLibroBookZip(zip) {
 
 
 /**
+ * LIBRO book形式のZIPを読み込んでよいかを判定する。
+ * ページ画像の復号・BlobURL化を伴わない軽量パス（JSONの読み出しのみ）で判定するため、
+ * 拒否するbookで復号コストを払わずに済む。
+ *
+ * 判定ルール：
+ *   1. index.json が無い                                   → 拒否（'no-index'）
+ *   2. index.json が壊れている                             → 拒否（'broken-index'）
+ *   3. index.json.configs['libro-craft-meta'] がある       → 許可（'craft-book'）
+ *      CRAFTが書き出したbookは、LIBRO+由来のpassthroughアノテーションを含んでいても
+ *      再読込できる必要があるため無条件で許可する。
+ *   4. libro-craft-meta を持たない annot が1件でもある     → 拒否（'libro-annots'）
+ *   5. それ以外（アノテーション0件のLIBRO+生book等）       → 許可（'ok'）
+ *
+ * annots[] は p####.json 側と index.json.pages[] 側の双方に置かれうる（実bookの構造）ため、
+ * 両方を走査する。
+ * @param {JSZip} zip - JSZip.loadAsync 済みのZIPオブジェクト
+ * @returns {Promise<{ok: boolean, reason: string}>}
+ */
+export async function checkLibroBookLoadable(zip) {
+  const indexEntry = findZipEntry(zip, 'index.json');
+  if (!indexEntry) return { ok: false, reason: 'no-index' };
+
+  let indexJson;
+  try {
+    indexJson = JSON.parse(await indexEntry.async('string'));
+  } catch (_) {
+    return { ok: false, reason: 'broken-index' };
+  }
+
+  if (indexJson.configs && indexJson.configs[CRAFT_META_KEY]) {
+    return { ok: true, reason: 'craft-book' };
+  }
+
+  const fullIndexPath = indexEntry.name;
+  const baseDir = fullIndexPath.slice(0, fullIndexPath.length - 'index.json'.length);
+
+  const hasLibroAnnot = (annots) =>
+    Array.isArray(annots) && annots.some(a => !a || !a[CRAFT_META_KEY]);
+
+  const pageMetaList = indexJson.pages || [];
+  for (let i = 0; i < pageMetaList.length; i++) {
+    const pageMeta = pageMetaList[i];
+    if (!pageMeta) continue;
+
+    // index.json 側のミラー
+    if (hasLibroAnnot(pageMeta.annots)) return { ok: false, reason: 'libro-annots' };
+
+    // p####.json 側
+    if (!pageMeta.json) continue;
+    const pageJsonEntry = zip.file(baseDir + pageMeta.json);
+    if (!pageJsonEntry) continue;
+    let pageJson;
+    try {
+      pageJson = JSON.parse(await pageJsonEntry.async('string'));
+    } catch (_) {
+      continue;
+    }
+    if (hasLibroAnnot(pageJson.annots)) return { ok: false, reason: 'libro-annots' };
+  }
+
+  return { ok: true, reason: 'ok' };
+}
+
+
+/**
  * annots[] の actions 配列から既知パターンを判定する。
  * @param {Array<Object>} actions
  * @returns {'pagelink'|'uri'|'launch'|'toggle'|null} 既知種別。判定不能な場合は null

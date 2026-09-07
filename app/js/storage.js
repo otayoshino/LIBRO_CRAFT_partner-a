@@ -2,7 +2,7 @@ import { checkAndPromptRestoreForBook } from './autosave.js';
 import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, getStickyColor, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
-import { buildLibroBookExport, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, resolveVideoSrc, styleToRect } from './libro-format.js';
+import { buildLibroBookExport, checkLibroBookLoadable, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, resolveVideoSrc, styleToRect } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility, updateNavButtonStates, updateTocButtonState } from './page-view.js';
 import { updateLibroBookBtnStates } from './index-outline.js';
 import { mediaBlobs, state } from './state.js';
@@ -329,6 +329,17 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
         // state を一切変更せずに終了するため、開いているbookはそのまま残る。
         if (!isLibroBookZip(zip)) {
           showToast('LIBRO book形式のZIPではありません');
+          return;
+        }
+
+        // LIBRO+由来のアノテーションを含むbookは読み込まない。
+        // handleLibroBookZip() は先頭で mediaBlobs を解放・初期化するため、
+        // この判定は必ずその手前で行う（開いているbookを壊さないため）。
+        const loadable = await checkLibroBookLoadable(zip);
+        if (!loadable.ok) {
+          showToast(loadable.reason === 'libro-annots'
+            ? 'LIBRO+由来のアノテーションを含むbookは読み込めません'
+            : 'LIBRO book形式のZIPではありません');
           return;
         }
 
