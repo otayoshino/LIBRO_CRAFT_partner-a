@@ -122,12 +122,18 @@ export function isLibroBookZip(zip) {
  *
  * 判定ルール：
  *   1. index.json が無い                                   → 拒否（'no-index'）
+ *      （呼び出し元が isLibroBookZip() で先に弾いているため実際には到達しない。防御的判定）
  *   2. index.json が壊れている                             → 拒否（'broken-index'）
  *   3. index.json.configs['libro-craft-meta'] がある       → 許可（'craft-book'）
  *      CRAFTが書き出したbookは、LIBRO+由来のpassthroughアノテーションを含んでいても
  *      再読込できる必要があるため無条件で許可する。
  *   4. libro-craft-meta を持たない annot が1件でもある     → 拒否（'libro-annots'）
+ *      ただし見開きナビの当たり判定（isSpreadNavAnnot）はこの数に含めない。
  *   5. それ以外（アノテーション0件のLIBRO+生book等）       → 許可（'ok'）
+ *
+ * 5 は「CRAFTで編集するためにLIBRO+へ新規搭載しただけのbook」を通すための経路である。
+ * libro-craft-meta は一度CRAFTで書き出したbookにしか付かないため、CRAFTで編集したいbookでも
+ * 初回は meta を持たない。この経路が無いと初回編集ができない。
  *
  * annots[] は p####.json 側と index.json.pages[] 側の双方に置かれうる（実bookの構造）ため、
  * 両方を走査する。
@@ -152,8 +158,24 @@ export async function checkLibroBookLoadable(zip) {
   const fullIndexPath = indexEntry.name;
   const baseDir = fullIndexPath.slice(0, fullIndexPath.length - 'index.json'.length);
 
+  // 見開き合成ページには、左右半面をクリックすると対応する実ページへ飛ぶだけの
+  // ナビゲーション用当たり判定が2件入る。これはLIBRO+が見開き設定のあるbookに対して
+  // 自動生成するものであり、著者が付けたアノテーションではないため由来判定に使えない。
+  // これを数えていたせいで「アノテーション0件だが見開き設定のあるbook」が
+  // 常に 'libro-annots' 扱いになり、CRAFT用に新規搭載したbookを開けなかった。
+  //
+  // 実データでの識別根拠（サンプルbook 8a24127cb94d4a158ae43954184af569・annots 776件を全件走査）：
+  //   - actions が「GoTo 単独」の annot は30件あり、すべて合成ページに存在する
+  //   - 実ページ側に「GoTo 単独」は1件も存在しない
+  //     （実ページのページリンクは GoTo + FitPage×2 の構成。classifyActions() も両方を要求する）
+  // よってページ種別（sub-pages 等）を見ずとも、annot の中身だけで排他的に識別できる。
+  // filename（annots/ffff.png）は条件に含めない。LIBRO+側がセンチネル名を変更した場合に
+  // 同じ誤判定が再発するため、構成だけで判定する。
+  const isSpreadNavAnnot = (a) =>
+    Array.isArray(a.actions) && a.actions.length === 1 && a.actions[0] && a.actions[0].action === 'GoTo';
+
   const hasLibroAnnot = (annots) =>
-    Array.isArray(annots) && annots.some(a => !a || !a[CRAFT_META_KEY]);
+    Array.isArray(annots) && annots.some(a => !a || (!a[CRAFT_META_KEY] && !isSpreadNavAnnot(a)));
 
   const pageMetaList = indexJson.pages || [];
   for (let i = 0; i < pageMetaList.length; i++) {
