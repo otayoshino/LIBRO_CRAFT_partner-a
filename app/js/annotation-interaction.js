@@ -93,6 +93,22 @@ import { pushUndo } from './undo-redo.js';
 
 
     /**
+     * 表示中ページについて「ページ画像1画素あたりの基準px」を返す。
+     * 基準px は #pageLeft の offsetWidth（ズームの CSS transform を含まない、アノテーション
+     * 座標と同じ座標系）。基準サイズはページ画像の縦横比を保つため、幅の比だけで縦横共通の
+     * 値になる。コピー時と貼り付け時の値の比で、クリップボードの位置・サイズを貼り付け先の
+     * 座標系へ換算するために使う（pasteClipboard() 参照）。
+     * @returns {number|null} 取得できない場合は null（呼び出し側で換算を行わない）
+     */
+    function getBasePxPerImagePixel() {
+      const pageEl   = document.getElementById('pageLeft');
+      const pageData = state.bookPages?.[state.currentPage - 1];
+      if (!pageEl || !pageEl.offsetWidth || !pageData?.width) return null;
+      return pageEl.offsetWidth / pageData.width;
+    }
+
+
+    /**
      * 選択中の全オブジェクト（付箋・アノテーション）をクリップボードにコピーする。
      * 実際の配置は行わず、パラメータをスナップショットとして保存するだけ。
      */
@@ -101,6 +117,8 @@ import { pushUndo } from './undo-redo.js';
       const targets = getSelectedObjects();
       if (targets.length === 0) { showToast('コピーするオブジェクトを選択してください。'); return; }
 
+      // コピー時点の座標系（ページ画像1画素あたりの基準px）。貼り付け時の換算に使う
+      const pxPerImg = getBasePxPerImagePixel();
       state.annClipboard = targets.map(el => {
         const snap = {
           type:       el.dataset.type || 'sticky',
@@ -116,6 +134,8 @@ import { pushUndo } from './undo-redo.js';
           // コピー元のページ番号。大問／答ボタンとの紐付けを引き継いでよいか
           // （＝同一ページへの貼り付けか）の判定に使う。
           page:       el.dataset.page,
+          // left/top/width/height（と linkedStickies の同項目）がどの座標系の値か
+          pxPerImg,
         };
         // 証明ボタン：shomeiId と紐付き付箋のスナップショットを保存
         if (el.classList.contains('shomei-btn') && el.dataset.shomeiId) {
@@ -178,6 +198,31 @@ import { pushUndo } from './undo-redo.js';
     export function pasteClipboard() {
       if (document.body.classList.contains('is-view-mode')) return;
       if (state.annClipboard.length === 0) { showToast('貼り付けるオブジェクトがありません。'); return; }
+
+      // コピー元と貼り付け先で「ページ画像1画素あたりの基準px」が異なる場合（紙面サイズの違う
+      // ページへの移動・フィット変更・ウィンドウサイズ変更を挟んだ場合）、クリップボードの
+      // 位置・サイズを貼り付け先の座標系へ換算する。基準はページ画像の画素（書き出す rect と
+      // 同じ単位）で、縦横同じ倍率のため比率も保たれる。換算後はクリップボード自体を
+      // 貼り付け先の値へ置き換えるため、末尾の連続ペースト用 OFFSET 加算はそのまま機能する。
+      // 同じページ・同じ基準サイズでは k === 1 となり、従来と完全に同じ動作になる。
+      const curPxPerImg = getBasePxPerImagePixel();
+      if (curPxPerImg) {
+        state.annClipboard = state.annClipboard.map(s => {
+          const k = s.pxPerImg ? curPxPerImg / s.pxPerImg : 1;
+          if (k === 1) return { ...s, pxPerImg: curPxPerImg };
+          const scaleRect = o => ({
+            ...o,
+            left:   o.left   * k,
+            top:    o.top    * k,
+            width:  o.width  * k,
+            height: o.height * k,
+          });
+          const scaled = { ...scaleRect(s), pxPerImg: curPxPerImg };
+          if (s.linkedStickies) scaled.linkedStickies = s.linkedStickies.map(scaleRect);
+          return scaled;
+        });
+      }
+
       const OFFSET = 16;
       const page   = document.getElementById('pageLeft');
 
