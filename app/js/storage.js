@@ -182,15 +182,26 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
                 // LIBRO+製（他ツール由来）known系のリサイズ禁止フラグ（reinitElementが参照）
                 if (obj.libroLockedSize) el.dataset.libroLockedSize = obj.libroLockedSize;
                 // アイコン型（.ann-icon-obj）は常に 1:1 を保証する。
-                // width% はページ幅基準・height% はページ高さ基準で個別に復元されるため、
-                // 保存時と復元時でページの縦横比が異なると正方形が崩れうる。
+                // ただし「正方形」の判定は、表示中ページではなく所属ページ（data-page）上で行う。
+                // 復元時の px は表示中ページの基準サイズを座標系とするため、縦横比の違うページの
+                // アイコンは現在の座標系では縦長／横長になるのが正しい（ページ移動時に
+                // rebaseAnnotations() が正方形へ戻す）。これを短辺に丸めると長辺の情報が失われ、
+                // アイコンが恒久的に縮む。所属ページ上の正方形は、現在の座標系では
+                // 幅/高さ = k（= 表示中ページの縦横比 / 所属ページの縦横比）になる。
+                // 所属ページを引き当てられない場合は k = 1（従来どおりの判定）。
                 if (el.classList.contains('ann-icon-obj')) {
                   const iw = parseFloat(el.style.width);
                   const ih = parseFloat(el.style.height);
-                  if (iw > 0 && ih > 0 && Math.abs(iw - ih) > 0.5) {
-                    const size = Math.min(iw, ih);
+                  const ownPageNum = parseInt(el.dataset.page, 10);
+                  const ownPage = (state.singlePages || state.bookPages)?.find(p => p.pageNum === ownPageNum);
+                  const k = (ownPage?.width && ownPage?.height && pageRect.width && pageRect.height)
+                    ? (pageRect.width / pageRect.height) / (ownPage.width / ownPage.height)
+                    : 1;
+                  const ihOwn = ih * k;
+                  if (iw > 0 && ih > 0 && Math.abs(iw - ihOwn) > 0.5) {
+                    const size = Math.min(iw, ihOwn);
                     el.style.width  = size + 'px';
-                    el.style.height = size + 'px';
+                    el.style.height = (size / k) + 'px';
                   }
                 }
                 // 内容再構築
