@@ -262,6 +262,22 @@ import { pushUndo } from './undo-redo.js';
         return groupIdRemap.get(oldGid);
       };
 
+      // 大問ボタンを別のページへ貼り付ける場合は、新しい daimonId を付ける。同じIDのまま
+      // 別ページへ持ち込むと、書き出し時にページの違うボタンが同じ group-id を持ち、
+      // 読み込み直したときにボタンが消える。同じ貼り付け操作で一緒に貼った付箋のうち、
+      // 旧IDのボタンに紐付いていたものは、同じ新IDへ付け替えて紐付けを保つ。
+      // 同じページへの貼り付けは従来どおり（同じ付箋グループを開閉する2つ目のボタン）。
+      const pastedDaimonIds = new Set(
+        state.annClipboard
+          .filter(s => s.className?.includes('daimon-btn') && s.daimonId)
+          .map(s => s.daimonId)
+      );
+      const daimonIdRemap = new Map();
+      const remapDaimonId = (oldId) => {
+        if (!daimonIdRemap.has(oldId)) daimonIdRemap.set(oldId, `daimon-${++state.daimonCounter}`);
+        return daimonIdRemap.get(oldId);
+      };
+
       const pasted = [];
       state.annClipboard.forEach(snap => {
         const newLeft = snap.left + dx;
@@ -374,7 +390,10 @@ import { pushUndo } from './undo-redo.js';
           const btn = document.createElement('div');
           btn.dataset.id        = ++state.annIdCounter;
           btn.dataset.type      = 'daimon';
-          if (snap.daimonId) btn.dataset.daimonId = snap.daimonId;
+          if (snap.daimonId) {
+            const samePage = String(snap.page ?? '') === String(state.currentPage);
+            btn.dataset.daimonId = samePage ? snap.daimonId : remapDaimonId(snap.daimonId);
+          }
           btn.dataset.savedData = snap.savedData || '{}';
           // LIBRO由来（.libro-toggle）は複製すると同一idの生データを二重に書き戻すことになるため、
           // 複製結果は新規大問ボタン（.is-sized）として扱う
@@ -448,6 +467,9 @@ import { pushUndo } from './undo-redo.js';
           if (String(snap.page ?? '') === String(state.currentPage)) {
             if (snap.daimonId) el.dataset.daimonId = snap.daimonId;
             if (snap.kotaeId)  el.dataset.kotaeId  = snap.kotaeId;
+          } else if (snap.daimonId && pastedDaimonIds.has(snap.daimonId)) {
+            // 別ページへ、紐付く大問ボタンと一緒に貼った付箋：新しい大問IDへ付け替えて紐付けを保つ
+            el.dataset.daimonId = remapDaimonId(snap.daimonId);
           }
 
           addStickyClickHandler(el);
