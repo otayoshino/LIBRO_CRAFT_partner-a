@@ -8,6 +8,7 @@ import { updateLibroBookBtnStates } from './index-outline.js';
 import { mediaBlobs, state } from './state.js';
 import { applyBookSettings } from './settings.js';
 import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelState, updateStatus } from './ui-common.js';
+import { trackEvent } from './analytics.js';
 
     /**
      * DOM上の付箋に付いている付箋グループID（`grp-N` 形式）を走査し、
@@ -426,6 +427,7 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
         ? `（未暗号化ファイル${unencryptedAssetPaths.size}件を検出。保存時に暗号化します）`
         : '';
       showToast(`${zipFileName} を読み込みました${unencryptedNote}`);
+      trackEvent('book_load', { load_route: 'zip', page_count: pages.length });
       await checkAndPromptRestoreForBook(bookId);
     }
 
@@ -818,6 +820,7 @@ import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelStat
         a.click();
         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
         showToast('LIBRO形式で書き出しました');
+        trackEvent('book_export');
       } catch (e) {
         showToast('LIBRO書き出しエラー: ' + e.message);
         console.error(e);

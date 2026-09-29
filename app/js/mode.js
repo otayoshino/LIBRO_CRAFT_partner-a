@@ -2,9 +2,11 @@ import { deactivateAnnotationMode, deselectAllObjects } from './annotation-inter
 import { resetAllButtonPressedImages } from './buttons.js';
 import { state } from './state.js';
 import { updateStatus } from './ui-common.js';
+import { trackEvent } from './analytics.js';
 
 
     export function switchToViewMode() {
+      trackEvent('mode_switch', { mode: 'view' });
       // 描画モード中ならキャンセル
       if (state.currentDrawType) deactivateAnnotationMode();
 
@@ -29,6 +31,7 @@ import { updateStatus } from './ui-common.js';
      * - オーサリングパネル・付箋パーツ操作を再表示
      */
     function switchToEditMode() {
+      trackEvent('mode_switch', { mode: 'edit' });
       document.body.classList.remove('is-view-mode');
 
       // 閲覧モード中に各ボタンによって変更された付箋の状態をすべて元に戻す

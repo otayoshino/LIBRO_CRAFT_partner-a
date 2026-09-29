@@ -8,6 +8,7 @@ import { addStickyClickHandler } from './sticky.js';
 import { closeDialog, saveDialog } from './storage.js';
 import { escapeHtml, updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
+import { trackEvent } from './analytics.js';
 
 
     /** 大問/答/証明ボタンのtype一覧（共通判定に使用） */
@@ -2176,6 +2177,12 @@ import { pushUndo } from './undo-redo.js';
           // 紙面外への配置を禁止(クイック作成はクリック点が中央になるため端で半分はみ出しうる)
           clampElementToPage(note);
           pushUndo({ type: 'create', elements: [note] });
+          trackEvent('annotation_create', {
+            annotation_type: 'sticky',
+            page_number: state.currentPage,
+            color_index: String(colorIdx),
+            open_mode: savedData.annStickyOpenMode ?? '0',
+          });
           updateStatus();
         }
 
@@ -2350,6 +2357,15 @@ import { pushUndo } from './undo-redo.js';
           // 紙面外への配置を禁止(クイック作成の中央寄せ・アイコン型の既定サイズ置換ではみ出しうる)
           clampElementToPage(ann);
           pushUndo({ type: 'create', elements: [ann] });
+          trackEvent('annotation_create', {
+            annotation_type: type,
+            page_number: state.currentPage,
+            display_type: displayType,
+            color_index: savedData.annColor ?? '',
+            show_mode: savedData.annShowMode ?? '',
+            play_mode: savedData.annPlayMode ?? '',
+            video_source: savedData.annVideoSrc ?? '',
+          });
           const dispLabel = displayType === 'icon' ? 'アイコン' : displayType === 'page-color' ? '紙面カラー' : displayType === 'image' ? '画像' : 'マーカー';
           updateStatus();
         }

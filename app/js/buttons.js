@@ -6,6 +6,7 @@ import { applyStickyOpenMode } from './sticky.js';
 import { closeDialog } from './storage.js';
 import { showToast, updateStatus } from './ui-common.js';
 import { pushUndo } from './undo-redo.js';
+import { trackEvent } from './analytics.js';
 
 
     /** ボタン種別ごとのデフォルト表示文言・プリセットindex */
@@ -396,6 +397,11 @@ import { pushUndo } from './undo-redo.js';
         btn: el,
         linkedAll: linkedUndo
       });
+      trackEvent('annotation_create', {
+        annotation_type: 'daimon',
+        page_number: state.currentPage,
+        linked_count: stickies.length + shomeis.length,
+      });
 
       const total = stickies.length + shomeis.length;
       updateStatus();
@@ -591,6 +597,11 @@ import { pushUndo } from './undo-redo.js';
           prevOpenMode: prevOpenModes.get(n) || '0',
         }))
       });
+      trackEvent('annotation_create', {
+        annotation_type: 'kotae',
+        page_number: state.currentPage,
+        linked_count: stickies.length,
+      });
 
       updateStatus();
     }
@@ -728,6 +739,11 @@ import { pushUndo } from './undo-redo.js';
           prevShomeiId:  n.dataset.shomeiId === sid ? undefined : n.dataset.shomeiId,
           prevBackground: n.dataset.shomeiOrigBg || ''
         }))
+      });
+      trackEvent('annotation_create', {
+        annotation_type: 'shomei',
+        page_number: state.currentPage,
+        linked_count: stickies.length,
       });
 
       updateStatus();

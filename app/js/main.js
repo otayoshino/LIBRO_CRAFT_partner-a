@@ -1,3 +1,4 @@
+import { initAnalytics } from './analytics.js';
 import { closeQuickCreateDialog, confirmAnnotation, openQuickCreateDialog } from './annotation-dialog.js';
 import { startAutoSaveInterval } from './autosave.js';
 import { createDaimonButton, createKotaeButton, createShomeiButton } from './buttons.js';
@@ -422,6 +423,9 @@ import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, initStickyC
     startAutoSaveInterval();
 
 
+
+// 利用状況の計測（本番の配置先でのみ有効。analytics.js 参照）
+initAnalytics();
 
 // index.html 内のインラインイベントハンドラ（onclick等）から呼べるように window に公開する
 Object.assign(window, {
