@@ -8,7 +8,7 @@
  */
 
 // 測定ID。発行後にこの行だけ差し替える（未発行の間はプレースホルダのまま＝計測しない）
-const GA_MEASUREMENT_ID = 'G-XXXXXXXXXX';
+const GA_MEASUREMENT_ID = 'G-MT0VFHGQ8B';
 const GA_PLACEHOLDER_ID = 'G-' + 'XXXXXXXXXX';
 
 // main と partner-a を同じプロパティで区別するための値
