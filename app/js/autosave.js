@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { repairCrossPageLinkIds, restoreAnnotationsFromArray, restoreLibroStickyOverrides } from './storage.js';
+import { repairCrossPageLinkIds, repairDuplicateAnnIds, restoreAnnotationsFromArray, restoreLibroStickyOverrides } from './storage.js';
 import { showToast } from './ui-common.js';
 
     /* ============================
@@ -194,9 +194,11 @@ import { showToast } from './ui-common.js';
           restoreLibroStickyOverrides(snapshot.libroStickies);
           // 旧版で作られたデータには、ページをまたいで重複した大問/答/証明ボタンのIDが
           // 含まれうる。そのまま書き出すと読み込み直したときにボタンが消えるため、ここで修復する
-          const repaired = repairCrossPageLinkIds();
+          // 同じく旧版では、復元後に新しく作った部品の data-id が既存と重複しうる
+          // （書き出すと付箋の開閉が別の付箋に効く）。ここで合わせて修復する
+          const repaired = repairCrossPageLinkIds() + repairDuplicateAnnIds();
           showToast(repaired > 0
-            ? `オートセーブデータから復元しました（重複していたボタンの紐付けを${repaired}件修復しました）`
+            ? `オートセーブデータから復元しました（重複していたIDを${repaired}件修復しました）`
             : 'オートセーブデータから復元しました');
         } else {
           await clearAutoSaveSnapshot();

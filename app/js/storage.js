@@ -107,6 +107,84 @@ import { trackEvent } from './analytics.js';
       return repaired;
     }
 
+    /**
+     * アノテーションIDのカウンタ（state.annIdCounter）を、DOM上で使われている数値ID
+     * （data-id・大問/答ボタンの押下時id・LIBRO由来付箋の閉/開id・付箋の開id）より大きく引き上げる。
+     *
+     * 一時保存から復元した直後は、カウンタが book 読み込み時の値（maxAnnotId）に戻っているため、
+     * そのまま新しい部品を作ると前回の作業で使ったIDを振り直し、既存の部品とIDが重複する。
+     * IDが重複すると、書き出し時のID正規化で2つの付箋が同一視され、Hide/Show の対象が
+     * 別の付箋を指す（押すと別の付箋が開閉する）。書き出し時に発行する付箋の開id
+     * （dataset.stickyOpenId）も同じカウンタから採るため、あわせて防げる。
+     */
+    function syncAnnIdCounterFromDom() {
+      let maxN = state.annIdCounter;
+      const bump = (v) => {
+        const n = parseInt(v, 10);
+        if (Number.isFinite(n) && n > maxN) maxN = n;
+      };
+      document.querySelectorAll(
+        '#pageLeft [data-id], #pageLeft [data-daimon-pressed-id], #pageLeft [data-kotae-pressed-id], ' +
+        '#pageLeft [data-closed-id], #pageLeft [data-open-id], #pageLeft [data-sticky-open-id]'
+      ).forEach(el => {
+        bump(el.dataset.id);
+        bump(el.dataset.daimonPressedId);
+        bump(el.dataset.kotaePressedId);
+        bump(el.dataset.closedId);
+        bump(el.dataset.openId);
+        bump(el.dataset.stickyOpenId);
+      });
+      state.annIdCounter = maxN;
+    }
+
+    /**
+     * CRAFTで作成した部品（LIBRO由来の .libro-toggle / .libro-network-slot を除く）のうち、
+     * data-id が他と重複しているものに新しいIDを振る。旧版で作られた一時保存データの修復用。
+     *
+     * LIBRO由来の要素のIDは book の生データと対応しているため変更せず、先に予約する。
+     * DOM上で先に現れた部品が元のIDを保ち、2つ目以降に新しいIDを振る。あわせて、
+     * 大問/答ボタンの押下時id（dataset.daimonPressedId / kotaePressedId）が他のIDと重複している
+     * 場合は削除する（書き出し時に新しいIDで発行し直される）。
+     * 呼び出し前に syncAnnIdCounterFromDom() でカウンタが引き上げ済みであること。
+     * @returns {number} 振り直した・削除したIDの件数（0なら重複なし）
+     */
+    export function repairDuplicateAnnIds() {
+      const pageEl = document.getElementById('pageLeft');
+      if (!pageEl) return 0;
+      let repaired = 0;
+      const used = new Set();
+      pageEl.querySelectorAll('.libro-toggle, .libro-network-slot').forEach(el => {
+        [el.dataset.id, el.dataset.closedId, el.dataset.openId, el.dataset.daimonPressedId, el.dataset.kotaePressedId]
+          .forEach(v => { if (v !== undefined && v !== '') used.add(String(v)); });
+      });
+      const natives = pageEl.querySelectorAll(
+        '.sticky-note:not(.libro-toggle), .ann-object, .ann-icon-obj, .ann-image-obj, ' +
+        '.daimon-btn:not(.libro-toggle), .kotae-btn:not(.libro-toggle), .shomei-btn:not(.libro-toggle)'
+      );
+      natives.forEach(el => {
+        const id = el.dataset.id;
+        if (id === undefined || id === '') return;
+        if (used.has(String(id))) {
+          el.dataset.id = String(++state.annIdCounter);
+          repaired++;
+        }
+        used.add(String(el.dataset.id));
+      });
+      natives.forEach(el => {
+        ['daimonPressedId', 'kotaePressedId'].forEach(key => {
+          const v = el.dataset[key];
+          if (v === undefined || v === '') return;
+          if (used.has(String(v))) {
+            delete el.dataset[key];
+            repaired++;
+          } else {
+            used.add(String(v));
+          }
+        });
+      });
+      return repaired;
+    }
+
         /**
          * アノテーション配列からDOMを再構築する共通処理。
          * handleZipFile から呼び出される。
@@ -308,6 +386,8 @@ import { trackEvent } from './analytics.js';
               syncStickyGroupCounterFromDom();
               // 大問・答・証明ボタンのIDも同様に引き上げる
               syncButtonCountersFromDom();
+              // アノテーションID（data-id 等）も同様に引き上げる
+              syncAnnIdCounterFromDom();
               showToast('アノテーションをファイルから復元しました');
         }
 
@@ -372,6 +452,8 @@ import { trackEvent } from './analytics.js';
       syncStickyGroupCounterFromDom();
       // 大問・答・証明ボタンのIDも同様に引き上げる
       syncButtonCountersFromDom();
+      // アノテーションID（data-id 等）も同様に引き上げる
+      syncAnnIdCounterFromDom();
     }
 
     /**
