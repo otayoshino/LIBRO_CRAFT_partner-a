@@ -1123,6 +1123,10 @@ export function renderTogglePairs(togglePairs) {
   const wrapByKey = new Map(); // `${pageNum}:${id}` -> 要素（closedId・openId両方をキーに登録。答ボタンリンク解決用）
   // 書き出し時のボタンgroup-id（libro-craft-metaのgroup-id）-> 復元したボタン要素
   const btnElByMetaGroupId = new Map();
+  // 同上をページ番号つきで引くための Map（`${pageNum}:${group-id}` -> ボタン要素）。
+  // 旧版の書き出しには、ページの違うボタンが同じ group-id を持つものがあり、group-id だけで
+  // 引くと別ページのボタンに紐付いてしまう。付箋と同じページのボタンを優先する。
+  const btnElByPageMetaGroupId = new Map();
   // メタに紐付け先ボタンのgroup-idを持つ付箋。ボタン要素の生成順に依存しないよう
   // 全要素の生成後にまとめて解決する。
   const stickyLinkRequests = [];
@@ -1207,7 +1211,10 @@ export function renderTogglePairs(togglePairs) {
       wrapByKey.set(`${tp.pageNum}:${tp.openId}`,   el);
       // メタ由来の紐付け解決用（付箋側の daimon-group-id / kotae-group-id と突き合わせる）
       const metaGroupId = meta?.['group-id'];
-      if (metaGroupId) btnElByMetaGroupId.set(metaGroupId, el);
+      if (metaGroupId) {
+        btnElByMetaGroupId.set(metaGroupId, el);
+        btnElByPageMetaGroupId.set(`${tp.pageNum}:${metaGroupId}`, el);
+      }
       page.appendChild(el);
       return;
     }
@@ -1244,7 +1251,7 @@ export function renderTogglePairs(togglePairs) {
       const daimonGroupId = tp.craftMeta['daimon-group-id'];
       const kotaeGroupId  = tp.craftMeta['kotae-group-id'];
       if (daimonGroupId || kotaeGroupId) {
-        stickyLinkRequests.push({ el: wrap, daimonGroupId, kotaeGroupId });
+        stickyLinkRequests.push({ el: wrap, pageNum: tp.pageNum, daimonGroupId, kotaeGroupId });
       }
     }
     wrap.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
@@ -1288,10 +1295,14 @@ export function renderTogglePairs(togglePairs) {
   // 関係を復元する。Hide/Show targetsの数値idに一切依存しないため、ID正規化・ファイル名の
   // ずれ・ページ内順序変更の影響を受けない。上のtargets由来リンクより後に実行し、
   // メタの内容を優先させる。対応するボタンが書き出されていない場合は何もしない。
-  stickyLinkRequests.forEach(({ el, daimonGroupId, kotaeGroupId }) => {
-    const daimonEl = daimonGroupId ? btnElByMetaGroupId.get(daimonGroupId) : null;
+  // 同じページのボタンを優先し、無い場合だけ従来どおり group-id のみで引く
+  const findBtnByMeta = (pageNum, groupId) => groupId
+    ? (btnElByPageMetaGroupId.get(`${pageNum}:${groupId}`) || btnElByMetaGroupId.get(groupId) || null)
+    : null;
+  stickyLinkRequests.forEach(({ el, pageNum, daimonGroupId, kotaeGroupId }) => {
+    const daimonEl = findBtnByMeta(pageNum, daimonGroupId);
     if (daimonEl && daimonEl.dataset.daimonId) el.dataset.daimonId = daimonEl.dataset.daimonId;
-    const kotaeEl = kotaeGroupId ? btnElByMetaGroupId.get(kotaeGroupId) : null;
+    const kotaeEl = findBtnByMeta(pageNum, kotaeGroupId);
     if (kotaeEl && kotaeEl.dataset.kotaeId) el.dataset.kotaeId = kotaeEl.dataset.kotaeId;
   });
 }
