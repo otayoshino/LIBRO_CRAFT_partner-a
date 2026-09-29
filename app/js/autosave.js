@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { restoreAnnotationsFromArray, restoreLibroStickyOverrides } from './storage.js';
+import { repairCrossPageLinkIds, restoreAnnotationsFromArray, restoreLibroStickyOverrides } from './storage.js';
 import { showToast } from './ui-common.js';
 
     /* ============================
@@ -192,7 +192,12 @@ import { showToast } from './ui-common.js';
           // LIBRO book由来付箋の紐付け情報を復元する（旧スナップショットではキーが無いが、
           // 復元側が配列以外を無視するためそのまま渡してよい）
           restoreLibroStickyOverrides(snapshot.libroStickies);
-          showToast('オートセーブデータから復元しました');
+          // 旧版で作られたデータには、ページをまたいで重複した大問/答/証明ボタンのIDが
+          // 含まれうる。そのまま書き出すと読み込み直したときにボタンが消えるため、ここで修復する
+          const repaired = repairCrossPageLinkIds();
+          showToast(repaired > 0
+            ? `オートセーブデータから復元しました（重複していたボタンの紐付けを${repaired}件修復しました）`
+            : 'オートセーブデータから復元しました');
         } else {
           await clearAutoSaveSnapshot();
         }

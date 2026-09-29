@@ -34,6 +34,79 @@ import { trackEvent } from './analytics.js';
       state.stickyGroupCounter = maxN;
     }
 
+    /**
+     * 大問・答・証明ボタンの採番カウンタ（state.daimonCounter / kotaeCounter / shomeiCounter）を、
+     * DOM上の既存ID（`daimon-N` / `kotae-N` / `shomei-N`）より大きく引き上げる。
+     *
+     * 一時保存から復元した直後はカウンタが0のままのため、そのまま新しいボタンを作ると
+     * `kotae-1` などから採番し直し、既存のボタンとIDが衝突する。IDが衝突すると、書き出し時に
+     * ページの違うボタンが同じ group-id を持ち、読み込み直したときにボタンが消える。
+     * LIBRO book 由来のID（`libro-daimon-6-1500` 等）はこの形に当てはまらないため対象外。
+     */
+    function syncButtonCountersFromDom() {
+      const specs = [
+        ['daimonId', 'daimon', 'daimonCounter'],
+        ['kotaeId',  'kotae',  'kotaeCounter'],
+        ['shomeiId', 'shomei', 'shomeiCounter'],
+      ];
+      specs.forEach(([key, prefix, counter]) => {
+        const re = new RegExp(`^${prefix}-(\\d+)$`);
+        let maxN = state[counter];
+        document.querySelectorAll(`#pageLeft [data-${prefix}-id]`).forEach(el => {
+          const m = re.exec(el.dataset[key] || '');
+          if (!m) return;
+          const n = parseInt(m[1], 10);
+          if (Number.isFinite(n) && n > maxN) maxN = n;
+        });
+        state[counter] = maxN;
+      });
+    }
+
+    /**
+     * ページをまたいで重複している大問・答・証明のID（data-daimon-id / data-kotae-id /
+     * data-shomei-id）を、ページごとに振り直す。旧版で作られた一時保存データの修復用。
+     *
+     * 同じIDの要素がページをまたいでいる場合、そのIDのボタンがある最小のページ（ボタンが
+     * どのページにも無ければ最小のページ）を元のIDの持ち主とし、それ以外のページの要素には
+     * ページごとに新しいIDを1つ振る。ページ内のボタンと付箋の紐付けは保たれる。
+     * 呼び出し前に syncButtonCountersFromDom() でカウンタが引き上げ済みであること。
+     * @returns {number} 振り直したページ数（0なら重複なし）
+     */
+    export function repairCrossPageLinkIds() {
+      const pageEl = document.getElementById('pageLeft');
+      if (!pageEl) return 0;
+      let repaired = 0;
+      const specs = [
+        ['daimonId', 'daimon', 'daimonCounter', '.daimon-btn'],
+        ['kotaeId',  'kotae',  'kotaeCounter',  '.kotae-btn'],
+        ['shomeiId', 'shomei', 'shomeiCounter', '.shomei-btn'],
+      ];
+      specs.forEach(([key, prefix, counter, btnSelector]) => {
+        const byId = new Map(); // ID -> Map(ページ番号文字列 -> 要素配列)
+        pageEl.querySelectorAll(`[data-${prefix}-id]`).forEach(el => {
+          const id = el.dataset[key];
+          if (!id) return;
+          const pg = String(el.dataset.page || '');
+          if (!byId.has(id)) byId.set(id, new Map());
+          const pages = byId.get(id);
+          if (!pages.has(pg)) pages.set(pg, []);
+          pages.get(pg).push(el);
+        });
+        byId.forEach(pages => {
+          if (pages.size < 2) return;
+          const sorted = [...pages.keys()].sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+          const keeper = sorted.find(pg => pages.get(pg).some(el => el.matches(btnSelector))) ?? sorted[0];
+          sorted.forEach(pg => {
+            if (pg === keeper) return;
+            const newId = `${prefix}-${++state[counter]}`;
+            pages.get(pg).forEach(el => { el.dataset[key] = newId; });
+            repaired++;
+          });
+        });
+      });
+      return repaired;
+    }
+
         /**
          * アノテーション配列からDOMを再構築する共通処理。
          * handleZipFile から呼び出される。
@@ -233,6 +306,8 @@ import { trackEvent } from './analytics.js';
               updateAnnotationVisibility();
               // 復元した data-group-id と新規発行IDが衝突しないようカウンタを引き上げる
               syncStickyGroupCounterFromDom();
+              // 大問・答・証明ボタンのIDも同様に引き上げる
+              syncButtonCountersFromDom();
               showToast('アノテーションをファイルから復元しました');
         }
 
@@ -295,6 +370,8 @@ import { trackEvent } from './analytics.js';
       });
       // 復元した data-group-id と新規発行IDが衝突しないようカウンタを引き上げる
       syncStickyGroupCounterFromDom();
+      // 大問・答・証明ボタンのIDも同様に引き上げる
+      syncButtonCountersFromDom();
     }
 
     /**
