@@ -112,8 +112,10 @@ import { trackEvent } from './analytics.js';
       const hEl    = document.getElementById('annHeight');
       setPosFieldValue(posXEl, Math.round(internalToRealPx(parseFloat(el.style.left) || 0, 'x')));
       setPosFieldValue(posYEl, Math.round(internalToRealPx(parseFloat(el.style.top)  || 0, 'y')));
-      setPosFieldValue(wEl,    Math.round(internalToRealPx(el.offsetWidth,  'x')));
-      setPosFieldValue(hEl,    Math.round(internalToRealPx(el.offsetHeight, 'y')));
+      // 幅・高さは、整数に丸められる offsetWidth/offsetHeight ではなく style の値から換算する
+      // （内部px 1px が実寸4〜5pxにあたるため、offsetWidth では表示が最大±5ずれていた）
+      setPosFieldValue(wEl,    Math.round(internalToRealPx(parseFloat(el.style.width)  || el.offsetWidth,  'x')));
+      setPosFieldValue(hEl,    Math.round(internalToRealPx(parseFloat(el.style.height) || el.offsetHeight, 'y')));
     }
 
 
@@ -280,8 +282,8 @@ import { trackEvent } from './analytics.js';
       try { Object.assign(prevData, JSON.parse(el.dataset.savedData || '{}')); } catch {}
       prevData.annPosX        = parseFloat(el.style.left) || 0;
       prevData.annPosY        = parseFloat(el.style.top)  || 0;
-      prevData.annWidth       = el.offsetWidth;
-      prevData.annHeight      = el.offsetHeight;
+      prevData.annWidth       = parseFloat(el.style.width)  || el.offsetWidth;
+      prevData.annHeight      = parseFloat(el.style.height) || el.offsetHeight;
       prevData.annDisplayType = el.classList.contains('ann-icon-obj') ? 'icon'
                                 : el.classList.contains('ann-image-obj') ? 'image'
                                 : (prevData.annDisplayType || 'marker');
@@ -603,14 +605,16 @@ import { trackEvent } from './analytics.js';
 
 
     function buildCommonFields(form, type, savedData, initRect, existingEl = null) {
-      const px = initRect ? Math.round(initRect.x) : (parseInt(savedData.annPosX,   10) || 0);
-      const py = initRect ? Math.round(initRect.y) : (parseInt(savedData.annPosY,   10) || 0);
+      // 内部px（小数）のまま扱い、入力欄へ表示するときだけ実寸を整数に丸める。
+      // 内部pxで丸めると、実寸で最大±5の誤差になる。
+      const px = initRect ? initRect.x : (parseFloat(savedData.annPosX) || 0);
+      const py = initRect ? initRect.y : (parseFloat(savedData.annPosY) || 0);
       // 大問/答/証明ボタンは dataset.savedData に annWidth/annHeight を持たないことがあり
       // （openAnnotationSettingsDialogが style.width のあるときだけ設定するため）、
       // 取得できない場合は実レイアウトサイズへフォールバックする。
       // 従来はここで一律 100 になり、変形欄に実サイズと無関係な値が表示されていた。
-      const pw = initRect ? Math.round(initRect.w) : (parseInt(savedData.annWidth,  10) || existingEl?.offsetWidth  || 100);
-      const ph = initRect ? Math.round(initRect.h) : (parseInt(savedData.annHeight, 10) || existingEl?.offsetHeight || 100);
+      const pw = initRect ? initRect.w : (parseFloat(savedData.annWidth)  || existingEl?.offsetWidth  || 100);
+      const ph = initRect ? initRect.h : (parseFloat(savedData.annHeight) || existingEl?.offsetHeight || 100);
       // px/py/pw/phは内部px（#pageLeftのベースサイズ基準）。入力欄にはLIBROページ実寸pxで
       // 表示する（フィットモード・ウィンドウ幅を変えても同じ値になるようにするため）。
       const dispX = Math.round(internalToRealPx(px, 'x'));
@@ -1975,10 +1979,10 @@ import { trackEvent } from './analytics.js';
       }
       // 既存要素の場合は style から位置・サイズを上書き（ドラッグ移動後も正確に取得）
       if (existingEl) {
-        savedData.annPosX   = parseInt(existingEl.style.left,   10) || 0;
-        savedData.annPosY   = parseInt(existingEl.style.top,    10) || 0;
-        if (existingEl.style.width)  savedData.annWidth  = parseInt(existingEl.style.width,  10) || 100;
-        if (existingEl.style.height) savedData.annHeight = parseInt(existingEl.style.height, 10) || 100;
+        savedData.annPosX   = parseFloat(existingEl.style.left) || 0;
+        savedData.annPosY   = parseFloat(existingEl.style.top)  || 0;
+        if (existingEl.style.width)  savedData.annWidth  = parseFloat(existingEl.style.width)  || 100;
+        if (existingEl.style.height) savedData.annHeight = parseFloat(existingEl.style.height) || 100;
       }
       // 新規作成時は state.pendingRect を初期値として使用
       const initRect = existingEl ? null : state.pendingRect;
@@ -2058,10 +2062,11 @@ import { trackEvent } from './analytics.js';
       // 実寸px→内部pxへ変換する。overrideSavedData経由（編集ポップアップの更新ボタン）・
       // 通常のdialogForm収集経由のどちらもこの1箇所で吸収できる（確認済み）。
       // これ以降（1600行目以降の各種別の分岐）は無変更。
-      if (savedData.annPosX   !== undefined) savedData.annPosX   = String(Math.round(realToInternalPx(parseFloat(savedData.annPosX)   || 0, 'x')));
-      if (savedData.annPosY   !== undefined) savedData.annPosY   = String(Math.round(realToInternalPx(parseFloat(savedData.annPosY)   || 0, 'y')));
-      if (savedData.annWidth  !== undefined) savedData.annWidth  = String(Math.round(realToInternalPx(parseFloat(savedData.annWidth)  || 0, 'x')));
-      if (savedData.annHeight !== undefined) savedData.annHeight = String(Math.round(realToInternalPx(parseFloat(savedData.annHeight) || 0, 'y')));
+      // 内部pxは丸めない（内部px 1px が実寸4〜5pxにあたり、丸めると確定のたびに大きさ・位置がずれる）
+      if (savedData.annPosX   !== undefined) savedData.annPosX   = String(realToInternalPx(parseFloat(savedData.annPosX)   || 0, 'x'));
+      if (savedData.annPosY   !== undefined) savedData.annPosY   = String(realToInternalPx(parseFloat(savedData.annPosY)   || 0, 'y'));
+      if (savedData.annWidth  !== undefined) savedData.annWidth  = String(realToInternalPx(parseFloat(savedData.annWidth)  || 0, 'x'));
+      if (savedData.annHeight !== undefined) savedData.annHeight = String(realToInternalPx(parseFloat(savedData.annHeight) || 0, 'y'));
 
       if (type === 'sticky') {
         // LIBRO由来の既存付箋（.libro-toggle）は色プロパティを持たないため、
@@ -2093,14 +2098,14 @@ import { trackEvent } from './analytics.js';
             prevStickyColorOverride: existingEl.dataset.stickyColorOverride,
           });
           // 位置・サイズを反映
-          if (savedData.annPosX !== undefined) existingEl.style.left = parseInt(savedData.annPosX, 10) + 'px';
-          if (savedData.annPosY !== undefined) existingEl.style.top  = parseInt(savedData.annPosY, 10) + 'px';
-          if (savedData.annWidth !== undefined)  existingEl.style.width  = parseInt(savedData.annWidth, 10) + 'px';
-          if (savedData.annHeight !== undefined) existingEl.style.height = parseInt(savedData.annHeight, 10) + 'px';
+          if (savedData.annPosX !== undefined) existingEl.style.left = parseFloat(savedData.annPosX) + 'px';
+          if (savedData.annPosY !== undefined) existingEl.style.top  = parseFloat(savedData.annPosY) + 'px';
+          if (savedData.annWidth !== undefined)  existingEl.style.width  = parseFloat(savedData.annWidth) + 'px';
+          if (savedData.annHeight !== undefined) existingEl.style.height = parseFloat(savedData.annHeight) + 'px';
           // 紙面外への配置を禁止：クランプ後の実位置を savedData にも反映してから保存する
           clampElementToPage(existingEl);
-          savedData.annPosX = parseInt(existingEl.style.left, 10) || 0;
-          savedData.annPosY = parseInt(existingEl.style.top,  10) || 0;
+          savedData.annPosX = parseFloat(existingEl.style.left) || 0;
+          savedData.annPosY = parseFloat(existingEl.style.top)  || 0;
 
           const openLocked = savedData.annStickyOpenMode === '1';
           // 答ボタン紐付き付箋（data-kotae-id あり）は紙色表示をCSS
@@ -2204,21 +2209,21 @@ import { trackEvent } from './analytics.js';
         const prevBtnImage = (prevBtnSd.btnImageFile || '').trim();
         const nextBtnImage = (savedData.btnImageFile || '').trim();
 
-        if (savedData.annPosX !== undefined) existingEl.style.left = parseInt(savedData.annPosX, 10) + 'px';
-        if (savedData.annPosY !== undefined) existingEl.style.top  = parseInt(savedData.annPosY, 10) + 'px';
+        if (savedData.annPosX !== undefined) existingEl.style.left = parseFloat(savedData.annPosX) + 'px';
+        if (savedData.annPosY !== undefined) existingEl.style.top  = parseFloat(savedData.annPosY) + 'px';
         // サイズ変更を許可したボタン（.is-sized かつLIBRO由来でない）のみW/Hを反映する。
         // savedData.annWidth/annHeight は 1805〜1808行目付近で実寸px→内部pxへ変換済みのため、
         // ここで再変換してはならない（確認済み）。
         if (isButtonResizable(existingEl)) {
-          const btnW = parseInt(savedData.annWidth,  10) || 0;
-          const btnH = parseInt(savedData.annHeight, 10) || 0;
+          const btnW = parseFloat(savedData.annWidth)  || 0;
+          const btnH = parseFloat(savedData.annHeight) || 0;
           if (btnW > 0) existingEl.style.width  = Math.max(14, btnW) + 'px';
           if (btnH > 0) existingEl.style.height = Math.max(14, btnH) + 'px';
         }
         // 紙面外への配置を禁止：クランプ後の実位置を savedData にも反映してから保存する
         clampElementToPage(existingEl);
-        savedData.annPosX = parseInt(existingEl.style.left, 10) || 0;
-        savedData.annPosY = parseInt(existingEl.style.top,  10) || 0;
+        savedData.annPosX = parseFloat(existingEl.style.left) || 0;
+        savedData.annPosY = parseFloat(existingEl.style.top)  || 0;
         renderButtonVisual(existingEl, type, savedData);
         existingEl.dataset.savedData = JSON.stringify(savedData);
         // renderButtonVisual() は el.textContent = '' で子要素を全削除するため、
@@ -2302,8 +2307,8 @@ import { trackEvent } from './analytics.js';
           clampElementToPage(existingEl);
           existingEl.dataset.savedData = JSON.stringify({
             ...savedData,
-            annPosX: parseInt(existingEl.style.left, 10) || 0,
-            annPosY: parseInt(existingEl.style.top,  10) || 0,
+            annPosX: parseFloat(existingEl.style.left) || 0,
+            annPosY: parseFloat(existingEl.style.top)  || 0,
           });
           updateStatus();
         } else {
