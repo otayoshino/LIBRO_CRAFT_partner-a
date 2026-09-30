@@ -196,6 +196,9 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
               if (Object.prototype.hasOwnProperty.call(snap, 'prevStickyColorOverride')) {
                 snap.afterStickyColorOverride = el.dataset.stickyColorOverride;
               }
+              if (Object.prototype.hasOwnProperty.call(snap, 'prevStickyColorOverrideHex')) {
+                snap.afterStickyColorOverrideHex = el.dataset.stickyColorOverrideHex;
+              }
               if (prevSavedData    !== undefined) el.dataset.savedData = prevSavedData;
               if (prevStyleCssText !== undefined) el.style.cssText = prevStyleCssText;
               if (prevClassName    !== undefined) el.className = prevClassName;
@@ -203,6 +206,10 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
               if (Object.prototype.hasOwnProperty.call(snap, 'prevStickyColorOverride')) {
                 if (snap.prevStickyColorOverride !== undefined) el.dataset.stickyColorOverride = snap.prevStickyColorOverride;
                 else delete el.dataset.stickyColorOverride;
+              }
+              if (Object.prototype.hasOwnProperty.call(snap, 'prevStickyColorOverrideHex')) {
+                if (snap.prevStickyColorOverrideHex !== undefined) el.dataset.stickyColorOverrideHex = snap.prevStickyColorOverrideHex;
+                else delete el.dataset.stickyColorOverrideHex;
               }
               reinitElement(el);
             };
@@ -357,6 +364,10 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
             if (Object.prototype.hasOwnProperty.call(snap, 'afterStickyColorOverride')) {
               if (snap.afterStickyColorOverride !== undefined) el.dataset.stickyColorOverride = snap.afterStickyColorOverride;
               else delete el.dataset.stickyColorOverride;
+            }
+            if (Object.prototype.hasOwnProperty.call(snap, 'afterStickyColorOverrideHex')) {
+              if (snap.afterStickyColorOverrideHex !== undefined) el.dataset.stickyColorOverrideHex = snap.afterStickyColorOverrideHex;
+              else delete el.dataset.stickyColorOverrideHex;
             }
             reinitElement(el);
           };

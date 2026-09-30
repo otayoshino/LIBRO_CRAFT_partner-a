@@ -1253,6 +1253,14 @@ export function renderTogglePairs(togglePairs) {
       if (daimonGroupId || kotaeGroupId) {
         stickyLinkRequests.push({ el: wrap, pageNum: tp.pageNum, daimonGroupId, kotaeGroupId });
       }
+      // 閉じた面の色（書き出し時に記録されたもの）。詳細設定の色欄の表示と、元の色を選び直した
+      // ときの判定（重ね表示を外す）に使う。外部ファイル由来の値のため形式を検査してから持たせる
+      const baseColorIndex = tp.craftMeta['color-index'];
+      const baseColorHex   = tp.craftMeta['color-hex'];
+      if (/^\d+$/.test(String(baseColorIndex ?? '')) && /^#[0-9a-f]{6}$/i.test(String(baseColorHex ?? ''))) {
+        wrap.dataset.stickyBaseColor    = String(baseColorIndex);
+        wrap.dataset.stickyBaseColorHex = String(baseColorHex).toLowerCase();
+      }
     }
     wrap.style.cssText = `left:${leftPx}px; top:${topPx}px; width:${widthPx}px; height:${heightPx}px;`;
 
@@ -1811,6 +1819,12 @@ async function convertStickyGroupToLibroAnnots(members, pageWidth, pageHeight, g
     const closedMeta = { type: 'sticky', role: 'closed', 'group-id': groupId, ...linkMeta };
     // 「開削除」：閉側は自己クリックでの「開く」動作を許可しない印
     if (m.openLocked) closedMeta['open-locked'] = true;
+    // 閉じた面の色（storage.js が決める）。読み込み直したときに詳細設定の色欄へ表示するために記録する。
+    // 色の記録が無い（元画像を再利用し、読み込み時にも記録が無かった）場合はキー自体を出さない
+    if (m.closedColorHex && m.closedColorIndex !== undefined && m.closedColorIndex !== '') {
+      closedMeta['color-index'] = String(m.closedColorIndex);
+      closedMeta['color-hex']   = m.closedColorHex;
+    }
     // 答ボタン紐付け前の開閉方式（答ボタン削除時の復帰値）。値が無ければキー自体を出さない
     // （旧bookとの後方互換：読み込み側は未定義なら既定値へ戻すフォールバックに落ちる）。
     if (m.kotaeOrigOpenMode !== undefined) {

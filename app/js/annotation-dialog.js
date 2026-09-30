@@ -1,5 +1,5 @@
 import { addAnnClickHandler } from './annotation-actions.js';
-import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, CUSTOM_STICKY_COLOR_BASE, CUSTOM_STICKY_COLOR_SLOTS, getStickyColor, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, CUSTOM_STICKY_COLOR_BASE, CUSTOM_STICKY_COLOR_SLOTS, getStickyColor, isCustomStickyColorIndex, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
 import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getPageBaseSize, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel, updateDaimonGroupHighlight } from './annotation-interaction.js';
 import { applyDaimonImageAspect, generatePressedVariant, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { validateJstreamCorpId, validateJstreamDir, validateJstreamVideoId } from './jstream-validate.js';
@@ -683,11 +683,15 @@ import { trackEvent } from './analytics.js';
       const colSel = document.createElement('select');
       colSel.className = 'd-select';
       colSel.id = 'annColor';
-      // LIBRO由来の既存付箋（.libro-toggle）は色プロパティを持たないため、
+      // LIBRO由来の既存付箋（.libro-toggle）の色は、色の重ね表示（stickyColorOverride）が
+      // あればその色、無ければ書き出し時に記録された閉じた面の色（stickyBaseColor。
+      // renderTogglePairs がメタから復元する）。どちらも無い付箋（色の記録が無い旧book）だけ
       // 「既存付箋カラー」という専用選択肢を先頭に追加しデフォルト選択にする。
-      // 実際の色を選び直した場合のみ、confirmAnnotation側で新規画像を生成して色を持たせる。
       const isLibroToggle = existingEl?.dataset.libroToggle === '1';
-      if (isLibroToggle) {
+      const libroToggleColor = isLibroToggle
+        ? (existingEl.dataset.stickyColorOverride ?? existingEl.dataset.stickyBaseColor)
+        : undefined;
+      if (isLibroToggle && libroToggleColor === undefined) {
         const o = document.createElement('option');
         o.value = 'existing';
         o.textContent = '既存付箋カラー';
@@ -723,7 +727,21 @@ import { trackEvent } from './analytics.js';
       }
       // 新規作成時（existingElなし）のみ、フォールバック先を環境設定のデフォルト色にする
       const stickyColorFallback = existingEl ? '0' : (state.settingsStickyDefaultColor ?? '0');
-      colSel.value = isLibroToggle ? 'existing' : (savedData.annColor || stickyColorFallback);
+      const stickyColorValue = isLibroToggle
+        ? (libroToggleColor ?? 'existing')
+        : (savedData.annColor || stickyColorFallback);
+      // 選択肢に無い色（旧パレットの青/緑/黄・環境設定に登録されていないカスタム）は、
+      // その色の項目を足して表示する（足さないと色欄が空欄になり、何色か分からない）
+      if (stickyColorValue !== 'existing' && ![...colSel.options].some(o => o.value === stickyColorValue)) {
+        const missingIdx = parseInt(stickyColorValue, 10);
+        const missingOpt = document.createElement('option');
+        missingOpt.value = stickyColorValue;
+        missingOpt.textContent = isCustomStickyColorIndex(missingIdx)
+          ? `カスタム${missingIdx - CUSTOM_STICKY_COLOR_BASE + 1}（未登録）`
+          : (STICKY_COLORS[missingIdx]?.label ?? `色${stickyColorValue}`);
+        colSel.appendChild(missingOpt);
+      }
+      colSel.value = stickyColorValue;
       colWrap.appendChild(colSel);
       colDd.appendChild(colWrap);
       form.appendChild(colDt);
@@ -827,6 +845,38 @@ import { trackEvent } from './analytics.js';
      * 「この内容で設定する」ボタンを押さなくても変更がオブジェクトに適用される。
      * @param {string} type - アノテーション種別
      */
+    /**
+     * LIBRO由来の付箋（.libro-toggle）の色を、色の重ね表示（stickyColorOverride）で変える。
+     * 見た目は閉じた画像で決まるため、背景を塗っても画像に隠れて変わらない。
+     * 選んだ色が書き出し時に記録された元の色（stickyBaseColorHex）と同じなら重ね表示を外し、
+     * 元の閉じた画像をそのまま使う（書き出しでも画像を作り直さない）。
+     * 「既存付箋カラー」（existing）・空・数値でない値は、何もしない。
+     * @param {HTMLElement} el - .sticky-note.libro-toggle
+     * @param {string|undefined} colorValue - 色欄の値
+     */
+    function applyLibroToggleStickyColor(el, colorValue) {
+      if (colorValue === undefined || colorValue === '' || colorValue === 'existing') return;
+      const colorIdx = parseInt(colorValue, 10);
+      if (!Number.isFinite(colorIdx)) return;
+      const color = getStickyColor(colorIdx);
+      const baseHex = el.dataset.stickyBaseColorHex;
+      if (baseHex && baseHex.toLowerCase() === String(color).toLowerCase()) {
+        delete el.dataset.stickyColorOverride;
+        delete el.dataset.stickyColorOverrideHex;
+        return;
+      }
+      el.dataset.stickyColorOverride    = String(colorIdx);
+      // 色の実体も併記する（カスタムカラーの定義が失われた環境でも色が確定するように）
+      el.dataset.stickyColorOverrideHex = color;
+      let overlay = el.querySelector('.libro-toggle-color-override');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'libro-toggle-color-override';
+        el.appendChild(overlay);
+      }
+      overlay.style.background = color;
+    }
+
     export function applyLiveUpdate(type) {
 
       const allTargets = getSelectedObjects();
@@ -835,13 +885,21 @@ import { trackEvent } from './analytics.js';
       // Undo用: 変更前スナップショットを積む（初回または値が変わる直前のみ）
       if (!applyLiveUpdate._undoPushed) {
         // 単一選択時は1件、複数選択時は全件
-        const snapshots = allTargets.map(target => ({
-          el: target,
-          prevStyleCssText: target.style.cssText,
-          prevClassName: target.className,
-          prevSavedData: target.dataset.savedData,
-          prevInnerHTML: target.innerHTML
-        }));
+        const snapshots = allTargets.map(target => {
+          const snap = {
+            el: target,
+            prevStyleCssText: target.style.cssText,
+            prevClassName: target.className,
+            prevSavedData: target.dataset.savedData,
+            prevInnerHTML: target.innerHTML
+          };
+          // LIBRO由来の付箋は色を重ね表示で変えるため、その値も取り消せるように控える
+          if (target.dataset.libroToggle === '1') {
+            snap.prevStickyColorOverride    = target.dataset.stickyColorOverride;
+            snap.prevStickyColorOverrideHex = target.dataset.stickyColorOverrideHex;
+          }
+          return snap;
+        });
         pushUndo({ type: 'prop', targets: snapshots });
         applyLiveUpdate._undoPushed = true;
       }
@@ -876,10 +934,24 @@ import { trackEvent } from './analytics.js';
             if (h > 0) target.style.height = Math.max(BTN_MIN, h) + 'px';
           }
         } else if (type === 'sticky') {
-          const color = getStickyColor(colorIdx);
           if (w > 0) target.style.width  = w + 'px';
           if (h > 0) target.style.height = h + 'px';
-          target.style.background = color;
+          const colorValue = document.getElementById('annColor')?.value;
+          if (target.dataset.libroToggle === '1') {
+            // LIBRO由来の付箋：背景は閉じた画像に隠れるため、色の重ね表示で変える
+            applyLibroToggleStickyColor(target, colorValue);
+          } else {
+            const color = getStickyColor(colorIdx);
+            target.style.background = color;
+            // 書き出しと色欄の再表示は savedData の色を使うため、背景と同じ値へ揃える
+            if (colorValue !== undefined && colorValue !== '' && colorValue !== 'existing') {
+              let stickySd = {};
+              try { stickySd = JSON.parse(target.dataset.savedData || '{}'); } catch (_) {}
+              stickySd.annColor    = String(colorIdx);
+              stickySd.annColorHex = color;
+              target.dataset.savedData = JSON.stringify(stickySd);
+            }
+          }
         } else if (target.classList.contains('ann-icon-obj')) {
           // アイコン型：常に 1:1（正方形）でサイズ変更し、背景グラデーション色も適用する。
           // W/H入力はペアリングで同値になるが、選択の切り替え直後など片方しか値がない場合にも
@@ -2096,6 +2168,7 @@ import { trackEvent } from './analytics.js';
             prevClassName: existingEl.className,
             prevInnerHTML: existingEl.innerHTML,
             prevStickyColorOverride: existingEl.dataset.stickyColorOverride,
+            prevStickyColorOverrideHex: existingEl.dataset.stickyColorOverrideHex,
           });
           // 位置・サイズを反映
           if (savedData.annPosX !== undefined) existingEl.style.left = parseFloat(savedData.annPosX) + 'px';
@@ -2129,17 +2202,9 @@ import { trackEvent } from './analytics.js';
             delete existingEl.dataset.stickyColorOverride;
             delete existingEl.dataset.stickyColorOverrideHex;
           } else if (isLibroToggleNote) {
-            // 実際の色が選択された：閉のみ選択色のプレビューに差し替える（開・元datasetは無変更のまま維持）
-            existingEl.dataset.stickyColorOverride    = String(colorIdx);
-            // 色の実体も併記する（カスタムカラーの定義が失われた環境でも色が確定するように）
-            existingEl.dataset.stickyColorOverrideHex = color;
-            let overlay = existingEl.querySelector('.libro-toggle-color-override');
-            if (!overlay) {
-              overlay = document.createElement('div');
-              overlay.className = 'libro-toggle-color-override';
-              existingEl.appendChild(overlay);
-            }
-            overlay.style.background = color;
+            // 実際の色が選択された：閉のみ選択色のプレビューに差し替える（開・元datasetは無変更のまま維持）。
+            // 書き出し時に記録された元の色と同じなら、重ね表示を外して元の閉じた画像に戻す
+            applyLibroToggleStickyColor(existingEl, colorSelection);
           } else {
             // 通常付箋：色を反映
             existingEl.style.background = color;

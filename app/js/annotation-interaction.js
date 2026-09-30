@@ -184,6 +184,11 @@ import { pushUndo } from './undo-redo.js';
             snap.stickyColorOverride = el.dataset.stickyColorOverride;
             snap.stickyColorOverrideHex = el.dataset.stickyColorOverrideHex;
           }
+          // 書き出し時に記録された閉じた面の色（重ね表示が無いときに表示中の色）
+          if (el.dataset.stickyBaseColor !== undefined) {
+            snap.stickyBaseColor = el.dataset.stickyBaseColor;
+            snap.stickyBaseColorHex = el.dataset.stickyBaseColorHex;
+          }
         }
         return snap;
       });
@@ -438,11 +443,15 @@ import { pushUndo } from './undo-redo.js';
           // （元PNGの絵柄そのものは引き継がない。単色付箋になる）。
           let stickyBg = snap.background;
           if (snap.fromLibroToggle) {
+            // 色は「色上書き指定 → 書き出し時に記録された閉じた面の色 → 環境設定のデフォルト付箋色」の順
             const colorIdx = snap.stickyColorOverride !== undefined
               ? snap.stickyColorOverride
-              : (state.settingsStickyDefaultColor ?? '0');
+              : (snap.stickyBaseColor ?? state.settingsStickyDefaultColor ?? '0');
+            const colorHex = snap.stickyColorOverride !== undefined
+              ? snap.stickyColorOverrideHex
+              : snap.stickyBaseColorHex;
             stickySd.annColor = String(colorIdx);
-            stickyBg = getStickyColor(colorIdx, snap.stickyColorOverrideHex);
+            stickyBg = getStickyColor(colorIdx, colorHex);
             // 色の実体を併記する（書き出し時の色決定と表示を一致させるため）
             stickySd.annColorHex = stickyBg;
             el.dataset.savedData = JSON.stringify(stickySd);
@@ -1231,14 +1240,16 @@ import { pushUndo } from './undo-redo.js';
      * @param {HTMLElement} clone - cloneNode(true) 直後のクローン要素（DOM挿入前でよい）
      */
     function convertLibroStickyCloneToCraft(clone) {
-      // 色は「コピー元の色上書き指定 → 環境設定のデフォルト付箋色」の順で決める
-      const colorIdx = clone.dataset.stickyColorOverride !== undefined
+      // 色は「コピー元の色上書き指定 → 書き出し時に記録された閉じた面の色 → 環境設定のデフォルト付箋色」の順
+      const hasOverride = clone.dataset.stickyColorOverride !== undefined;
+      const colorIdx = hasOverride
         ? clone.dataset.stickyColorOverride
-        : (state.settingsStickyDefaultColor ?? '0');
+        : (clone.dataset.stickyBaseColor ?? state.settingsStickyDefaultColor ?? '0');
+      const colorHex = hasOverride ? clone.dataset.stickyColorOverrideHex : clone.dataset.stickyBaseColorHex;
       let sd = {};
       try { sd = JSON.parse(clone.dataset.savedData || '{}'); } catch (_) {}
       sd.annColor = String(colorIdx);
-      const bg = getStickyColor(colorIdx, clone.dataset.stickyColorOverrideHex);
+      const bg = getStickyColor(colorIdx, colorHex);
       // 色の実体を併記する（書き出し時の色決定と表示を一致させるため）
       sd.annColorHex = bg;
       clone.dataset.savedData = JSON.stringify(sd);
@@ -1258,6 +1269,8 @@ import { pushUndo } from './undo-redo.js';
       delete clone.dataset.openFile;
       delete clone.dataset.stickyColorOverride;
       delete clone.dataset.stickyColorOverrideHex;
+      delete clone.dataset.stickyBaseColor;
+      delete clone.dataset.stickyBaseColorHex;
 
       clone.style.background = bg;
       // 答ボタンとの紐付けを解除したときに戻す背景色（buttons.jsが記録するもの）。

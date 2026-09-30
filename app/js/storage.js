@@ -738,14 +738,20 @@ import { trackEvent } from './analytics.js';
             openId   = parseInt(el.dataset.openId, 10);
             const closedFile = el.dataset.closedFile;
             const openFile   = el.dataset.openFile;
+            // closedColorIndex / closedColorHex：閉じた面が表す色。libro-craft-meta へ記録し、
+            // 読み込み直したときに詳細設定の色欄へ表示する（元画像をそのまま使う場合は、
+            // 読み込み時に記録されていた色をそのまま引き継ぐ。記録が無ければ出さない）
             if (isKotaeLinked) {
-              desc = { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color: STICKY_COLOR_MAP[3], style };
+              desc = { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color: STICKY_COLOR_MAP[3], style,
+                       closedColorIndex: '3', closedColorHex: STICKY_COLOR_MAP[3] };
             } else if (el.dataset.stickyColorOverride) {
               const colorIdx = parseInt(el.dataset.stickyColorOverride, 10);
               const color = getStickyColor(colorIdx, el.dataset.stickyColorOverrideHex);
-              desc = { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color, style };
+              desc = { closedId, openId, closedFile, openFile, closedMode: 'color', openMode: 'reuse', color, style,
+                       closedColorIndex: String(colorIdx), closedColorHex: color };
             } else {
-              desc = { closedId, openId, closedFile, openFile, closedMode: 'reuse', openMode: 'reuse', style };
+              desc = { closedId, openId, closedFile, openFile, closedMode: 'reuse', openMode: 'reuse', style,
+                       closedColorIndex: el.dataset.stickyBaseColor, closedColorHex: el.dataset.stickyBaseColorHex };
             }
           } else {
             // 新規付箋：閉id（dataset.id）は既存を再利用し、開idは初回のみ発行してdatasetにキャッシュする
@@ -759,7 +765,8 @@ import { trackEvent } from './analytics.js';
             const color = isKotaeLinked
               ? STICKY_COLOR_MAP[3]
               : getStickyColor(colorIdx, sd.annColorHex);
-            desc = { closedId, openId, closedMode: 'color', openMode: 'transparent', color, style };
+            desc = { closedId, openId, closedMode: 'color', openMode: 'transparent', color, style,
+                     closedColorIndex: isKotaeLinked ? '3' : String(colorIdx), closedColorHex: color };
           }
           // 「開削除」設定（3-2-4/3-2-5節でクラス反映済み）をLIBRO書き出し側へ伝える。
           // 答ボタン紐付き付箋には作成時に既定適用されるため .libro-toggle付箋にも付きうるが、
