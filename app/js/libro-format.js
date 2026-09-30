@@ -1,5 +1,5 @@
 import { mediaBlobs, state } from './state.js';
-import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, DAIMON_PRESSED_COLOR, ICON_COLOR_OPTIONS } from './config.js';
+import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, CUSTOM_STICKY_COLOR_BASE, CUSTOM_STICKY_COLOR_SLOTS, DAIMON_PRESSED_COLOR, ICON_COLOR_OPTIONS, STICKY_COLOR_MAP } from './config.js';
 import { addStickyClickHandler } from './sticky.js';
 import { getPageBaseSize, makeDraggable, makeResizable } from './annotation-interaction.js';
 import { addDaimonClickHandler, addKotaeClickHandler, makeDaimonResizable, renderButtonVisual } from './buttons.js';
@@ -1082,6 +1082,87 @@ export async function parseLibroBookZip(zip) {
   return { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths };
 }
 
+
+/**
+ * 色の値（#rrggbb・小文字）に一致する付箋の色番号を返す。一致しなければ null。
+ * 照合の順は「紙色 → カスタム1〜3 → 青・緑・黄」（同じ色が複数に当たる場合は紙色を優先する）。
+ * カスタムカラーは現在の環境設定（book読み込み時に book の設定へ戻したもの）と照合する。
+ * @param {string} hex
+ * @returns {number|null}
+ */
+function findStickyColorIndexByHex(hex) {
+  if (STICKY_COLOR_MAP[3].toLowerCase() === hex) return 3;
+  for (let slot = 0; slot < CUSTOM_STICKY_COLOR_SLOTS; slot++) {
+    const custom = state.settingsCustomStickyColors?.[slot];
+    if (custom && custom.toLowerCase() === hex) return CUSTOM_STICKY_COLOR_BASE + slot;
+  }
+  for (const idx of [0, 1, 2]) {
+    if (STICKY_COLOR_MAP[idx].toLowerCase() === hex) return idx;
+  }
+  return null;
+}
+
+/**
+ * 閉じた画像が単色なら、その色（#rrggbb・小文字）を返す。単色でない・透明を含む・
+ * 読み込めない場合は null。中央と四隅の近く（各辺から10%内側）の5点がすべて同じ色のときだけ単色とみなす。
+ * @param {string} url - 閉じた画像の URL（同一オリジンの Blob URL）
+ * @returns {Promise<string|null>}
+ */
+async function readSolidImageColor(url) {
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (!w || !h) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    const points = [[0.5, 0.5], [0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]];
+    let hex = null;
+    for (const [fx, fy] of points) {
+      const x = Math.min(w - 1, Math.floor(w * fx));
+      const y = Math.min(h - 1, Math.floor(h * fy));
+      const d = ctx.getImageData(x, y, 1, 1).data;
+      if (d[3] !== 255) return null;
+      const pointHex = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+      if (hex === null) hex = pointHex;
+      else if (hex !== pointHex) return null;
+    }
+    return hex;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * 色の記録（libro-craft-meta の color-index / color-hex）が無い CRAFT 製の付箋について、
+ * 閉じた画像の色から付箋の色を読み取り、記録された色（stickyBaseColor / stickyBaseColorHex）として持たせる。
+ * 2026-09-30 より前の版で書き出した book でも、詳細設定の色欄に色の名前を表示するため。
+ * 読み取れない・環境設定の色と一致しない付箋は何もしない（色欄は「既存付箋カラー」のまま）。
+ * **applyBookSettings() の後に呼ぶこと**（book に記録されたカスタムカラーと照合するため）。
+ * @returns {Promise<void>}
+ */
+export async function detectLegacyStickyBaseColors() {
+  const notes = [...document.querySelectorAll(
+    '#pageLeft .sticky-note.libro-toggle[data-libro-toggle-craft="1"]:not([data-sticky-base-color-hex])'
+  )];
+  await Promise.all(notes.map(async note => {
+    const closedImg = note.querySelector('.libro-toggle-closed');
+    if (!closedImg || !closedImg.src) return;
+    const hex = await readSolidImageColor(closedImg.src);
+    if (!hex) return;
+    const idx = findStickyColorIndexByHex(hex);
+    if (idx === null) return;
+    // 読み取りの間に別の経路で設定されていれば、そちらを優先する
+    if (note.dataset.stickyBaseColorHex) return;
+    note.dataset.stickyBaseColor    = String(idx);
+    note.dataset.stickyBaseColorHex = hex;
+  }));
+}
 
 /**
  * Hide/Showペア（付箋・答え表示等の開閉）を、位置移動・リサイズ・グループ化・書き出しに対応した

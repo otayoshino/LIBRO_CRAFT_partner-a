@@ -2,7 +2,7 @@ import { checkAndPromptRestoreForBook } from './autosave.js';
 import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, getStickyColor, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
-import { buildLibroBookExport, checkLibroBookLoadable, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, resolveVideoSrc, styleToRect } from './libro-format.js';
+import { buildLibroBookExport, checkLibroBookLoadable, detectLegacyStickyBaseColors, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, resolveVideoSrc, styleToRect } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility, updateNavButtonStates, updateTocButtonState } from './page-view.js';
 import { updateLibroBookBtnStates } from './index-outline.js';
 import { mediaBlobs, state } from './state.js';
@@ -572,6 +572,9 @@ import { trackEvent } from './analytics.js';
       state.libroBook = { zip, baseDir, indexJson, unencryptedAssetPaths };
       // book側に記録された環境設定を無条件で適用する（無ければlocalStorageの値へ戻す）
       applyBookSettings(indexJson);
+      // 色の記録が無い修正前の付箋は、閉じた画像の色から色を読み取る（book のカスタムカラーと照合するため、
+      // 環境設定の適用より後に行う）
+      await detectLegacyStickyBaseColors();
       updateTocButtonState();
       updateNavButtonStates();
       updateLibroBookBtnStates();
