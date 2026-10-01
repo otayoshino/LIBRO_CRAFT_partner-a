@@ -189,6 +189,11 @@ import { pushUndo } from './undo-redo.js';
             snap.stickyBaseColor = el.dataset.stickyBaseColor;
             snap.stickyBaseColorHex = el.dataset.stickyBaseColorHex;
           }
+          // どちらも無い（「既存付箋カラー」の）付箋は、閉じた画像の色を控える
+          if (snap.stickyColorOverride === undefined && snap.stickyBaseColor === undefined) {
+            const imageHex = readClosedImageSolidHex(el);
+            if (imageHex) snap.stickyImageColorHex = imageHex;
+          }
         }
         return snap;
       });
@@ -447,9 +452,11 @@ import { pushUndo } from './undo-redo.js';
             const colorIdx = snap.stickyColorOverride !== undefined
               ? snap.stickyColorOverride
               : (snap.stickyBaseColor ?? state.settingsStickyDefaultColor ?? '0');
+            // 色の値は「色上書き → 記録された色 → 閉じた画像から読んだ色（既存付箋カラーの付箋）」の順。
+            // 画像から読んだ色は色番号を持たないため、色番号は既定の付箋色のまま色の値だけを使う
             const colorHex = snap.stickyColorOverride !== undefined
               ? snap.stickyColorOverrideHex
-              : snap.stickyBaseColorHex;
+              : (snap.stickyBaseColorHex ?? snap.stickyImageColorHex);
             stickySd.annColor = String(colorIdx);
             stickyBg = getStickyColor(colorIdx, colorHex);
             // 色の実体を併記する（書き出し時の色決定と表示を一致させるため）
@@ -1225,6 +1232,43 @@ import { pushUndo } from './undo-redo.js';
     }
 
     /**
+     * LIBRO由来の付箋の閉じた画像（.libro-toggle-closed）が単色なら、その色（#rrggbb・小文字）を返す。
+     * 単色でない・透明を含む・読み込み前の場合は null。中央と四隅の近く（各辺から10%内側）の
+     * 5点がすべて同じ色のときだけ単色とみなす（libro-format.js の readSolidImageColor と同じ基準）。
+     * 画像は同一オリジンの Blob URL で読み込み済みのため、同期的に読める。
+     * 「既存付箋カラー」の付箋（色の記録も照合結果も無い）を複製するときの色に使う。
+     * @param {HTMLElement} noteEl - .sticky-note.libro-toggle（DOM上の要素。複製先ではなく複製元を渡す）
+     * @returns {string|null}
+     */
+    function readClosedImageSolidHex(noteEl) {
+      try {
+        const img = noteEl?.querySelector('.libro-toggle-closed');
+        if (!img || !img.complete || !img.naturalWidth || !img.naturalHeight) return null;
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        const points = [[0.5, 0.5], [0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]];
+        let hex = null;
+        for (const [fx, fy] of points) {
+          const x = Math.min(w - 1, Math.floor(w * fx));
+          const y = Math.min(h - 1, Math.floor(h * fy));
+          const d = ctx.getImageData(x, y, 1, 1).data;
+          if (d[3] !== 255) return null;
+          const pointHex = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+          if (hex === null) hex = pointHex;
+          else if (hex !== pointHex) return null;
+        }
+        return hex;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    /**
      * Alt+ドラッグで複製したLIBRO由来付箋（.sticky-note.libro-toggle）のクローンを、
      * 通常のCRAFT付箋（単色）へ作り替える。
      *
@@ -1240,14 +1284,20 @@ import { pushUndo } from './undo-redo.js';
      * savedData.annColor から単色PNGを生成するため、DOMの見た目と書き出し結果が一致する。
      * 元PNGの絵柄は引き継がない（単色付箋になる）。
      * @param {HTMLElement} clone - cloneNode(true) 直後のクローン要素（DOM挿入前でよい）
+     * @param {HTMLElement|null} [orig] - 複製元の要素（閉じた画像の色を読むために使う）
      */
-    function convertLibroStickyCloneToCraft(clone) {
-      // 色は「コピー元の色上書き指定 → 書き出し時に記録された閉じた面の色 → 環境設定のデフォルト付箋色」の順
+    function convertLibroStickyCloneToCraft(clone, orig = null) {
+      // 色は「コピー元の色上書き指定 → 書き出し時に記録された閉じた面の色 → 環境設定のデフォルト付箋色」の順。
+      // どちらも無い（「既存付箋カラー」の）付箋は、複製元の閉じた画像の色の値を使う
+      // （cloneNode した img は読み込み直しになりうるため、読み込み済みの複製元から読む）
       const hasOverride = clone.dataset.stickyColorOverride !== undefined;
+      const hasBase = clone.dataset.stickyBaseColor !== undefined;
       const colorIdx = hasOverride
         ? clone.dataset.stickyColorOverride
         : (clone.dataset.stickyBaseColor ?? state.settingsStickyDefaultColor ?? '0');
-      const colorHex = hasOverride ? clone.dataset.stickyColorOverrideHex : clone.dataset.stickyBaseColorHex;
+      const colorHex = hasOverride
+        ? clone.dataset.stickyColorOverrideHex
+        : (hasBase ? clone.dataset.stickyBaseColorHex : (readClosedImageSolidHex(orig || clone) ?? undefined));
       let sd = {};
       try { sd = JSON.parse(clone.dataset.savedData || '{}'); } catch (_) {}
       sd.annColor = String(colorIdx);
@@ -1346,7 +1396,7 @@ import { pushUndo } from './undo-redo.js';
             clone.classList.remove('is-selected');
             // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
             if (orig.dataset.libroToggle === '1' && clone.classList.contains('sticky-note')) {
-              convertLibroStickyCloneToCraft(clone);
+              convertLibroStickyCloneToCraft(clone, orig);
             }
             // shomei-btn / 付箋 の shomeiId を新 ID にリマップ
             if (clone.classList.contains('shomei-btn') && clone.dataset.shomeiId) {
@@ -1387,7 +1437,7 @@ import { pushUndo } from './undo-redo.js';
               noteClone.dataset.shomeiId = newId;
               noteClone.classList.remove('is-selected');
               // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
-              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone);
+              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone, origNote);
               origNote.parentNode.appendChild(noteClone);
               makeDraggable(noteClone, excludeSelector);
               reinitElement(noteClone);
@@ -1410,7 +1460,7 @@ import { pushUndo } from './undo-redo.js';
               noteClone.dataset.kotaeId = newId;
               noteClone.classList.remove('is-selected');
               // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
-              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone);
+              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone, origNote);
               origNote.parentNode.appendChild(noteClone);
               makeDraggable(noteClone, excludeSelector);
               reinitElement(noteClone);
@@ -1617,7 +1667,7 @@ import { pushUndo } from './undo-redo.js';
           clone.classList.remove('is-selected');
           // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
           if (el.dataset.libroToggle === '1' && clone.classList.contains('sticky-note')) {
-            convertLibroStickyCloneToCraft(clone);
+            convertLibroStickyCloneToCraft(clone, el);
           }
           // shomei-btn の場合：新 shomeiId を採番し、紐付き付箋も複製
           if (clone.classList.contains('shomei-btn') && clone.dataset.shomeiId) {
@@ -1630,7 +1680,7 @@ import { pushUndo } from './undo-redo.js';
               noteClone.dataset.shomeiId = newShomeiId;
               noteClone.classList.remove('is-selected');
               // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
-              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone);
+              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone, origNote);
               origNote.parentNode.appendChild(noteClone);
               makeDraggable(noteClone, excludeSelector);
               reinitElement(noteClone);
@@ -1648,7 +1698,7 @@ import { pushUndo } from './undo-redo.js';
               noteClone.dataset.kotaeId = newKotaeId;
               noteClone.classList.remove('is-selected');
               // LIBRO由来付箋の複製は通常のCRAFT付箋（単色）へ作り替える
-              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone);
+              if (origNote.dataset.libroToggle === '1') convertLibroStickyCloneToCraft(noteClone, origNote);
               origNote.parentNode.appendChild(noteClone);
               makeDraggable(noteClone, excludeSelector);
               reinitElement(noteClone);

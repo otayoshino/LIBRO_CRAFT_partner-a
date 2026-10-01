@@ -913,8 +913,9 @@ import { trackEvent } from './analytics.js';
       });
       const colElForLive = document.getElementById('annColor');
       if (colElForLive) {
-        colElForLive.addEventListener('change', () => applyLiveUpdate(type));
-        colElForLive.addEventListener('input', () => applyLiveUpdate(type));
+        // 色欄からの呼び出しだけ色を塗り直す（位置・大きさの確定では塗り直さない）
+        colElForLive.addEventListener('change', () => applyLiveUpdate(type, { colorChanged: true }));
+        colElForLive.addEventListener('input', () => applyLiveUpdate(type, { colorChanged: true }));
       }
     }
 
@@ -956,7 +957,13 @@ import { trackEvent } from './analytics.js';
       overlay.style.background = color;
     }
 
-    export function applyLiveUpdate(type) {
+    /**
+     * @param {string} type - アノテーション種別
+     * @param {{colorChanged?: boolean}} [opts] - colorChanged: 色欄が変わったときの呼び出しなら true。
+     *   true のときだけ色を塗り直す。位置・大きさの確定で塗り直すと、色欄の番号（例：カスタム1）が
+     *   その時点の環境設定の色を指すため、環境設定を後から変えた場合に色が黙って変わる。
+     */
+    export function applyLiveUpdate(type, { colorChanged = false } = {}) {
 
       const allTargets = getSelectedObjects();
       if (allTargets.length === 0) return;
@@ -1016,7 +1023,9 @@ import { trackEvent } from './analytics.js';
           if (w > 0) target.style.width  = w + 'px';
           if (h > 0) target.style.height = h + 'px';
           const colorValue = document.getElementById('annColor')?.value;
-          if (target.dataset.libroToggle === '1') {
+          if (!colorChanged) {
+            // 色欄以外の確定：色は変えない
+          } else if (target.dataset.libroToggle === '1') {
             // LIBRO由来の付箋：背景は閉じた画像に隠れるため、色の重ね表示で変える
             applyLibroToggleStickyColor(target, colorValue);
           } else {
@@ -1039,7 +1048,9 @@ import { trackEvent } from './analytics.js';
           const size = Math.max(ICON_MIN, w > 0 ? w : (h > 0 ? h : getIconDefaultSizePx()));
           target.style.width  = size + 'px';
           target.style.height = size + 'px';
-          target.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
+          if (colorChanged) {
+            target.style.background = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
+          }
         } else if (target.classList.contains('ann-image-obj')) {
           // 画像アイコン型：サイズのみ変更（背景色は適用しない、元画像をそのまま表示するため）
           if (w > 0) target.style.width  = w + 'px';
@@ -1048,7 +1059,7 @@ import { trackEvent } from './analytics.js';
           const bgColor = ANN_COLOR_OPTIONS[colorIdx]?.value ?? ANN_COLOR_OPTIONS[0].value;
           if (w > 0) target.style.width  = w + 'px';
           if (h > 0) target.style.height = h + 'px';
-          target.style.background = bgColor;
+          if (colorChanged) target.style.background = bgColor;
         }
       } else {
         // 複数選択：位置・サイズはデルタで全対象に適用し個々の状態を保持する。
@@ -1061,7 +1072,7 @@ import { trackEvent } from './analytics.js';
         const multiColorEl  = document.querySelector('#sideDetailActive #annColor');
         const multiColorIdx = parseInt(multiColorEl?.value || '0', 10);
         // 'existing'（LIBRO由来の「既存カラー」選択）は色を持たない指定のため、色の適用対象外とする
-        const applyColor    = !!multiColorEl && multiColorEl.value !== 'existing';
+        const applyColor    = colorChanged && !!multiColorEl && multiColorEl.value !== 'existing';
 
         // デルタの基準は「現在の外接矩形（#selectionBoundingBox）」＝サイドパネルに表示中の値。
         // 以前は applyLiveUpdate._prevX 等のキャッシュを基準にしていたが、ドラッグ移動・リサイズ・
@@ -1427,8 +1438,9 @@ import { trackEvent } from './analytics.js';
       colDd.appendChild(colWrap);
       form.appendChild(colDt);
       form.appendChild(colDd);
-      colSel.addEventListener('change', () => applyLiveUpdate(type));
-      colSel.addEventListener('input',  () => applyLiveUpdate(type));
+      // 色欄からの呼び出しだけ色を塗り直す（位置・大きさの確定では塗り直さない）
+      colSel.addEventListener('change', () => applyLiveUpdate(type, { colorChanged: true }));
+      colSel.addEventListener('input',  () => applyLiveUpdate(type, { colorChanged: true }));
 
       // --- 画像アイコン用アップロードフィールド（表示タイプ「画像」選択時のみ表示） ---
       const iconImageDt = document.createElement('dt');
