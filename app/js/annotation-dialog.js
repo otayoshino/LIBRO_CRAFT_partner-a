@@ -830,6 +830,16 @@ import { trackEvent } from './analytics.js';
             if (targets.length >= 2)      updateAlignPanel();
             else if (targets.length === 1) refreshPosFieldsLive(targets[0]);
           });
+          // Enterで確定したらフォーカスを外す（上の blur 処理で表示も実配置へ揃う）。
+          // 編集ポップアップ内の欄は、Enterを「確定ボタンのクリック」として扱う
+          // main.js の keydown に任せるため対象外とする。
+          el.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            if (e.isComposing || e.keyCode === 229) return;
+            if (el.closest('#quickCreatePopup')) return;
+            e.preventDefault();
+            el.blur();
+          });
         }
       });
       const colElForLive = document.getElementById('annColor');

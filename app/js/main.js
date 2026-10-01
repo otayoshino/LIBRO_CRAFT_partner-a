@@ -412,6 +412,36 @@ import { applyDaimonMenuLabel, closeSettingsModal, initSettingsTabs, initStickyC
       updatePageDisplay();
     });
 
+    // Enterで確定したらフォーカスを外す。フォーカスが残ると矢印キーでのページ移動や
+    // Delete・Ctrl+Z などのショートカットが入力欄に吸われて効かないため。
+    // blur() で値が変わっていれば change が1回だけ発火し、上のページ移動が走る
+    // （preventDefault でブラウザ側の Enter による change は止めている）。
+    document.getElementById('pageInput').addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      // IME変換中の確定Enterでは外さない
+      if (e.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
+      this.blur();
+    });
+
+    /**
+     * ページ番号欄・詳細設定パネルの入力欄にフォーカスがあるとき、欄の外を押したらフォーカスを外す。
+     * 紙面・部品・グレー領域の mousedown はドラッグのために preventDefault しており、
+     * ブラウザ標準の「押した場所へフォーカスを移す」動作が止まって入力欄にフォーカスが残る。
+     * キャプチャ段階で紙面側の処理より先に外すため、値が変わっていれば change が
+     * 選択の切り替えより前に走り、入力していた部品へ適用される。
+     */
+    document.addEventListener('mousedown', (e) => {
+      const active = document.activeElement;
+      if (!active || !['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
+      if (active.id !== 'pageInput' && !active.closest('#sideDetailPanel')) return;
+      if (active.contains(e.target)) return;
+      // スピンボタン（▲▼）はフォーカスを保ったまま値を増減する設計のため、同じ欄のものは除外する
+      const posField = active.closest('.pos-field');
+      if (posField && posField.contains(e.target)) return;
+      active.blur();
+    }, true);
+
     // 初期ページ表示を 0/0 に初期化する
     updatePageDisplay();
 
