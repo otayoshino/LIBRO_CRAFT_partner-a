@@ -1,4 +1,5 @@
 import { syncJstreamDefaults, syncStickyDefaultColor } from './annotation-dialog.js';
+import { scheduleAutoSave } from './autosave.js';
 import { CUSTOM_STICKY_COLOR_BASE, CUSTOM_STICKY_COLOR_SLOTS, CUSTOM_STICKY_COLOR_VALUES } from './config.js';
 import { validateJstreamCorpId, validateJstreamDir } from './jstream-validate.js';
 import { state } from './state.js';
@@ -131,10 +132,43 @@ export function applyBookSettings(indexJson) {
   const bookSettings = indexJson?.configs?.['libro-craft-meta']?.settings;
   if (bookSettings) applySettingsObject(bookSettings);
 
-  // state の変更をUI・連続作成用の前回設定へ反映する（closeSettingsModal と同じ処理）。
+  syncSettingsToUi();
+}
+
+/**
+ * state の環境設定をUI・連続作成用の前回設定へ反映する（closeSettingsModal と同じ処理）。
+ */
+function syncSettingsToUi() {
   syncStickyDefaultColor(state.settingsStickyDefaultColor);
   syncJstreamDefaults(state.settingsJstreamDir, state.settingsJstreamCorpId);
   applyDaimonMenuLabel();
+}
+
+/**
+ * 現在の state の環境設定を、localStorage・book・一時保存と同じキー構成の新しいオブジェクトで返す。
+ * 一時保存（autosave.js）へ環境設定を含めるために使う。
+ * @returns {Object}
+ */
+export function getCurrentSettings() {
+  return {
+    stickyDefaultColor: state.settingsStickyDefaultColor,
+    customStickyColors: [...state.settingsCustomStickyColors],
+    daimonLabel:        state.settingsDaimonLabel,
+    jstreamDir:         state.settingsJstreamDir,
+    jstreamCorpId:      state.settingsJstreamCorpId,
+  };
+}
+
+/**
+ * 一時保存（オートセーブ）に記録された環境設定を state へ適用し、UIへ反映する。
+ * 復元を選んだときに、applyBookSettings() の後で呼ぶ（一時保存の方が新しい作業状態のため、
+ * bookに記録された値より優先する）。初期値へのリセットはしない。
+ * localStorage は読まないし書き換えもしない（applyBookSettings と同じ方針）。
+ * @param {Object} saved - 一時保存の settings（getCurrentSettings() と同じキー構成）
+ */
+export function applyAutoSaveSettings(saved) {
+  applySettingsObject(saved);
+  syncSettingsToUi();
 }
 
 /**
@@ -336,6 +370,9 @@ export function closeSettingsModal(save) {
     }
     applyDaimonMenuLabel();
     saveSettings();
+    // 環境設定だけを変えた場合も、中断時に一時保存から戻せるよう保存を予約する
+    // （部品の操作が無いと、次の定期保存まで最大30秒反映されないため）
+    scheduleAutoSave();
   }
 
   overlay.classList.remove('is-open');

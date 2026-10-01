@@ -1,3 +1,4 @@
+import { applyAutoSaveSettings, getCurrentSettings } from './settings.js';
 import { state } from './state.js';
 import { repairCrossPageLinkIds, repairDuplicateAnnIds, restoreAnnotationsFromArray, restoreLibroStickyOverrides } from './storage.js';
 import { showToast } from './ui-common.js';
@@ -120,6 +121,9 @@ import { showToast } from './ui-common.js';
      * 現在のアノテーション状態をIndexedDBへ保存する。
      */
     async function saveAutoSaveSnapshot() {
+      // book未読込の間は保存しない。起動直後から定期保存が走るため、ここで止めないと
+      // 中断した作業の一時保存が「部品0件・bookId無し」で上書きされ、復元できなくなる。
+      if (!state.currentBookId) return;
       // 見開き表示中はスナップショットのpx→%換算基準（#pageLeft の実寸）が見開き紙面のものになり、
       // 保存される座標が壊れる。見開きは閲覧専用で編集も発生しないため、保存自体を見送る。
       if (state.viewMode === 'spread') return;
@@ -127,10 +131,13 @@ import { showToast } from './ui-common.js';
         const data = collectAnnotationSnapshotData();
         // LIBRO book由来付箋の紐付け情報（本体はzip側が真のため、編集分だけを別枠で保存する）
         const libroStickies = collectLibroStickyOverrides();
+        // 環境設定（カスタムカラー等）。付箋は個々に色を持つが、続きの作業で同じ色を作るには
+        // 環境設定も中断時点の値へ戻す必要がある
+        const settings = getCurrentSettings();
         const db = await openAutoSaveDB();
         await new Promise((resolve, reject) => {
           const tx = db.transaction(STORE_NAME, 'readwrite');
-          tx.objectStore(STORE_NAME).put({ data, libroStickies, savedAt: Date.now(), bookId: state.currentBookId }, SNAPSHOT_KEY);
+          tx.objectStore(STORE_NAME).put({ data, libroStickies, settings, savedAt: Date.now(), bookId: state.currentBookId }, SNAPSHOT_KEY);
           tx.oncomplete = resolve;
           tx.onerror = () => reject(tx.error);
         });
@@ -188,6 +195,10 @@ import { showToast } from './ui-common.js';
         const savedAt = new Date(snapshot.savedAt).toLocaleString('ja-JP');
         const restore = window.confirm(`このbookの自動保存された編集内容があります（${savedAt} 保存）。\n復元しますか？`);
         if (restore) {
+          // 環境設定も中断時点の値へ戻す。部品の復元より先に行う（付箋の色をカスタムカラー番号から
+          // 求める処理が、中断時点のカスタムカラーを参照できるように）。
+          // 修正前に保存された一時保存には settings が無いため、その場合はbookの値のまま
+          if (snapshot.settings) applyAutoSaveSettings(snapshot.settings);
           restoreAnnotationsFromArray(snapshot.data);
           // LIBRO book由来付箋の紐付け情報を復元する（旧スナップショットではキーが無いが、
           // 復元側が配列以外を無視するためそのまま渡してよい）
