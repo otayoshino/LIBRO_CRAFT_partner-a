@@ -1161,8 +1161,10 @@ import { pushUndo } from './undo-redo.js';
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup',   onUp);
             // リサイズが実際に行われた場合のみ Undo スタックに積む
-            const curLeft   = parseInt(el.style.left,   10);
-            const curTop    = parseInt(el.style.top,    10);
+            // 開始位置（startLeft/startTop）と同じく小数のまま読む。parseInt で切り捨てると、
+            // 位置が小数の部品ではハンドルを押しただけで「動いた」と判定され空振りの履歴が積まれる
+            const curLeft   = parseFloat(el.style.left) || 0;
+            const curTop    = parseFloat(el.style.top)  || 0;
             const curWidth  = el.offsetWidth;
             const curHeight = el.offsetHeight;
             if (curLeft !== startLeft || curTop !== startTop || curWidth !== startWidth || curHeight !== startHeight) {
@@ -1586,11 +1588,13 @@ import { pushUndo } from './undo-redo.js';
               setTimeout(() => { state.suppressObjectClick = false; }, 0);
             }
             // 移動が実際に行われた場合のみ Undo スタックに積む
+            // 開始位置（startLeft/startTop）と同じく小数のまま比べ・記録する。parseInt で切り捨てると、
+            // 位置が小数の部品ではクリックだけで空振りの履歴が積まれ、やり直しでも位置が整数へずれる
             const movedTargets = multiTargets.filter(({ el: t, startLeft, startTop }) =>
-              parseInt(t.style.left, 10) !== startLeft || parseInt(t.style.top, 10) !== startTop
+              (parseFloat(t.style.left) || 0) !== startLeft || (parseFloat(t.style.top) || 0) !== startTop
             );
             if (movedTargets.length > 0) {
-              pushUndo({ type: 'move', targets: movedTargets.map(({ el: t, startLeft, startTop }) => ({ el: t, prevLeft: startLeft, prevTop: startTop, afterLeft: parseInt(t.style.left, 10), afterTop: parseInt(t.style.top, 10) })) });
+              pushUndo({ type: 'move', targets: movedTargets.map(({ el: t, startLeft, startTop }) => ({ el: t, prevLeft: startLeft, prevTop: startTop, afterLeft: parseFloat(t.style.left) || 0, afterTop: parseFloat(t.style.top) || 0 })) });
             }
             updateAlignPanel();
           };
@@ -1748,8 +1752,10 @@ import { pushUndo } from './undo-redo.js';
             updateAlignPanel();
           } else {
             // 通常ドラッグ：移動が実際に行われた場合のみ Undo スタックに積む
-            const curLeft = parseInt(target.style.left, 10);
-            const curTop  = parseInt(target.style.top,  10);
+            // 開始位置（startLeft/startTop）と同じく小数のまま読む（parseInt だとクリックだけで
+            // 空振りの履歴が積まれ、やり直しでも位置が整数へずれる）
+            const curLeft = parseFloat(target.style.left) || 0;
+            const curTop  = parseFloat(target.style.top)  || 0;
             if (curLeft !== startLeft || curTop !== startTop) {
               pushUndo({ type: 'move', targets: [{ el: target, prevLeft: startLeft, prevTop: startTop, afterLeft: curLeft, afterTop: curTop }] });
             }
