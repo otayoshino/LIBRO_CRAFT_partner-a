@@ -84,10 +84,9 @@ import { trackEvent } from './analytics.js';
      * 位置・サイズ入力欄（#annPosX等）へ値を書き戻す。
      * ユーザーが入力中（フォーカス中）の欄は書き換えない。
      *
-     * 入力は `input` イベントで1文字ごとに applyLiveUpdate() → 外接矩形の再計算 → 書き戻し
-     * まで走るため、フォーカス中の欄まで上書きすると「1500」と打とうとしても1文字目の時点で
-     * 欄が実配置の値へ差し替わり、多桁の値を入力できない（紙面端でクランプされた場合は
-     * 何桁足しても戻されて「一定以上変更できない」状態になる）。
+     * 欄の値は確定（Enter・フォーカス解除）時の `change` で applyLiveUpdate() へ渡すが、
+     * スピンボタンはフォーカスを保ったまま即時反映 → 書き戻しまで走る。フォーカス中の欄まで
+     * 上書きすると、スピン後に続けて打っている値が実配置の値へ差し替わってしまう。
      * 入力中の欄と実配置のずれは、フォーカスが外れた時点の再同期（buildCommonFieldsのblur）で解消する。
      * @param {HTMLElement|null} el    - 入力欄
      * @param {number}           value - 書き戻す値（実寸px）
@@ -588,17 +587,23 @@ import { trackEvent } from './analytics.js';
         <input type="number" class="d-input d-input-sm" id="${id}" value="${value}">
       `;
       const input = field.querySelector('input');
+      // スピンボタンは押すたびに即時反映する（1クリック＝取り消し1件）。
+      // 欄の値は通常、確定（Enter・フォーカス解除）時の change でのみ部品へ反映するため、
+      // スピン専用の確定イベント poscommit を発火する（受け側は buildCommonFields）。
+      // input はアイコン型の縦横比ペアリング（反対側の欄の表示追従）のために残す。
       // スピンアップ：+1
       field.querySelector('.spin-up').addEventListener('mousedown', (e) => {
         e.preventDefault();
         input.value = (parseInt(input.value, 10) || 0) + 1;
         input.dispatchEvent(new Event('input'));
+        input.dispatchEvent(new Event('poscommit'));
       });
       // スピンダウン：-1（0未満にしない）
       field.querySelector('.spin-down').addEventListener('mousedown', (e) => {
         e.preventDefault();
         input.value = Math.max(0, (parseInt(input.value, 10) || 0) - 1);
         input.dispatchEvent(new Event('input'));
+        input.dispatchEvent(new Event('poscommit'));
       });
       return field;
     }
@@ -816,13 +821,32 @@ import { trackEvent } from './analytics.js';
         }
       }
 
-      // 選択中オブジェクトへの即時反映リスナーを登録
-      // サイドメニュー・ダイアログ両対応でUndoが積まれるよう、input/change両方でapplyLiveUpdateを呼ぶ
+      // 選択中オブジェクトへの反映リスナーを登録
+      // 入力中（1文字ごとの input）には反映せず、確定したときだけ反映する。
+      // 1文字ごとに反映すると、途中の値（「600」を打つ途中の「6」など）でも部品が動き、
+      // 取り消し履歴も1文字ごとに積まれて Ctrl+Z / Ctrl+Shift+Z が1文字単位になるため。
+      // - 確定 = change（Enter で blur したとき・欄の外を押してフォーカスが外れたとき・Tab）
+      // - スピンボタン = poscommit（makePosField が発火。押すたびに即時反映）
       ['annPosX', 'annPosY', 'annWidth', 'annHeight'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
-          el.addEventListener('input', () => applyLiveUpdate(type));
-          el.addEventListener('change', () => applyLiveUpdate(type));
+          // 最後に部品へ反映した値。スピン後にフォーカスを外したときの change など、
+          // 値の変わらない確定で反映と取り消し履歴が二重にならないよう比較に使う。
+          let lastApplied = el.value;
+          // フォーカスの無い間はドラッグ等で表示値が書き換わる（setPosFieldValue）ため、
+          // 入力を始める時点の表示値で取り直す
+          el.addEventListener('focus', () => { lastApplied = el.value; });
+          el.addEventListener('change', () => {
+            if (el.value === lastApplied) return;
+            lastApplied = el.value;
+            applyLiveUpdate(type);
+          });
+          // スピンボタンは比較せず必ず反映する（フォーカスの無い欄では lastApplied が
+          // 古い値のままのことがあり、比較すると反映漏れになる）
+          el.addEventListener('poscommit', () => {
+            applyLiveUpdate(type);
+            lastApplied = el.value;
+          });
           // 入力中はフォーカス中の欄への書き戻しを抑止している（setPosFieldValue）ため、
           // フォーカスが外れた時点で実際の配置（紙面外クランプ後の値）へ表示を揃える。
           el.addEventListener('blur', () => {
@@ -830,7 +854,8 @@ import { trackEvent } from './analytics.js';
             if (targets.length >= 2)      updateAlignPanel();
             else if (targets.length === 1) refreshPosFieldsLive(targets[0]);
           });
-          // Enterで確定したらフォーカスを外す（上の blur 処理で表示も実配置へ揃う）。
+          // Enterで確定したらフォーカスを外す（blur の直前に change が発火して反映され、
+          // 上の blur 処理で表示も実配置へ揃う）。
           // 編集ポップアップ内の欄は、Enterを「確定ボタンのクリック」として扱う
           // main.js の keydown に任せるため対象外とする。
           el.addEventListener('keydown', (e) => {
