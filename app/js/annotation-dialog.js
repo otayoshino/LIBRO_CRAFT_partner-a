@@ -363,6 +363,9 @@ import { trackEvent } from './analytics.js';
       document.getElementById('qcOkBtn').onclick = () => {
         // J-stream指定の入力値を検証する。通らない場合はポップアップを閉じず更新もしない
         if (!validateQuickPopupJstream(type)) return;
+        // アイコン型は1:1のため、W・Hのうち変えた方の値で両欄を揃えてから収集する。
+        // confirmAnnotation はW・Hが等しいときにその値を1辺として使う
+        unifyIconSizeFields(popup);
         // ポップアップ内フォーム値を直接収集
         const savedData = {};
         ['qcFormCommon', 'qcFormSpecific'].forEach(formId => {
@@ -433,7 +436,15 @@ import { trackEvent } from './analytics.js';
       if (existing) existing.remove();
 
       const cfg      = ANNOTATION_TYPE_CONFIG[type];
-      const prevData = lastNewAnnData[type] || {};
+      const prevData = { ...(lastNewAnnData[type] || {}) };
+      // アイコン型は W・H 欄にアイコンの既定サイズ（1:1）を表示する。
+      // 前回作成時の値や buildCommonFields の既定値（100）のままだと、何も変えずに作ったときの
+      // 大きさ（既定サイズ）と欄の表示が一致しないため。表示タイプの既定は buildSpecificFields と同じ 'icon'。
+      if (type !== 'sticky' && !BUTTON_TYPES.has(type) && (prevData.annDisplayType || 'icon') === 'icon') {
+        const iconDefault = getIconDefaultSizePx();
+        prevData.annWidth  = iconDefault;
+        prevData.annHeight = iconDefault;
+      }
 
       // ポップアップシェルを生成（フォーム内容は buildCommonFields/buildSpecificFields が埋める）
       const popup = document.createElement('div');
@@ -512,6 +523,34 @@ import { trackEvent } from './analytics.js';
 
 
     /**
+     * ポップアップ（#quickCreatePopup）の W・H 欄を、アイコン型（1:1）用に同じ値へ揃える。
+     * 表示タイプがアイコンのときだけ働き、W・H のうち値を変えた方（初期値＝defaultValue と
+     * 異なる方）に揃える。両方変えた場合は W に揃える。どちらも変えていない場合は何もしない。
+     *
+     * ポップアップの欄には縦横比ペアリング（buildCommonFields）が付かない。
+     * buildCommonFields は欄を document.getElementById で探すため、ヘッダーに同じ id の欄が
+     * あるとそちらを拾うので、W を変えても H が追従せず、別々の値のまま確定されてしまう。
+     * @param {HTMLElement|null} popup - #quickCreatePopup
+     * @returns {boolean} 揃えた場合 true
+     */
+    function unifyIconSizeFields(popup) {
+      if (!popup) return false;
+      if (popup.querySelector('#qcFormSpecific [id="annDisplayType"]')?.value !== 'icon') return false;
+      const wEl = popup.querySelector('#qcFormCommon [id="annWidth"]');
+      const hEl = popup.querySelector('#qcFormCommon [id="annHeight"]');
+      if (!wEl || !hEl) return false;
+      const wChanged = wEl.value !== wEl.defaultValue;
+      const hChanged = hEl.value !== hEl.defaultValue;
+      if (!wChanged && !hChanged) return false;
+      const side = parseFloat((wChanged ? wEl : hEl).value);
+      if (!(side > 0)) return false;
+      wEl.value = String(side);
+      hEl.value = String(side);
+      return true;
+    }
+
+
+    /**
      * クイック作成ポップアップを閉じる。
      */
     export function closeQuickCreateDialog() {
@@ -531,6 +570,9 @@ import { trackEvent } from './analytics.js';
     function confirmQuickCreate(type, pageX, pageY) {
       // J-stream指定の入力値を検証する。通らない場合はポップアップを閉じずオブジェクトも作らない
       if (!validateQuickPopupJstream(type)) return;
+      // アイコン型は1:1のため、W・Hのうち変えた方の値で両欄を揃える（転写・中心合わせより先に行う）。
+      // どちらも変えていなければ false で、アイコンは従来どおり既定サイズで作る
+      const iconResized = unifyIconSizeFields(document.getElementById('quickCreatePopup'));
       // ポップアップフォームから値を収集し、サイドバーの共通/種別固有フォームに転写する
       ['qcFormCommon', 'qcFormSpecific'].forEach((srcId, i) => {
         const src  = document.getElementById(srcId);
@@ -559,6 +601,8 @@ import { trackEvent } from './analytics.js';
 
       // クリック位置をオブジェクトの中央にして配置
       state.pendingRect = { x: pageX - w / 2, y: pageY - h / 2, w, h };
+      // アイコン型でW・Hを変えた場合は、その1辺で作る（confirmAnnotation のアイコン型・新規作成分岐が使う）
+      if (iconResized) state.pendingRect.iconSize = Math.max(14, w);
       confirmAnnotation(type);
 
       // 注入した hidden input を二次防止のため後片付けで削除
@@ -2363,9 +2407,18 @@ import { trackEvent } from './analytics.js';
 
           if (displayType === 'icon') {
             // アイコン型に変更または絶対アイコン型のまま更新
-            // 1:1比率を強制：short辺に揃える（非アイコン型から切り替え時に縦横が異なる場合がある）
+            // 1:1比率を強制する。W・Hが等しい値で届いたとき（編集ポップアップでサイズを変えた場合は
+            // unifyIconSizeFields が両欄を揃えて渡す。何も変えていない場合も現在の大きさで等しい）は
+            // その値を1辺にする。等しくないとき（非アイコン型から切り替えた場合など）は従来どおり
+            // 現在の矩形の短辺に揃える。
             const iconDefault = getIconDefaultSizePx();
-            const iconSize = Math.min(existingEl.offsetWidth || iconDefault, existingEl.offsetHeight || iconDefault);
+            const formW = parseFloat(savedData.annWidth);
+            const formH = parseFloat(savedData.annHeight);
+            // 実寸→内部pxの換算はX軸・Y軸で別々に行うため、同じ実寸値でも小数の誤差で
+            // 完全には一致しないことがある。1px未満の差は「等しい」とみなす
+            const iconSize = (formW > 0 && formH > 0 && Math.abs(formW - formH) < 1)
+              ? Math.max(14, formW)
+              : Math.min(existingEl.offsetWidth || iconDefault, existingEl.offsetHeight || iconDefault);
             existingEl.className = 'ann-icon-obj';
             existingEl.style.width  = iconSize + 'px';
             existingEl.style.height = iconSize + 'px';
@@ -2426,8 +2479,9 @@ import { trackEvent } from './analytics.js';
             const iconBg = ICON_COLOR_OPTIONS[colorIdx]?.value ?? ICON_COLOR_OPTIONS[0].value;
             ann.className = 'ann-icon-obj';
             // 種別によらず同一の既定サイズ・1:1で作成する
-            // （getIconDefaultSizePx() を唯一の基準にする。ドラッグで描いた矩形の寸法は使わない）
-            const iconSize = getIconDefaultSizePx();
+            // （getIconDefaultSizePx() を唯一の基準にする。ドラッグで描いた矩形の寸法は使わない）。
+            // 作成ポップアップでW・Hを変えた場合だけ、confirmQuickCreate が渡す1辺（iconSize）を使う
+            const iconSize = state.pendingRect?.iconSize ?? getIconDefaultSizePx();
             ann.style.cssText = `left:${x}px; top:${y}px; width:${iconSize}px; height:${iconSize}px; background:${iconBg};`;
             ann.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${cfg.iconViewBox || '0 0 24 24'}">${cfg.iconSvg}</svg>`;
           } else if (displayType === 'page-color') {
