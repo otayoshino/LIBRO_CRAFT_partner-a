@@ -8,7 +8,7 @@ import { updateAnnotationVisibility } from './page-view.js';
 import { redoStack, undoStack } from './state.js';
 import { addStickyClickHandler, applyStickyHideUndo, applyStickyOpenMode } from './sticky.js';
 import { closeDialog } from './storage.js';
-import { escapeHtml, showToast, updateStatus } from './ui-common.js';
+import { classNameKeepingSelection, escapeHtml, showToast, updateStatus } from './ui-common.js';
 
 
     /* ============================
@@ -201,7 +201,8 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
               }
               if (prevSavedData    !== undefined) el.dataset.savedData = prevSavedData;
               if (prevStyleCssText !== undefined) el.style.cssText = prevStyleCssText;
-              if (prevClassName    !== undefined) el.className = prevClassName;
+              // 選択表示（is-selected）は取り消し直前の状態を保つ（付箋の selectedStickySet とずれないように）
+              if (prevClassName    !== undefined) el.className = classNameKeepingSelection(el, prevClassName);
               if (prevInnerHTML    !== undefined) el.innerHTML = prevInnerHTML;
               if (Object.prototype.hasOwnProperty.call(snap, 'prevStickyColorOverride')) {
                 if (snap.prevStickyColorOverride !== undefined) el.dataset.stickyColorOverride = snap.prevStickyColorOverride;
@@ -359,7 +360,8 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
             const { el, afterSavedData, afterStyleCssText, afterClassName, afterInnerHTML } = snap;
             if (afterSavedData    !== undefined) el.dataset.savedData = afterSavedData;
             if (afterStyleCssText !== undefined) el.style.cssText = afterStyleCssText;
-            if (afterClassName    !== undefined) el.className = afterClassName;
+            // 選択表示（is-selected）はやり直し直前の状態を保つ（付箋の selectedStickySet とずれないように）
+            if (afterClassName    !== undefined) el.className = classNameKeepingSelection(el, afterClassName);
             if (afterInnerHTML    !== undefined) el.innerHTML = afterInnerHTML;
             if (Object.prototype.hasOwnProperty.call(snap, 'afterStickyColorOverride')) {
               if (snap.afterStickyColorOverride !== undefined) el.dataset.stickyColorOverride = snap.afterStickyColorOverride;

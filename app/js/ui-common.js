@@ -5,6 +5,21 @@ import { state } from './state.js';
     let _toastTimer = null;
 
     /**
+     * 要素へ戻す className を、選択表示（is-selected）だけは要素の現在の状態に合わせて返す。
+     * 取り消し・やり直しでスナップショットの className を丸ごと戻すと、操作時点の選択表示まで
+     * 戻ってしまう。付箋は選択を selectedStickySet でも管理しているため、Set に入っていないのに
+     * is-selected だけ付いた状態になり、紙面をクリックしても選択が外れなくなる。
+     * @param {HTMLElement} el        - 対象要素（現在の選択状態を読む）
+     * @param {string}      className - 戻したい className
+     * @returns {string}
+     */
+    export function classNameKeepingSelection(el, className) {
+      const base = String(className).replace(/\bis-selected\b/g, ' ').replace(/\s+/g, ' ').trim();
+      return el.classList.contains('is-selected') ? `${base} is-selected`.trim() : base;
+    }
+
+
+    /**
      * 画面中央にトーストメッセージを表示する。
      * @param {string} msg - 表示メッセージ
      * @param {number} [duration=2000] - 表示時間（ms）
