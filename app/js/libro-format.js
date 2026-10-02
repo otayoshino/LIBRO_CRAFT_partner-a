@@ -1142,7 +1142,9 @@ async function readSolidImageColor(url) {
  * 色の記録（libro-craft-meta の color-index / color-hex）が無い CRAFT 製の付箋について、
  * 閉じた画像の色から付箋の色を読み取り、記録された色（stickyBaseColor / stickyBaseColorHex）として持たせる。
  * 2026-09-30 より前の版で書き出した book でも、詳細設定の色欄に色の名前を表示するため。
- * 読み取れない・環境設定の色と一致しない付箋は何もしない（色欄は「既存付箋カラー」のまま）。
+ * 読み取れない付箋は何もしない。環境設定の色と一致しない付箋は、色の値（stickyBaseColorHex）だけを
+ * 持たせる（色欄の「既存付箋カラー（#rrggbb）」の表示と、元の色を選び直したときの判定に使う）。
+ * 色番号（stickyBaseColor）は一致したときだけ持たせる（番号が無ければ書き出しでメタを出さない）。
  * **applyBookSettings() の後に呼ぶこと**（book に記録されたカスタムカラーと照合するため）。
  * @returns {Promise<void>}
  */
@@ -1156,10 +1158,9 @@ export async function detectLegacyStickyBaseColors() {
     const hex = await readSolidImageColor(closedImg.src);
     if (!hex) return;
     const idx = findStickyColorIndexByHex(hex);
-    if (idx === null) return;
     // 読み取りの間に別の経路で設定されていれば、そちらを優先する
     if (note.dataset.stickyBaseColorHex) return;
-    note.dataset.stickyBaseColor    = String(idx);
+    if (idx !== null) note.dataset.stickyBaseColor = String(idx);
     note.dataset.stickyBaseColorHex = hex;
   }));
 }

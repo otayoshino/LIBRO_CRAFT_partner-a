@@ -1,6 +1,6 @@
 import { addAnnClickHandler } from './annotation-actions.js';
 import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconDefaultSizePx, STICKY_COLORS, STICKY_COLOR_MAP, CUSTOM_STICKY_COLOR_BASE, CUSTOM_STICKY_COLOR_SLOTS, getStickyColor, isCustomStickyColorIndex, renderAnnObjectContent, renderAnnImageContent, MAX_ICON_IMAGE_SIZE_BYTES, MAX_ICON_IMAGE_DIMENSION } from './config.js';
-import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getPageBaseSize, getSelectedObjects, makeDraggable, makeResizable, updateAlignPanel, updateDaimonGroupHighlight } from './annotation-interaction.js';
+import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getPageBaseSize, getSelectedObjects, makeDraggable, makeResizable, readClosedImageSolidHex, updateAlignPanel, updateDaimonGroupHighlight } from './annotation-interaction.js';
 import { applyDaimonImageAspect, generatePressedVariant, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { validateJstreamCorpId, validateJstreamDir, validateJstreamVideoId } from './jstream-validate.js';
 import { mediaBlobs, state } from './state.js';
@@ -732,19 +732,71 @@ import { trackEvent } from './analytics.js';
       const colSel = document.createElement('select');
       colSel.className = 'd-select';
       colSel.id = 'annColor';
-      // LIBRO由来の既存付箋（.libro-toggle）の色は、色の重ね表示（stickyColorOverride）が
-      // あればその色、無ければ書き出し時に記録された閉じた面の色（stickyBaseColor。
-      // renderTogglePairs がメタから復元する）。どちらも無い付箋（色の記録が無い旧book）だけ
-      // 「既存付箋カラー」という専用選択肢を先頭に追加しデフォルト選択にする。
+      // 色欄の名前は、付箋がいま表示している色の値で決める（表示のたびに判定する）。
+      // 記録された色番号（例：カスタム1＝100）で決めると、環境設定のカスタムカラーを後から
+      // 上書きしたとき、付箋は元の色のままなのに色欄だけ新しい色の名前になるため。
+      // - 同じ色の欄があればその名前（記録された番号の色が同じならその番号を優先）
+      // - どれとも同じでなければ「既存付箋カラー（#rrggbb）」（value='existing'）
+      // 色が変わるのは、利用者が色欄で色を選んだときだけ（applyLiveUpdate / confirmAnnotation）。
       const isLibroToggle = existingEl?.dataset.libroToggle === '1';
-      const libroToggleColor = isLibroToggle
-        ? (existingEl.dataset.stickyColorOverride ?? existingEl.dataset.stickyBaseColor)
-        : undefined;
-      if (isLibroToggle && libroToggleColor === undefined) {
+      let stickyColorValue;
+      let showExistingOption = false;
+      // 「既存付箋カラー」の選択肢の文言に添える色の値（null なら添えない）
+      let existingOptionHex = null;
+      if (isLibroToggle) {
+        // LIBRO由来の付箋：「既存付箋カラー」＝元の閉じた画像のまま（重ね表示を外す）。
+        // 元の色がいまの環境設定のどれとも同じでない（または読めない）付箋には、色を変えた後も
+        // 元へ戻せるよう、重ね表示の有無にかかわらずこの選択肢を出す。
+        const originalHex   = getLibroToggleOriginalHex(existingEl);
+        const originalValue = findStickyColorValueByHex(originalHex, existingEl.dataset.stickyBaseColor);
+        showExistingOption = originalValue === null;
+        existingOptionHex  = originalHex;
+        if (existingEl.dataset.stickyColorOverride !== undefined) {
+          const overrideHex = existingEl.dataset.stickyColorOverrideHex;
+          const resolvedOverrideHex = (overrideHex && /^#[0-9a-f]{6}$/i.test(overrideHex))
+            ? overrideHex.toLowerCase()
+            : stickyColorValueToHex(existingEl.dataset.stickyColorOverride);
+          const overrideValue = findStickyColorValueByHex(resolvedOverrideHex, existingEl.dataset.stickyColorOverride);
+          if (overrideValue !== null) {
+            stickyColorValue = overrideValue;
+          } else {
+            // 重ね表示の色がいまの環境設定のどれとも同じでない：いまの重ね表示のままを表す選択肢
+            // （番号の欄を選択状態にすると、確定でいまの環境設定の色へ黙って変わるため）
+            stickyColorValue = 'current';
+            const currentOpt = document.createElement('option');
+            currentOpt.value = 'current';
+            currentOpt.textContent = resolvedOverrideHex ? `現在の色（${resolvedOverrideHex}）` : '現在の色';
+            colSel.appendChild(currentOpt);
+          }
+        } else {
+          stickyColorValue = originalValue ?? 'existing';
+        }
+      } else if (existingEl) {
+        // 通常の付箋：色の値（savedData.annColorHex。無ければ色番号のいまの色）で名前を決める。
+        // 書き出しも同じ順で色を決める（storage.js の getStickyColor(colorIdx, sd.annColorHex)）
+        const recordedValue = savedData.annColor || '0';
+        const actualHex     = String(getStickyColor(recordedValue, savedData.annColorHex)).toLowerCase();
+        const matchedValue  = findStickyColorValueByHex(actualHex, recordedValue);
+        if (matchedValue !== null) {
+          stickyColorValue = matchedValue;
+        } else {
+          // 「既存付箋カラー」＝色欄を作った時点の色のまま。色を変えた後に選び直したとき
+          // 戻す色を色欄に控える（applyLiveUpdate が使う）
+          stickyColorValue   = 'existing';
+          showExistingOption = true;
+          existingOptionHex  = actualHex;
+          colSel.dataset.existingHex        = actualHex;
+          colSel.dataset.existingColorIndex = recordedValue;
+        }
+      } else {
+        // 新規作成時のみ、フォールバック先を環境設定のデフォルト色にする
+        stickyColorValue = savedData.annColor || (state.settingsStickyDefaultColor ?? '0');
+      }
+      if (showExistingOption) {
         const o = document.createElement('option');
         o.value = 'existing';
-        o.textContent = '既存付箋カラー';
-        colSel.appendChild(o);
+        o.textContent = existingOptionHex ? `既存付箋カラー（${existingOptionHex}）` : '既存付箋カラー';
+        colSel.insertBefore(o, colSel.firstChild);
       }
       // 新規作成で選べるのは紙色（STICKY_COLORS[3]）と登録済みのカスタムスロットのみ。
       // 旧選択肢（青/緑/黄）は過去データの描画・書き出し用に定義だけ残しており、ここには出さない。
@@ -774,14 +826,9 @@ import { trackEvent } from './analytics.js';
         emptyOpt.disabled = true;
         colSel.appendChild(emptyOpt);
       }
-      // 新規作成時（existingElなし）のみ、フォールバック先を環境設定のデフォルト色にする
-      const stickyColorFallback = existingEl ? '0' : (state.settingsStickyDefaultColor ?? '0');
-      const stickyColorValue = isLibroToggle
-        ? (libroToggleColor ?? 'existing')
-        : (savedData.annColor || stickyColorFallback);
       // 選択肢に無い色（旧パレットの青/緑/黄・環境設定に登録されていないカスタム）は、
       // その色の項目を足して表示する（足さないと色欄が空欄になり、何色か分からない）
-      if (stickyColorValue !== 'existing' && ![...colSel.options].some(o => o.value === stickyColorValue)) {
+      if (stickyColorValue !== 'existing' && stickyColorValue !== 'current' && ![...colSel.options].some(o => o.value === stickyColorValue)) {
         const missingIdx = parseInt(stickyColorValue, 10);
         const missingOpt = document.createElement('option');
         missingOpt.value = stickyColorValue;
@@ -926,21 +973,76 @@ import { trackEvent } from './analytics.js';
      * @param {string} type - アノテーション種別
      */
     /**
+     * 色欄の値（'3'・'100' など）が、いまの環境設定で表す色の値（#rrggbb・小文字）を返す。
+     * 登録されていないカスタムカラー・数値でない値は null（getStickyColor() は未登録のカスタムを
+     * 紙色へ倒すが、色欄の名前の判定では「その色」とみなさないため）。
+     * @param {string|undefined} value
+     * @returns {string|null}
+     */
+    function stickyColorValueToHex(value) {
+      if (!/^\d+$/.test(String(value ?? ''))) return null;
+      const idx = parseInt(value, 10);
+      if (isCustomStickyColorIndex(idx)) {
+        const custom = state.settingsCustomStickyColors?.[idx - CUSTOM_STICKY_COLOR_BASE];
+        return custom ? String(custom).toLowerCase() : null;
+      }
+      return STICKY_COLOR_MAP[idx] ? STICKY_COLOR_MAP[idx].toLowerCase() : null;
+    }
+
+    /**
+     * 色の値（#rrggbb）と同じ色になる色欄の値を返す。どれとも同じでなければ null。
+     * 記録された色欄の値（preferredValue）が同じ色ならそれを優先し、違えば
+     * 「紙色 → カスタム1〜3 → 青・緑・黄」の順で同じ色の欄を探す
+     * （libro-format.js の findStickyColorIndexByHex() と同じ順）。
+     * @param {string|null} hex
+     * @param {string|undefined} preferredValue
+     * @returns {string|null}
+     */
+    function findStickyColorValueByHex(hex, preferredValue) {
+      if (!hex) return null;
+      const target = String(hex).toLowerCase();
+      if (stickyColorValueToHex(preferredValue) === target) return String(parseInt(preferredValue, 10));
+      const candidates = ['3'];
+      for (let slot = 0; slot < CUSTOM_STICKY_COLOR_SLOTS; slot++) candidates.push(String(CUSTOM_STICKY_COLOR_BASE + slot));
+      candidates.push('0', '1', '2');
+      return candidates.find(v => stickyColorValueToHex(v) === target) ?? null;
+    }
+
+    /**
+     * LIBRO由来の付箋（.libro-toggle）の元の色（重ね表示を外したときの閉じた画像の色。
+     * #rrggbb・小文字）を返す。記録された色（stickyBaseColorHex）→ 閉じた画像から読んだ色 の順。
+     * 分からなければ null（単色でない画像など）。
+     * @param {HTMLElement} el - .sticky-note.libro-toggle
+     * @returns {string|null}
+     */
+    function getLibroToggleOriginalHex(el) {
+      const baseHex = el.dataset.stickyBaseColorHex;
+      if (baseHex && /^#[0-9a-f]{6}$/i.test(baseHex)) return baseHex.toLowerCase();
+      return readClosedImageSolidHex(el);
+    }
+
+    /**
      * LIBRO由来の付箋（.libro-toggle）の色を、色の重ね表示（stickyColorOverride）で変える。
      * 見た目は閉じた画像で決まるため、背景を塗っても画像に隠れて変わらない。
-     * 選んだ色が書き出し時に記録された元の色（stickyBaseColorHex）と同じなら重ね表示を外し、
+     * 選んだ色が元の色（getLibroToggleOriginalHex）と同じなら重ね表示を外し、
      * 元の閉じた画像をそのまま使う（書き出しでも画像を作り直さない）。
-     * 「既存付箋カラー」（existing）・空・数値でない値は、何もしない。
+     * 「既存付箋カラー」（existing）は重ね表示を外して元の閉じた画像に戻す。
+     * 「現在の色」（current）・空・数値でない値は、何もしない。
      * @param {HTMLElement} el - .sticky-note.libro-toggle
      * @param {string|undefined} colorValue - 色欄の値
      */
     function applyLibroToggleStickyColor(el, colorValue) {
-      if (colorValue === undefined || colorValue === '' || colorValue === 'existing') return;
+      if (colorValue === 'existing') {
+        delete el.dataset.stickyColorOverride;
+        delete el.dataset.stickyColorOverrideHex;
+        return;
+      }
+      if (colorValue === undefined || colorValue === '' || colorValue === 'current') return;
       const colorIdx = parseInt(colorValue, 10);
       if (!Number.isFinite(colorIdx)) return;
       const color = getStickyColor(colorIdx);
-      const baseHex = el.dataset.stickyBaseColorHex;
-      if (baseHex && baseHex.toLowerCase() === String(color).toLowerCase()) {
+      const originalHex = getLibroToggleOriginalHex(el);
+      if (originalHex && originalHex === String(color).toLowerCase()) {
         delete el.dataset.stickyColorOverride;
         delete el.dataset.stickyColorOverrideHex;
         return;
@@ -1028,6 +1130,18 @@ import { trackEvent } from './analytics.js';
           } else if (target.dataset.libroToggle === '1') {
             // LIBRO由来の付箋：背景は閉じた画像に隠れるため、色の重ね表示で変える
             applyLibroToggleStickyColor(target, colorValue);
+          } else if (colorValue === 'existing') {
+            // 「既存付箋カラー」：色欄を作った時点の色（buildCommonFields が色欄に控えたもの）へ戻す
+            const colEl = document.getElementById('annColor');
+            const existingHex = colEl?.dataset.existingHex;
+            if (existingHex) {
+              target.style.background = existingHex;
+              let stickySd = {};
+              try { stickySd = JSON.parse(target.dataset.savedData || '{}'); } catch (_) {}
+              stickySd.annColor    = colEl.dataset.existingColorIndex ?? stickySd.annColor;
+              stickySd.annColorHex = existingHex;
+              target.dataset.savedData = JSON.stringify(stickySd);
+            }
           } else {
             const color = getStickyColor(colorIdx);
             target.style.background = color;
@@ -2241,13 +2355,27 @@ import { trackEvent } from './analytics.js';
         const isLibroToggleNote = existingEl?.dataset.libroToggle === '1';
         const colorSelection    = savedData.annColor;
         const keepsOriginalImage = isLibroToggleNote && (colorSelection === undefined || colorSelection === 'existing');
+        // LIBRO由来の付箋で「現在の色」（いまの重ね表示のまま）が選ばれている
+        const keepsCurrentOverride = isLibroToggleNote && colorSelection === 'current';
+        // 通常の付箋で「既存付箋カラー」が選ばれている：色はそのまま（要素の savedData の色）。
+        // 詳細設定では applyLiveUpdate が色欄を選ぶたびに要素の savedData を合わせ、
+        // 編集ポップアップは開いた時点の要素の savedData から色欄を作るため、
+        // どちらの経路でも要素の savedData が「既存付箋カラー」の色になっている
+        let keptStickySd = null;
+        if (!isLibroToggleNote && isUpdate && colorSelection === 'existing') {
+          keptStickySd = {};
+          try { keptStickySd = JSON.parse(existingEl.dataset.savedData || '{}'); } catch (_) {}
+          savedData.annColor = keptStickySd.annColor || '0';
+        }
         // 新規作成時（isUpdate=false）のみ、フォールバック先を環境設定のデフォルト色にする
         const colorFallback = isUpdate ? '0' : (state.settingsStickyDefaultColor ?? '0');
-        const colorIdx = parseInt(colorSelection || colorFallback, 10);
-        const color    = getStickyColor(colorIdx);
+        const colorIdx = parseInt(savedData.annColor || colorFallback, 10);
+        const color    = keptStickySd
+          ? getStickyColor(colorIdx, keptStickySd.annColorHex)
+          : getStickyColor(colorIdx);
         // 色の実体を付箋自身へ併記する（カスタムカラーの定義が失われた環境でも色が確定するように）。
-        // 「既存付箋カラー」（色を持たない指定）のときは付けない。
-        if (!keepsOriginalImage) savedData.annColorHex = color;
+        // 「既存付箋カラー」「現在の色」（色を持たない指定）のときは付けない。
+        if (!keepsOriginalImage && !keepsCurrentOverride) savedData.annColorHex = color;
 
         if (isUpdate) {
           // 更新前のスナップショットを Undo スタックに積む（ラベルやクラス名も含める）

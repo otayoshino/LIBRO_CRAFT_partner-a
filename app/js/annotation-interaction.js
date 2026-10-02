@@ -1237,10 +1237,11 @@ import { pushUndo } from './undo-redo.js';
      * 5点がすべて同じ色のときだけ単色とみなす（libro-format.js の readSolidImageColor と同じ基準）。
      * 画像は同一オリジンの Blob URL で読み込み済みのため、同期的に読める。
      * 「既存付箋カラー」の付箋（色の記録も照合結果も無い）を複製するときの色に使う。
+     * annotation-dialog.js が、詳細設定の色欄に元の色の名前を出すときにも使う。
      * @param {HTMLElement} noteEl - .sticky-note.libro-toggle（DOM上の要素。複製先ではなく複製元を渡す）
      * @returns {string|null}
      */
-    function readClosedImageSolidHex(noteEl) {
+    export function readClosedImageSolidHex(noteEl) {
       try {
         const img = noteEl?.querySelector('.libro-toggle-closed');
         if (!img || !img.complete || !img.naturalWidth || !img.naturalHeight) return null;
