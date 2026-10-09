@@ -183,6 +183,14 @@ export const state = {
      */
     export const mediaBlobs = {};
 
+    /**
+     * 利用者がダイアログで指定したメディア（音声・アイコン画像・ボタン画像素材）の実体。
+     * キーは mediaBlobs と同じ。book の中から読み込んだものは入れない。
+     * 一時保存（autosave.js）が実体を保存・復旧し、書き出し（libro-format.js）が
+     * book の同じ名前のファイルより優先して書き込むために使う（2026-10-09 音声の修正 B・C）。
+     */
+    export const userMediaFiles = new Map();
+
 
     /** Undo スタック（最大 50 件） */
     export const undoStack = [];

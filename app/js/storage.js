@@ -2,10 +2,10 @@ import { checkAndPromptRestoreForBook } from './autosave.js';
 import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, getStickyColor, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
-import { buildLibroBookExport, checkLibroBookLoadable, detectLegacyStickyBaseColors, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, resolveVideoSrc, styleToRect } from './libro-format.js';
+import { buildLibroBookExport, checkLibroBookLoadable, detectLegacyStickyBaseColors, findAudioMediaKey, isLibroBookZip, parseLibroBookZip, renderTogglePairs, renderNetworkGroups, resolveVideoSrc, styleToRect } from './libro-format.js';
 import { loadLibroBookPages, updateAnnotationVisibility, updateNavButtonStates, updateTocButtonState } from './page-view.js';
 import { updateLibroBookBtnStates } from './index-outline.js';
-import { mediaBlobs, state } from './state.js';
+import { mediaBlobs, state, userMediaFiles } from './state.js';
 import { applyBookSettings } from './settings.js';
 import { escapeHtml, hideLoader, showLoader, showToast, updateAuthoringPanelState, updateStatus } from './ui-common.js';
 import { trackEvent } from './analytics.js';
@@ -467,6 +467,11 @@ import { trackEvent } from './analytics.js';
      * @returns {string} 再生URL。見つからない場合は空文字
      */
     export function resolveMediaSrc(fileName, ext) {
+      // 音声は新旧どちらの名前でも引く（2026-10-09 音声の修正 A。書き出しと同じ findAudioMediaKey() で探す）
+      if (ext === 'mp3') {
+        const audioKey = findAudioMediaKey(fileName);
+        return audioKey ? mediaBlobs[audioKey] : '';
+      }
       const key = `${fileName}.${ext}`;
       return mediaBlobs[key] || '';
     }
@@ -539,6 +544,8 @@ import { trackEvent } from './analytics.js';
       // 既存BlobURLを解放してmediaBlobsを初期化する
       Object.values(mediaBlobs).forEach(url => URL.revokeObjectURL(url));
       Object.keys(mediaBlobs).forEach(k => delete mediaBlobs[k]);
+      // 前の book でダイアログから指定したものの控えも捨てる（修正 B。続きの作業なら一時保存の復旧で戻る）
+      userMediaFiles.clear();
 
       const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths } =
         await parseLibroBookZip(zip);
@@ -593,6 +600,32 @@ import { trackEvent } from './analytics.js';
       await checkAndPromptRestoreForBook(bookId);
     }
 
+
+    /**
+     * 書き出す部品が参照しているのに手元（mediaBlobs）に無い音声・画像のファイル名を返す（2026-10-09 音声の修正 D）。
+     * 音声は書き出しと同じ findAudioMediaKey() で探す。アイコン画像は、名前が book の元の名前
+     * （id 由来の 0001.png 形式）なら book の中のものを使うため数えない。
+     * 証明ボタン（書き出し非対応）と LIBRO+ 製のボタン（生データのまま書き戻す）は数えない。
+     * @param {NodeList} elements - 書き出しの対象の部品
+     * @returns {string[]} 見つからないファイル名
+     */
+    function findMissingMediaForExport(elements) {
+      const missing = new Set();
+      Array.from(elements).forEach(el => {
+        const type = el.dataset.type;
+        if (type === 'shomei' || el.dataset.libroToggle === '1') return;
+        let sd = {};
+        try { sd = JSON.parse(el.dataset.savedData || '{}'); } catch (_) { return; }
+        const annFile = (sd.annFile || '').trim();
+        if (type === 'audio' && annFile && !findAudioMediaKey(annFile)) missing.add(`${annFile}.mp3`);
+        const icon = sd.annIconImage ? String(sd.annIconImage) : '';
+        const origIconName = `${String(el.dataset.id).padStart(4, '0')}.png`;
+        if (sd.annDisplayType === 'image' && icon && icon !== origIconName && !mediaBlobs[icon]) missing.add(icon);
+        const btn = String(sd.btnImageFile || '').trim();
+        if (btn && !btn.includes('/') && !mediaBlobs[btn]) missing.add(btn);
+      });
+      return [...missing];
+    }
 
     /**
      * LIBRO bookとして読み込んだ内容を、LIBRO bookフォルダ形式のZIPとして書き出す。
@@ -978,6 +1011,10 @@ import { trackEvent } from './analytics.js';
 
       const passthroughAnnotations = [...state.libroUnknownAnnotations, ...daimonRawAnnots, ...networkRawAnnots];
 
+      // 書き出しに入らない音声・画像（手元に実体が無いもの）。完了のトーストでファイル名を挙げて知らせる（修正 D）。
+      // 以前は何も知らせずに外していたため、LIBRO+ へ反映した後で気づくことになっていた
+      const missingMedia = findMissingMediaForExport(elements);
+
       try {
         const zip = await buildLibroBookExport(state.libroBook, domAnnotations, passthroughAnnotations, domStickyGroups, domDaimonButtons);
         const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -988,7 +1025,13 @@ import { trackEvent } from './analytics.js';
         document.body.appendChild(a);
         a.click();
         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
-        showToast('LIBRO形式で書き出しました');
+        if (missingMedia.length > 0) {
+          const shown = missingMedia.slice(0, 3).join('、');
+          const more = missingMedia.length > 3 ? ` ほか${missingMedia.length - 3}件` : '';
+          showToast(`LIBRO形式で書き出しました。次のファイルが見つからないため含まれていません：${shown}${more}（ファイルを指定し直してください）`, 8000);
+        } else {
+          showToast('LIBRO形式で書き出しました');
+        }
         trackEvent('book_export');
       } catch (e) {
         showToast('LIBRO書き出しエラー: ' + e.message);

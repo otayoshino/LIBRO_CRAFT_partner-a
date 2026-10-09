@@ -1,4 +1,4 @@
-import { mediaBlobs, state } from './state.js';
+import { mediaBlobs, state, userMediaFiles } from './state.js';
 import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, BTN_COLOR_OPTIONS, CUSTOM_STICKY_COLOR_BASE, CUSTOM_STICKY_COLOR_SLOTS, DAIMON_PRESSED_COLOR, ICON_COLOR_OPTIONS, STICKY_COLOR_MAP } from './config.js';
 import { addStickyClickHandler } from './sticky.js';
 import { getPageBaseSize, makeDraggable, makeResizable } from './annotation-interaction.js';
@@ -1524,8 +1524,24 @@ function filenameToNumericId(annot) {
  * @param {string} name
  * @returns {string}
  */
-function stripAudioPrefix(name) {
+export function stripAudioPrefix(name) {
   return (name || '').replace(/^(ex_|in_)/i, '');
+}
+
+/**
+ * 音声の部品（annFile）に対応する手元（mediaBlobs）のキーを返す（2026-10-09 音声の修正 A）。
+ * 新しいキー（先頭の ex_/in_ を除いた名前＋".mp3"）を先に探し、無ければ以前のキー
+ * （annFile そのまま＋".mp3"。修正前にダイアログで指定した ex_/in_ 付きの名前）を探す。
+ * 再生・書き出し・一時保存・書き出し前の確認はすべてこの関数で探す（探し方がずれると、
+ * 鳴るのに書き出しに入らない状態になるため）。
+ * @param {string} annFile
+ * @returns {string|null} 見つかったキー。どちらも無ければ null
+ */
+export function findAudioMediaKey(annFile) {
+  const raw = (annFile || '').trim();
+  if (!raw) return null;
+  const candidates = [`${stripAudioPrefix(raw)}.mp3`, `${raw}.mp3`];
+  return candidates.find(key => mediaBlobs[key]) || null;
 }
 
 
@@ -2027,7 +2043,8 @@ async function convertAnnotationToLibroAnnot(domData, pageWidth, pageHeight, zip
     // mediaBlobsの画像は取り込み時に復号済み／アップロード原本のためいずれも平文だが、
     // 想定外データへの安全側フォールバックとして暗号化済みなら復号してから書き込む。
     const expectedOrigBaseName = `${String(domData.id).padStart(4, '0')}.png`;
-    if (sd.annIconImage !== expectedOrigBaseName) {
+    // 元ファイル名と同じでも、ダイアログで同じ名前の別ファイルに差し替えた場合は書き込む（修正 C）
+    if (sd.annIconImage !== expectedOrigBaseName || userMediaFiles.has(sd.annIconImage)) {
       const blobUrl = mediaBlobs[sd.annIconImage];
       if (blobUrl) {
         const buf = new Uint8Array(await (await fetch(blobUrl)).arrayBuffer());
@@ -2414,14 +2431,16 @@ export async function buildLibroBookExport(libroBook, domAnnotations, passthroug
       const sd = JSON.parse(a.savedData || '{}');
       const baseName = stripAudioPrefix((sd.annFile || '').trim());
       if (!baseName) return;
-      referencedAudio.set(libroSoundFilename(sd.annFile, sd.annPlayMode), `${baseName}.mp3`);
+      // 手元のキーは新旧どちらの名前でも探す（修正 A）。見つからなければ null
+      referencedAudio.set(libroSoundFilename(sd.annFile, sd.annPlayMode), findAudioMediaKey(sd.annFile));
     } catch (_) {}
   });
   // 各音声ファイルは互いに独立して読込・暗号化できるため並列実行する
   await Promise.all([...referencedAudio].map(async ([zipFileName, mediaKey]) => {
     const soundPath = baseDir + 'sounds/' + zipFileName;
-    if (zip.file(soundPath)) return; // 既存音声は無変更
-    const blobUrl = mediaBlobs[mediaKey];
+    // 既存音声は無変更。ただしダイアログで同じ名前の別ファイルに差し替えた場合は、新しいほうで上書きする（修正 C）
+    if (zip.file(soundPath) && !(mediaKey && userMediaFiles.has(mediaKey))) return;
+    const blobUrl = mediaKey ? mediaBlobs[mediaKey] : null;
     if (!blobUrl) return;
     const res = await fetch(blobUrl);
     const buf = new Uint8Array(await res.arrayBuffer());

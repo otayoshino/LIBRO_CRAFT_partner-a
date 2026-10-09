@@ -1,11 +1,15 @@
 import { applyAutoSaveSettings, getCurrentSettings } from './settings.js';
-import { state } from './state.js';
+import { mediaBlobs, state, userMediaFiles } from './state.js';
 import { repairCrossPageLinkIds, repairDuplicateAnnIds, restoreAnnotationsFromArray, restoreLibroStickyOverrides } from './storage.js';
 import { showToast } from './ui-common.js';
+import { generatePressedVariant } from './buttons.js';
+import { findAudioMediaKey } from './libro-format.js';
 
     /* ============================
        編集状態の定期オートセーブ（IndexedDB）
-       画像・音声本体はZIP書き出し時に生成するため、対象はDOMのアノテーション状態のみ。
+       対象はDOMのアノテーション状態と、ダイアログで指定した音声・画像の実体。
+       book の中のメディアは book の読み込みで手元へ戻るため保存しない。
+       （2026-10-09：以前は実体を保存しておらず、復旧すると音声が鳴らず書き出しにも入らなかった）
     ============================ */
 
     const DB_NAME = 'ContentsBuilderAutoSave';
@@ -118,6 +122,55 @@ import { showToast } from './ui-common.js';
     }
 
     /**
+     * 部品が参照している「ダイアログで指定したメディア」の実体を集める（修正 B）。
+     * book の中から読み込んだメディア（userMediaFiles に無いもの）は含めない。
+     * @param {Array<Object>} data - collectAnnotationSnapshotData() の結果
+     * @returns {Array<{name: string, blob: Blob, button: boolean}>}
+     */
+    function collectUserMediaForSnapshot(data) {
+      const used = new Set();
+      const buttonNames = new Set();
+      data.forEach(item => {
+        let sd = {};
+        try { sd = JSON.parse(item.savedData || '{}'); } catch (_) { return; }
+        if (item.type === 'audio' && sd.annFile) {
+          const key = findAudioMediaKey(sd.annFile);
+          if (key) used.add(key);
+        }
+        if (sd.annIconImage) used.add(String(sd.annIconImage));
+        const btn = String(sd.btnImageFile || '').trim();
+        if (btn) { used.add(btn); buttonNames.add(btn); }
+      });
+      return [...used]
+        .filter(name => userMediaFiles.has(name))
+        .map(name => ({ name, blob: userMediaFiles.get(name), button: buttonNames.has(name) }));
+    }
+
+    /**
+     * 一時保存から、ダイアログで指定したメディアの実体を手元へ戻す（修正 B）。
+     * 部品の描画（アイコン画像・ボタン画像）が手元を読むため、部品を作り直す前に呼ぶこと。
+     * book に同じ名前のものがあっても、利用者が指定したほうで置き換える。
+     * ボタン画像は押下時の画像も、ダイアログと同じ generatePressedVariant() で作る。
+     * @param {Array<{name: string, blob: Blob, button: boolean}>|undefined} media
+     */
+    async function restoreUserMedia(media) {
+      if (!Array.isArray(media)) return; // 修正前の一時保存には無い
+      for (const { name, blob, button } of media) {
+        if (!name || !(blob instanceof Blob)) continue;
+        if (mediaBlobs[name]) URL.revokeObjectURL(mediaBlobs[name]);
+        mediaBlobs[name] = URL.createObjectURL(blob);
+        userMediaFiles.set(name, blob);
+        if (button) {
+          try {
+            await generatePressedVariant(new File([blob], name, { type: blob.type }));
+          } catch (e) {
+            console.warn('[autosave] 押下時の画像を作れませんでした:', name, e);
+          }
+        }
+      }
+    }
+
+    /**
      * 現在のアノテーション状態をIndexedDBへ保存する。
      */
     async function saveAutoSaveSnapshot() {
@@ -134,10 +187,12 @@ import { showToast } from './ui-common.js';
         // 環境設定（カスタムカラー等）。付箋は個々に色を持つが、続きの作業で同じ色を作るには
         // 環境設定も中断時点の値へ戻す必要がある
         const settings = getCurrentSettings();
+        // ダイアログで指定した音声・画像の実体（修正 B）。復旧したときに鳴らない・書き出しに入らない状態を防ぐ
+        const media = collectUserMediaForSnapshot(data);
         const db = await openAutoSaveDB();
         await new Promise((resolve, reject) => {
           const tx = db.transaction(STORE_NAME, 'readwrite');
-          tx.objectStore(STORE_NAME).put({ data, libroStickies, settings, savedAt: Date.now(), bookId: state.currentBookId }, SNAPSHOT_KEY);
+          tx.objectStore(STORE_NAME).put({ data, libroStickies, settings, media, savedAt: Date.now(), bookId: state.currentBookId }, SNAPSHOT_KEY);
           tx.oncomplete = resolve;
           tx.onerror = () => reject(tx.error);
         });
@@ -199,6 +254,9 @@ import { showToast } from './ui-common.js';
           // 求める処理が、中断時点のカスタムカラーを参照できるように）。
           // 修正前に保存された一時保存には settings が無いため、その場合はbookの値のまま
           if (snapshot.settings) applyAutoSaveSettings(snapshot.settings);
+          // ダイアログで指定した音声・画像の実体を手元へ戻す（修正 B）。アイコン画像・ボタン画像の
+          // 描画が手元を読むため、部品の作り直しより先に行う
+          await restoreUserMedia(snapshot.media);
           restoreAnnotationsFromArray(snapshot.data);
           // LIBRO book由来付箋の紐付け情報を復元する（旧スナップショットではキーが無いが、
           // 復元側が配列以外を無視するためそのまま渡してよい）

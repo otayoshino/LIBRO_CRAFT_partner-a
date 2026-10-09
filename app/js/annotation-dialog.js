@@ -3,7 +3,8 @@ import { ANNOTATION_TYPE_CONFIG, ANN_COLOR_OPTIONS, ICON_COLOR_OPTIONS, getIconD
 import { clampElementToPage, clampGroupIntoPage, deactivateAnnotationMode, getPageBaseSize, getSelectedObjects, makeDraggable, makeResizable, readClosedImageSolidHex, updateAlignPanel, updateDaimonGroupHighlight } from './annotation-interaction.js';
 import { applyDaimonImageAspect, generatePressedVariant, makeDaimonResizable, renderButtonVisual } from './buttons.js';
 import { validateJstreamCorpId, validateJstreamDir, validateJstreamVideoId } from './jstream-validate.js';
-import { mediaBlobs, state } from './state.js';
+import { mediaBlobs, state, userMediaFiles } from './state.js';
+import { stripAudioPrefix } from './libro-format.js';
 import { addStickyClickHandler } from './sticky.js';
 import { closeDialog, saveDialog } from './storage.js';
 import { escapeHtml, updateStatus } from './ui-common.js';
@@ -1884,11 +1885,16 @@ import { trackEvent } from './analytics.js';
         }
 
         const fileInput = ddEl.querySelector(`#${inputId}`);
-        const baseName = file.name.replace(/\.[^/.]+$/, '');
+        // 音声は、先頭の ex_／in_ を除き、拡張子を小文字にした名前で持つ（2026-10-09 音声の修正 A）。
+        // 書き出しは ex_／in_ を付け直して sounds/ へ入れ、book の読み込みは外した名前で手元へ入れる。
+        // ここで付いたまま持つと、書き出しにも読み込み直しにも入らなかった（.MP3 は再生もできなかった）
+        const rawBaseName = file.name.replace(/\.[^/.]+$/, '');
+        const baseName = isAudio ? stripAudioPrefix(rawBaseName) : rawBaseName;
+        const mediaKey = isAudio ? `${baseName}.mp3` : file.name;
 
         // 同名ファイルが既に別アノテーションで使用中の場合は上書き前に警告する
         // （「自分自身の差し替え」＝現在このダイアログが編集中のファイル名と同じ場合は警告不要）
-        if (mediaBlobs[file.name]) {
+        if (mediaBlobs[mediaKey]) {
           let savedAnnFile = '';
           if (existingEl) {
             try {
@@ -1909,10 +1915,12 @@ import { trackEvent } from './analytics.js';
 
         // ファイルをBlobURLに変換してmediaBlobsへキャッシュ（サーバー不要）
         // 同名ファイルが既にある場合は古いBlobURLを解放してから上書き
-        if (mediaBlobs[file.name]) {
-          URL.revokeObjectURL(mediaBlobs[file.name]);
+        if (mediaBlobs[mediaKey]) {
+          URL.revokeObjectURL(mediaBlobs[mediaKey]);
         }
-        mediaBlobs[file.name] = URL.createObjectURL(file);
+        mediaBlobs[mediaKey] = URL.createObjectURL(file);
+        // 一時保存で実体を残し、書き出しで book の同じ名前のファイルより優先するために控える（修正 B・C）
+        userMediaFiles.set(mediaKey, file);
         statusEl.textContent = `✔ ${file.name} を読み込みました`;
         statusEl.className = 'drop-status is-success';
       };
@@ -2021,6 +2029,8 @@ import { trackEvent } from './analytics.js';
 
           if (mediaBlobs[file.name]) URL.revokeObjectURL(mediaBlobs[file.name]);
           mediaBlobs[file.name] = tempUrl;
+          // 一時保存で実体を残し、書き出しで book の同じ名前のファイルより優先するために控える（修正 B・C）
+          userMediaFiles.set(file.name, file);
 
           if (hiddenInput) {
             hiddenInput.value = file.name;
@@ -2132,6 +2142,8 @@ import { trackEvent } from './analytics.js';
 
         if (mediaBlobs[file.name]) URL.revokeObjectURL(mediaBlobs[file.name]);
         mediaBlobs[file.name] = URL.createObjectURL(file);
+        // 一時保存で実体を残すために控える（修正 B）
+        userMediaFiles.set(file.name, file);
 
         statusEl.textContent = `読み込み中... (${file.name})`;
         statusEl.className = 'drop-status';
