@@ -1,5 +1,6 @@
 import { deactivateAnnotationMode, deselectAllObjects } from './annotation-interaction.js';
 import { resetAllButtonPressedImages } from './buttons.js';
+import { stopAllAudio } from './annotation-actions.js';
 import { state } from './state.js';
 import { updateStatus } from './ui-common.js';
 import { trackEvent } from './analytics.js';
@@ -33,6 +34,9 @@ import { trackEvent } from './analytics.js';
     function switchToEditMode() {
       trackEvent('mode_switch', { mode: 'edit' });
       document.body.classList.remove('is-view-mode');
+
+      // 閲覧モードで鳴らした音声をすべて止め、コントローラーを消す（2026-10-09 音声の修正 G）
+      stopAllAudio();
 
       // 閲覧モード中に各ボタンによって変更された付箋の状態をすべて元に戻す
       document.querySelectorAll('.sticky-note').forEach(note => {

@@ -243,7 +243,10 @@ import { updateStatus } from './ui-common.js';
         '#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj, #pageLeft .ann-image-obj, ' +
         '#pageLeft .daimon-btn, ' +
         '#pageLeft .kotae-btn, #pageLeft .shomei-btn, ' +
-        '#pageLeft .libro-toggle, #pageLeft .libro-network-slot'
+        '#pageLeft .libro-toggle, #pageLeft .libro-network-slot, ' +
+        // 閲覧モードの音声のコントローラー（修正 F）。めくった先では隠し、元のページに戻ると見える。
+        // 隠しても再生は続く（<audio> は display:none でも鳴る）
+        '#pageLeft .audio-inline-player'
       ).forEach(el => {
         const elPage = parseInt(el.dataset.page || '1', 10);
         el.classList.toggle('ann-hidden-page', spread || elPage !== state.currentPage);

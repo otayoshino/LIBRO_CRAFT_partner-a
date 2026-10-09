@@ -1,4 +1,5 @@
 import { checkAndPromptRestoreForBook } from './autosave.js';
+import { stopAllAudio } from './annotation-actions.js';
 import { renderButtonVisual } from './buttons.js';
 import { ANNOTATION_TYPE_CONFIG, STICKY_COLOR_MAP, getStickyColor, renderAnnObjectContent, renderAnnImageContent } from './config.js';
 import { reinitElement, updateAlignPanel } from './annotation-interaction.js';
@@ -546,6 +547,8 @@ import { trackEvent } from './analytics.js';
       Object.keys(mediaBlobs).forEach(k => delete mediaBlobs[k]);
       // 前の book でダイアログから指定したものの控えも捨てる（修正 B。続きの作業なら一時保存の復旧で戻る）
       userMediaFiles.clear();
+      // 前の book で鳴らしている音声を止め、コントローラーを消す（2026-10-09 音声の修正 G）
+      stopAllAudio();
 
       const { pages, knownAnnotations, togglePairs, unknownAnnotations, daimonPassthrough, networkGroups, maxAnnotId, baseDir, indexJson, unencryptedAssetPaths } =
         await parseLibroBookZip(zip);

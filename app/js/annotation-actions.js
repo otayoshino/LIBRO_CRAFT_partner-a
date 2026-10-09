@@ -69,6 +69,25 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
     }
 
     /**
+     * 閲覧モードで鳴らしている「コントローラーなし」の音声（2026-10-09 音声の修正 G）。
+     * どこにも置かないため、ここで控えておかないと閲覧モードを閉じても止められない。
+     */
+    const playingAudios = new Set();
+
+    /**
+     * 閲覧モードで鳴らしている音声をすべて止め、アイコン直下のコントローラーを消す（修正 G）。
+     * 編集モードへ戻るとき（mode.js）と book を読み込み直すとき（storage.js）に呼ぶ。
+     */
+    export function stopAllAudio() {
+      playingAudios.forEach(audio => audio.pause());
+      playingAudios.clear();
+      document.querySelectorAll('#pageLeft .audio-inline-player').forEach(player => {
+        player.querySelector('audio')?.pause();
+        player.remove();
+      });
+    }
+
+    /**
      * 閲覧モード時のアノテーションボタンの実際の挙動。
      * @param {HTMLElement} ann
      */
@@ -199,52 +218,33 @@ import { escapeHtml, showToast, updateStatus } from './ui-common.js';
           }
           const playMode = saved.annPlayMode || '0';
           if (playMode === '1') {
-            // コントローラーなし：そのまま再生
+            // コントローラーなし：そのまま再生。閲覧モードを閉じたときに止められるよう控える（修正 G）
             const audio = new Audio(src);
+            playingAudios.add(audio);
+            audio.addEventListener('ended', () => playingAudios.delete(audio));
             audio.play().catch(() => updateStatus());
             updateStatus();
           } else {
-            // コントローラーあり：フローティングプレーヤーを表示
-            const existing = document.getElementById('audioPlayerPopup');
-            if (existing) existing.remove();
-            const popup = document.createElement('div');
-            popup.id = 'audioPlayerPopup';
-            popup.innerHTML = `
-              <div class="audio-player-title">
-                <span style="font-size:12px;font-weight:700;">▶ ${escapeHtml(fileName)}</span>
-                <span id="audioPlayerClose">×</span>
-              </div>
-              <div class="audio-player-body">
-                <audio controls autoplay src="${escapeHtml(src)}"></audio>
-              </div>
-            `;
-            document.body.appendChild(popup);
-            // 画面中央下寄りに配置
-            const pw = popup.offsetWidth || 320;
-            const ph = popup.offsetHeight || 100;
-            popup.style.left = Math.max(8, (window.innerWidth  - pw) / 2) + 'px';
-            popup.style.top  = Math.max(8, window.innerHeight - ph - 60) + 'px';
-            // 閉じるボタン
-            document.getElementById('audioPlayerClose').onclick = () => {
-              popup.querySelector('audio')?.pause();
-              popup.remove();
-            };
-            // タイトルバードラッグ移動
-            const titleBar = popup.querySelector('.audio-player-title');
-            titleBar.addEventListener('mousedown', (e) => {
-              if (e.target.id === 'audioPlayerClose') return;
-              e.preventDefault();
-              const sx = e.clientX, sy = e.clientY;
-              const ol = parseInt(popup.style.left, 10) || 0;
-              const ot = parseInt(popup.style.top,  10) || 0;
-              const onMove = (ev) => {
-                popup.style.left = Math.max(0, Math.min(ol + ev.clientX - sx, window.innerWidth  - popup.offsetWidth))  + 'px';
-                popup.style.top  = Math.max(0, Math.min(ot + ev.clientY - sy, window.innerHeight - popup.offsetHeight)) + 'px';
-              };
-              const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-              document.addEventListener('mousemove', onMove);
-              document.addEventListener('mouseup',   onUp);
+            // コントローラーあり：アイコンの直下にコントローラーだけを出す（2026-10-09 ユーザー指示。
+            // 見出し・ファイル名・閉じるボタンは出さない）。紙面（#pageLeft）の中に置くので、
+            // パン・拡大縮小でもアイコンについていく。画面上の大きさは CSS の --zoom-inv-scale で保つ。
+            // ページをめくっても再生は続け、コントローラーは元のページでだけ見える
+            // （updateAnnotationVisibility が data-page で隠す）。同時に出すのは1つだけ。
+            document.querySelectorAll('#pageLeft .audio-inline-player').forEach(prev => {
+              prev.querySelector('audio')?.pause();
+              prev.remove();
             });
+            const player = document.createElement('div');
+            player.className = 'audio-inline-player';
+            player.dataset.page = ann.dataset.page || '1';
+            player.style.left = `${ann.offsetLeft}px`;
+            player.style.top  = `${ann.offsetTop + ann.offsetHeight}px`;
+            player.innerHTML = `<audio controls autoplay src="${escapeHtml(src)}"></audio>`;
+            // コントローラーの操作で、紙面の操作（パン・ドラッグ選択など）が始まらないようにする
+            ['mousedown', 'pointerdown', 'click', 'dblclick'].forEach(type => {
+              player.addEventListener(type, (e) => e.stopPropagation());
+            });
+            document.getElementById('pageLeft').appendChild(player);
             updateStatus();
           }
           break;

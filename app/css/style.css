@@ -2753,44 +2753,20 @@
     }
 
     /* ============================
-       音声プレーヤーポップアップ
+       音声のコントローラー（閲覧モード・コントローラーあり）
+       アイコンの直下に、紙面（#pageLeft）の子として置く（2026-10-09）。
+       紙面の拡大・縮小（transform: scale）を --zoom-inv-scale で打ち消し、
+       画面上の大きさを一定に保つ（左上＝アイコンの左下を基準にする）。
     ============================ */
-    #audioPlayerPopup {
-      position: fixed;
-      z-index: 9100;
-      background: #333;
-      border-radius: 8px;
-      box-shadow: 0 6px 24px rgba(0,0,0,0.55);
-      padding: 0;
-      overflow: hidden;
-      min-width: 320px;
+    #pageLeft .audio-inline-player {
+      position: absolute;
+      z-index: 50;
+      transform: scale(var(--zoom-inv-scale, 1));
+      transform-origin: top left;
     }
-    #audioPlayerPopup .audio-player-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 40px;
-      padding: 0 14px;
-      background: #444;
-      color: #eee;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: move;
-      user-select: none;
-    }
-    #audioPlayerPopup .audio-player-title span {
-      cursor: pointer;
-      color: #aaa;
-      font-size: 18px;
-      line-height: 1;
-    }
-    #audioPlayerPopup .audio-player-title span:hover { color: #fff; }
-    #audioPlayerPopup .audio-player-body {
-      padding: 12px 16px;
-    }
-    #audioPlayerPopup audio {
-      width: 100%;
+    #pageLeft .audio-inline-player audio {
       display: block;
+      width: 300px;
     }
 
     /* 動画モーダルオーバーレイ */
