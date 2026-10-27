@@ -1889,6 +1889,11 @@ import { pushUndo } from './undo-redo.js';
           let frozenDx   = shiftAtStart ? 0 : null;
           let frozenDy   = shiftAtStart ? 0 : null;
 
+          // Undo用：リサイズ前の位置・サイズを inline style の文字列のまま控える。
+          // CSS固定サイズの旧ボタン（width未指定）もあるため、数値化せず元の指定を丸ごと戻す。
+          const readBoxStyle = el => ({ left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height });
+          const undoBefore = selectedObjects.map(el => ({ el, prev: readBoxStyle(el) }));
+
           // ダブルクリックの2回目のmousedownがわずかに動いただけでリサイズ扱いになるのを防ぐ
           const DRAG_THRESHOLD = 4;
           let hasMoved = false;
@@ -2002,6 +2007,12 @@ import { pushUndo } from './undo-redo.js';
             // アイコン型・画像アイコン型は矩形スケールに追従せずサイズ固定のため、
             // 外接矩形が紙面内でも自身のサイズ分だけはみ出しうる。個別に補正する。
             getSelectedObjects().forEach(el => clampElementToPage(el));
+            // リサイズが実際に行われた場合のみ Undo スタックに積む（単一リサイズと同じ扱い）。
+            // 積まないと、直前の操作（整列など）が取り消され、サイズは戻らない。
+            const targets = undoBefore
+              .map(({ el, prev }) => ({ el, prev, after: readBoxStyle(el) }))
+              .filter(({ prev, after }) => ['left', 'top', 'width', 'height'].some(k => prev[k] !== after[k]));
+            if (targets.length > 0) pushUndo({ type: 'resize', targets });
             updateAlignPanel();
           };
           document.addEventListener('mousemove', onMove);

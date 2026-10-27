@@ -286,6 +286,12 @@ import { classNameKeepingSelection, escapeHtml, showToast, updateStatus } from '
           }
           // --- リサイズの取り消し ---
           case 'resize': {
+            // 複数選択の外接矩形リサイズ：inline style の文字列をそのまま戻す
+            if (Array.isArray(op.targets)) {
+              op.targets.forEach(({ el, prev }) => Object.assign(el.style, prev));
+              updateAlignPanel();
+              break;
+            }
             const { el, prevLeft, prevTop, prevWidth, prevHeight } = op;
             el.style.left   = prevLeft   + 'px';
             el.style.top    = prevTop    + 'px';
@@ -458,6 +464,12 @@ import { classNameKeepingSelection, escapeHtml, showToast, updateStatus } from '
         }
         // --- リサイズの再適用 ---
         case 'resize': {
+          // 複数選択の外接矩形リサイズ
+          if (Array.isArray(op.targets)) {
+            op.targets.forEach(({ el, after }) => Object.assign(el.style, after));
+            updateAlignPanel();
+            break;
+          }
           const { el, afterLeft, afterTop, afterWidth, afterHeight } = op;
           el.style.left   = afterLeft   + 'px';
           el.style.top    = afterTop    + 'px';
