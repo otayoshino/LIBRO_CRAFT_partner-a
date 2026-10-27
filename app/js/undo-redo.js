@@ -33,6 +33,118 @@ import { classNameKeepingSelection, escapeHtml, showToast, updateStatus } from '
 
 
     /**
+     * 取り消し・やり直しの記録に残る部品の位置・大きさ（px）を、紙面の基準の大きさの変更に合わせて変換する。
+     *
+     * 部品の style.left/top/width/height は紙面の基準の大きさ（#pageLeft の offsetWidth/offsetHeight）を
+     * 座標系とする px で、記録は操作した時点の座標系の px を持つ。基準の大きさが変わるとき
+     * （フィットの変更・縦横比の違うページへの移動・見開きから戻すとき）、画面上の部品は
+     * scaleAnnotations()・rebaseAnnotations()（page-view.js）が変換するが、記録はそのままのため、
+     * 変換をまたいで取り消すと位置・大きさがずれる。そこで、その2つの関数から同じ比率・同じ対象で呼ぶ。
+     *
+     * - undoStack・redoStack の両方を変換する（記録はどちらか一方にだけある）。
+     * - 対象は、呼び出し元が画面上の部品の変換に使うセレクタに当てはまる部品の記録だけ（当てはまらない部品は
+     *   画面上でも変換されないので、記録もそのままにしてそろえる）。
+     * - width/height は、値があるときだけ変換する（CSS固定サイズのボタンの記録は値を持たない）。
+     * - 画面上に無い要素（取り消した「作成」をやり直し用に持っている要素など）は、画面上の変換に
+     *   含まれないので、ここでその要素の style を変換する。画面上にある要素は変換しない（二重になるため）。
+     * - savedData（JSON）の中の値は変換しない（画面上の部品の変換と同じ扱い）。
+     *
+     * @param {number} rx - 横の比率（新しい基準の幅 / 古い基準の幅）
+     * @param {number} ry - 縦の比率（新しい基準の高さ / 古い基準の高さ）
+     * @param {string} selector - 呼び出し元が画面上の部品の変換に使うセレクタ（'#pageLeft ' 付き）
+     */
+    export function rescaleUndoRecords(rx, ry, selector) {
+      const sel = selector.replace(/#pageLeft\s+/g, '');
+      const page = document.getElementById('pageLeft');
+      const fits = el => !!el && el.nodeType === 1 && el.matches(sel);
+      const fitsClass = className => {
+        const probe = document.createElement('div');
+        probe.className = className || '';
+        return probe.matches(sel);
+      };
+      // 数値の px（move・resize の prev*/after*）
+      const num = (v, r) => (typeof v === 'number' && isFinite(v)) ? v * r : v;
+      // style の値の文字列（'12.5px'）。px 以外・空はそのまま
+      const pxText = (v, r) => (typeof v === 'string' && /^-?[\d.]+(e-?\d+)?px$/.test(v.trim())) ? (parseFloat(v) * r) + 'px' : v;
+      // style（CSSStyleDeclaration）または { left, top, width, height } の値を変換する
+      const scaleBox = box => {
+        if (!box) return;
+        box.left   = pxText(box.left,   rx);
+        box.top    = pxText(box.top,    ry);
+        box.width  = pxText(box.width,  rx);
+        box.height = pxText(box.height, ry);
+      };
+      // style の文字列（cssText）の left/top/width/height を変換する。変わらないときは元の文字列を返す
+      const cssText = text => {
+        if (typeof text !== 'string' || text === '') return text;
+        const probe = document.createElement('div');
+        probe.style.cssText = text;
+        const before = probe.style.cssText;
+        scaleBox(probe.style);
+        return probe.style.cssText === before ? text : probe.style.cssText;
+      };
+      const done = new Set();
+      const detached = el => {
+        if (!fits(el) || done.has(el) || (page && page.contains(el))) return;
+        done.add(el);
+        scaleBox(el.style);
+      };
+      [...undoStack, ...redoStack].forEach(op => {
+        switch (op.type) {
+          case 'move':
+            op.targets.forEach(t => {
+              if (!fits(t.el)) return;
+              t.prevLeft  = num(t.prevLeft,  rx);
+              t.prevTop   = num(t.prevTop,   ry);
+              t.afterLeft = num(t.afterLeft, rx);
+              t.afterTop  = num(t.afterTop,  ry);
+            });
+            break;
+          case 'resize':
+            if (Array.isArray(op.targets)) {
+              op.targets.forEach(t => {
+                if (!fits(t.el)) return;
+                scaleBox(t.prev);
+                scaleBox(t.after);
+              });
+            } else if (fits(op.el)) {
+              op.prevLeft    = num(op.prevLeft,    rx);
+              op.prevTop     = num(op.prevTop,     ry);
+              op.prevWidth   = num(op.prevWidth,   rx);
+              op.prevHeight  = num(op.prevHeight,  ry);
+              op.afterLeft   = num(op.afterLeft,   rx);
+              op.afterTop    = num(op.afterTop,    ry);
+              op.afterWidth  = num(op.afterWidth,  rx);
+              op.afterHeight = num(op.afterHeight, ry);
+            }
+            break;
+          case 'prop':
+            (Array.isArray(op.targets) ? op.targets : [op]).forEach(s => {
+              if (!fits(s.el)) return;
+              s.prevStyleCssText  = cssText(s.prevStyleCssText);
+              s.afterStyleCssText = cssText(s.afterStyleCssText);
+            });
+            break;
+          case 'delete':
+            op.snapshots.forEach(s => {
+              if (fitsClass(s.className)) s.styleCssText = cssText(s.styleCssText);
+            });
+            break;
+          case 'create':
+            op.elements.forEach(detached);
+            break;
+          case 'daimon-create':
+          case 'kotae-create':
+          case 'shomei-create':
+            detached(op.btn);
+            break;
+          // sticky-hide・group は位置・大きさを持たない
+        }
+      });
+    }
+
+
+    /**
      * 直前の操作を取り消す。
      * op.type ごとに逆操作を実行する。
      */

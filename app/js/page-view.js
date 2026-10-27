@@ -2,6 +2,7 @@ import { deselectAllObjects, updateAlignPanel } from './annotation-interaction.j
 import { updateLibroBookBtnStates } from './index-outline.js';
 import { state } from './state.js';
 import { updateStatus } from './ui-common.js';
+import { rescaleUndoRecords } from './undo-redo.js';
 
 
     /**
@@ -502,6 +503,7 @@ import { updateStatus } from './ui-common.js';
 
     /**
      * ページ内の全アノテーションの位置・サイズをズーム比率に合わせてスケールする。
+     * 取り消し・やり直しの記録（undo-redo.js）に残る位置・大きさも、同じ比率・同じ対象で変換する。
      * @param {number} ratio - 新旧ズームの比率（newZoom / oldZoom）
      */
     export function scaleAnnotations(ratio) {
@@ -510,7 +512,8 @@ import { updateStatus } from './ui-common.js';
       // LIBRO実データ基準の既定サイズを持つ .is-sized の大問/答/証明ボタン）は、通常の付箋・
       // アノテーションと同様に追従させる。インラインの width/height を持たない
       // CSS固定サイズのボタン（本改修以前に作成されたもの）は現行仕様のまま対象外とする。
-      document.querySelectorAll('#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj, #pageLeft .ann-image-obj, #pageLeft .daimon-btn.libro-toggle, #pageLeft .daimon-btn.is-sized, #pageLeft .kotae-btn.is-sized, #pageLeft .shomei-btn.is-sized, #pageLeft .libro-network-slot').forEach(el => {
+      const selector = '#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj, #pageLeft .ann-image-obj, #pageLeft .daimon-btn.libro-toggle, #pageLeft .daimon-btn.is-sized, #pageLeft .kotae-btn.is-sized, #pageLeft .shomei-btn.is-sized, #pageLeft .libro-network-slot';
+      document.querySelectorAll(selector).forEach(el => {
         el.style.left = ((parseFloat(el.style.left) || 0) * ratio) + 'px';
         el.style.top  = ((parseFloat(el.style.top)  || 0) * ratio) + 'px';
         const w = parseFloat(el.style.width)  || el.offsetWidth;
@@ -518,6 +521,9 @@ import { updateStatus } from './ui-common.js';
         el.style.width  = (w * ratio) + 'px';
         el.style.height = (h * ratio) + 'px';
       });
+      // 取り消し・やり直しの記録も同じ座標系へそろえる（そろえないと、フィットの変更をまたいで
+      // 取り消したときに、古い座標系の px がそのまま入って位置・大きさがずれる）
+      rescaleUndoRecords(ratio, ratio, selector);
     }
 
 
@@ -546,10 +552,10 @@ import { updateStatus } from './ui-common.js';
       const rx = newW / oldW;
       const ry = newH / oldH;
       if (rx === 1 && ry === 1) return;
-      document.querySelectorAll(
+      const selector =
         '#pageLeft .sticky-note, #pageLeft .ann-object, #pageLeft .ann-icon-obj, #pageLeft .ann-image-obj, ' +
-        '#pageLeft .daimon-btn, #pageLeft .kotae-btn, #pageLeft .shomei-btn, #pageLeft .libro-network-slot'
-      ).forEach(el => {
+        '#pageLeft .daimon-btn, #pageLeft .kotae-btn, #pageLeft .shomei-btn, #pageLeft .libro-network-slot';
+      document.querySelectorAll(selector).forEach(el => {
         el.style.left = ((parseFloat(el.style.left) || 0) * rx) + 'px';
         el.style.top  = ((parseFloat(el.style.top)  || 0) * ry) + 'px';
         const w = parseFloat(el.style.width);
@@ -557,6 +563,8 @@ import { updateStatus } from './ui-common.js';
         if (!isNaN(w)) el.style.width  = (w * rx) + 'px';
         if (!isNaN(h)) el.style.height = (h * ry) + 'px';
       });
+      // 取り消し・やり直しの記録も同じ座標系へそろえる（scaleAnnotations() と同じ理由）
+      rescaleUndoRecords(rx, ry, selector);
     }
 
 
